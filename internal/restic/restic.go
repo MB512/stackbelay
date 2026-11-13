@@ -1,13 +1,14 @@
 // Package restic drives the restic CLI.
 //
 // Only create and read operations are exposed (backup, restore, snapshots,
-// cat config). Repositories are expected to be append-only; never add
+// ls, cat config). Repositories are expected to be append-only; never add
 // forget/prune/tag here.
 package restic
 
 import (
 	"context"
 	"errors"
+	"os"
 	"regexp"
 	"time"
 )
@@ -32,6 +33,17 @@ type Snapshot struct {
 	Paths    []string  `json:"paths"`
 	Tags     []string  `json:"tags"`
 	Parent   string    `json:"parent"`
+}
+
+// Node is one file or directory entry inside a snapshot ("restic ls --json").
+type Node struct {
+	Name    string      `json:"name"`
+	Type    string      `json:"type"` // "dir", "file", "symlink", ...
+	Path    string      `json:"path"`
+	UID     uint32      `json:"uid"`
+	GID     uint32      `json:"gid"`
+	Mode    os.FileMode `json:"mode"` // Go FileMode bits, as stored by restic
+	ModTime time.Time   `json:"mtime"`
 }
 
 // BackupOptions control a single backup run.
@@ -61,4 +73,8 @@ type Runner interface {
 	// Restore restores the contents of subpath within the snapshot
 	// (restic restore <id>:<subpath>) into target.
 	Restore(ctx context.Context, repo Repo, snapshotID, subpath, target string) error
+	// Node returns the metadata of path inside the snapshot (restic ls).
+	// Restore uses it to apply mode and owner of the stack directory itself,
+	// which "restic restore <id>:<subpath>" does not restore.
+	Node(ctx context.Context, repo Repo, snapshotID, path string) (Node, error)
 }

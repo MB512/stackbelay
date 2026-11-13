@@ -69,3 +69,19 @@ func TestSnapshotIDPattern(t *testing.T) {
 		}
 	}
 }
+
+func TestParseNodeLine(t *testing.T) {
+	snapshotLine := `{"time":"2026-11-13T21:23:47+01:00","paths":["/s/web"],"id":"e918","message_type":"snapshot","struct_type":"snapshot"}`
+	if _, ok := parseNodeLine([]byte(snapshotLine)); ok {
+		t.Fatal("snapshot line parsed as node")
+	}
+	line := `{"name":"web","type":"dir","path":"/s/web","uid":1000,"gid":1001,"mode":2147484141,"permissions":"drwxr-xr-x","mtime":"2026-11-13T21:23:45.51053436+01:00","message_type":"node","struct_type":"node"}`
+	n, ok := parseNodeLine([]byte(line))
+	if !ok {
+		t.Fatal("node line not parsed")
+	}
+	if n.Path != "/s/web" || n.Type != "dir" || n.UID != 1000 || n.GID != 1001 ||
+		!n.Mode.IsDir() || n.Mode.Perm() != 0o755 || n.ModTime.IsZero() {
+		t.Fatalf("unexpected node %+v", n)
+	}
+}

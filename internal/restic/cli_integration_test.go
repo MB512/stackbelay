@@ -62,6 +62,21 @@ func TestCLIIntegration(t *testing.T) {
 		t.Fatalf("unexpected snapshots %+v", snaps)
 	}
 
+	if err := os.Chmod(stack, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	id, err = c.Backup(ctx, repo, stack, BackupOptions{Host: "test-host"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	node, err := c.Node(ctx, repo, id, stack)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if node.Type != "dir" || node.Path != stack || node.Mode.Perm() != 0o750 || int(node.UID) != os.Getuid() {
+		t.Fatalf("unexpected node %+v", node)
+	}
+
 	target := filepath.Join(tmp, "restore")
 	if err := c.Restore(ctx, repo, id, snaps[0].Paths[0], target); err != nil {
 		t.Fatal(err)

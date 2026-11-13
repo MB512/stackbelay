@@ -198,6 +198,40 @@ func (c *CLI) Restore(ctx context.Context, repo Repo, snapshotID, subpath, targe
 		"restore", "--target", target, "--", snapshotID+":"+subpath)
 }
 
+// Node implements Runner. It runs "restic ls --json <id> <path>", which
+// prints the snapshot, then the node for path itself, then its direct
+// children; only the node for path is returned.
+func (c *CLI) Node(ctx context.Context, repo Repo, snapshotID, path string) (Node, error) {
+	if !SnapshotIDPattern.MatchString(snapshotID) {
+		return Node{}, fmt.Errorf("invalid snapshot id %q", snapshotID)
+	}
+	var node Node
+	found := false
+	err := c.runJSON(ctx, repo, func(line []byte) {
+		if n, ok := parseNodeLine(line); ok && !found && n.Path == path {
+			node, found = n, true
+		}
+	}, "ls", "--", snapshotID, path)
+	if err != nil {
+		return Node{}, err
+	}
+	if !found {
+		return Node{}, fmt.Errorf("path %q not found in snapshot %s", path, snapshotID)
+	}
+	return node, nil
+}
+
+func parseNodeLine(line []byte) (Node, bool) {
+	var n struct {
+		Node
+		StructType string `json:"struct_type"`
+	}
+	if json.Unmarshal(line, &n) != nil || n.StructType != "node" {
+		return Node{}, false
+	}
+	return n.Node, true
+}
+
 // redact replaces secret values from repo.Env in s.
 func redact(s string, repo Repo) string {
 	for _, kv := range repo.Env {
