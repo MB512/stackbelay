@@ -271,17 +271,56 @@ disabled per stack. Discovery is the only source of stack names/paths.
 
 ## Interfaces (for testing)
 
+The pipelines in `internal/jobs` depend only on two small interfaces; the
+real implementations shell out to the CLIs (`docker.CLI`, `restic.CLI`),
+tests use fakes.
+
 ```go
-type DockerClient interface {
-    Services(ctx context.Context, stack Stack) ([]ServiceState, error)
-    Stop(ctx context.Context, stack Stack) error
-    Start(ctx context.Context, stack Stack, services []string) error
-    WaitHealthy(ctx context.Context, stack Stack, services []string) error
+// internal/docker
+type Client interface {
+    Services(ctx context.Context, projectDir string) ([]ServiceState, error)
+    Stop(ctx context.Context, projectDir string) error
+    Start(ctx context.Context, projectDir string, services []string) error // compose start (after backup)
+    Up(ctx context.Context, projectDir string, services []string) error    // compose up -d (after restore; nil = all)
+    WaitHealthy(ctx context.Context, projectDir string, services []string) error
 }
 
-type ResticRunner interface {
-    Backup(ctx context.Context, repo Repo, path string, opts BackupOpts) (SnapshotID, error)
-    Restore(ctx context.Context, repo Repo, snap SnapshotID, target string) error
-    Snapshots(ctx context.Context, repo Repo, filter Filter) ([]Snapshot, error)
+// internal/restic
+type Runner interface {
+    CheckRepo(ctx context.Context, repo Repo) error // restic cat config
+    Backup(ctx context.Context, repo Repo, path string, opts BackupOptions) (string, error)
+    Snapshots(ctx context.Context, repo Repo, ids ...string) ([]Snapshot, error)
+    Restore(ctx context.Context, repo Repo, snapshotID, subpath, target string) error // <id>:<subpath>
 }
 ```
+
+Compose commands run with the stack directory as working and project
+directory and without `-f`, so `compose.override.yml` is honoured exactly as
+when a user runs `docker compose` there. `restic restore <id>:<subpath>`
+requires restic >= 0.17.
+
+## Worker CLI (M1)
+
+```
+worker backup  [--pre-stop] <stack>
+worker restore [--no-safety-snapshot] [--no-start] <stack> <snapshot-id>
+```
+
+Flags go before positional arguments. Exit codes: 0 success, 1 job failed,
+2 usage/configuration error. Logs are JSON lines (`log/slog`) on stderr.
+Until the manager exists (M3), the job spec comes from the command line and
+the repository from the environment:
+
+| Variable | Meaning |
+|---|---|
+| `STACKS_ROOT` | absolute stacks root (required) |
+| `STACKVAULT_HOSTNAME` | value for `restic --host` (defaults to `os.Hostname()`, which is random inside a container, so set it there) |
+| `RESTIC_REPOSITORY` | repository (required) |
+| `RESTIC_PASSWORD_FILE` / `RESTIC_PASSWORD` / `RESTIC_PASSWORD_COMMAND` | one is required |
+| backend variables (`AWS_*`, `RESTIC_REST_*`, ...) | read by restic; known secret values are redacted from output |
+| `STACKVAULT_JOB_TIMEOUT` | hard job timeout, Go duration, default `6h` |
+| `STACKVAULT_LOG_LEVEL` | `debug`, `info`, `warn`, `error` |
+
+Not yet in M1 (follow in M3/M4): `spec.json`/`status.json`/`log.txt` handoff
+via `/job`, the per-stack lock, restore into a not-yet-existing stack
+(import), image pinning.
