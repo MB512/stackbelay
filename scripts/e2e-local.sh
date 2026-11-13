@@ -106,6 +106,9 @@ pass "data restored (v1)"
 pass "stack directory mode restored (750)"
 [[ -n "$OLD" && "$(cat "$OLD/data/value.txt")" == v2 ]] || fail "previous dir missing or wrong: $OLD"
 pass "previous version kept at $(basename "$OLD")"
+if ./bin/worker backup "$(basename "$OLD")" 2>"$WORK/old.log"; then fail "previous version is accepted as a stack"; fi
+grep -q 'stack not found' "$WORK/old.log" || { cat "$WORK/old.log"; fail "unexpected error for previous version"; }
+pass "previous version is not a stack (backup rejected)"
 [[ -n "$SAFETY" ]] && restic snapshots --json --tag pre-restore | grep -q "$SAFETY" || fail "no pre-restore snapshot"
 pass "pre-restore safety snapshot $SAFETY"
 [[ "$(state app)" == running ]] || fail "app not running after restore"

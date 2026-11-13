@@ -273,7 +273,10 @@ always goes through the same queue and worker path as manual runs. Missed runs
 ## Stack discovery
 
 Every direct subdirectory of `STACKS_ROOT` containing `compose.yml` or
-`compose.yaml` is a stack. The directory name is the stack ID. Stacks can be
+`compose.yaml` is a stack. The directory name is the stack ID. Names ending
+in `.restore-tmp` or containing `.old-` are reserved for the restore
+pipeline's staging and previous-version directories and are never
+discovered, so a restore does not create new stacks. Stacks can be
 disabled per stack. Discovery is the only source of stack names/paths.
 
 ## Interfaces (for testing)

@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"time"
 )
 
 // ComposeFiles are the file names that mark a directory as a stack, in
@@ -22,6 +23,26 @@ var composeFiles = []string{"compose.yml", "compose.yaml"}
 // namePattern restricts stack names to safe directory names. It excludes
 // path separators, "." and ".." and leading dots/dashes.
 var namePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
+
+// Sibling directories created by the restore pipeline next to a stack
+// directory. They contain a compose file but are not stacks: names matching
+// them are reserved and never discovered.
+const (
+	stagingSuffix = ".restore-tmp"
+	oldInfix      = ".old-"
+)
+
+// reservedPattern matches staging directories and previous versions kept
+// after a restore (also when renamed by hand, e.g. "web.old-keep").
+var reservedPattern = regexp.MustCompile(`(\.restore-tmp$|\.old-)`)
+
+// StagingDir is the directory a restore writes into before the swap.
+func StagingDir(s Stack) string { return s.Dir + stagingSuffix }
+
+// OldDir is where the previous stack directory is moved during a restore.
+func OldDir(s Stack, t time.Time) string {
+	return s.Dir + oldInfix + t.UTC().Format("20060102T150405Z")
+}
 
 // ErrNotFound is returned by Lookup when no stack with that name was discovered.
 var ErrNotFound = errors.New("stack not found")
@@ -33,9 +54,11 @@ type Stack struct {
 	ComposeFile string // absolute path of compose.yml / compose.yaml
 }
 
-// ValidName reports whether name is an acceptable stack name.
+// ValidName reports whether name is an acceptable stack name. Names reserved
+// for restore staging/previous directories are not.
 func ValidName(name string) bool {
-	return namePattern.MatchString(name) && name != "." && name != ".."
+	return namePattern.MatchString(name) && name != "." && name != ".." &&
+		!reservedPattern.MatchString(name)
 }
 
 // Discover lists all stacks directly below root, sorted by name.

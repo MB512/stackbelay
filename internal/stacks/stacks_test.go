@@ -4,7 +4,9 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
 
 func mkStack(t *testing.T, root, name, composeName string) {
@@ -27,6 +29,10 @@ func TestDiscover(t *testing.T) {
 	mkStack(t, root, "nocompose", "")
 	mkStack(t, root, "legacy", "docker-compose.yml") // not supported
 	mkStack(t, root, ".hidden", "compose.yml")
+	// Leftovers of a restore must not show up as stacks.
+	mkStack(t, root, "app.old-20261113T202615Z", "compose.yml")
+	mkStack(t, root, "app.old-keep", "compose.yml")
+	mkStack(t, root, "app.restore-tmp", "compose.yaml")
 	if err := os.WriteFile(filepath.Join(root, "file.txt"), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -95,5 +101,40 @@ func TestLookup(t *testing.T) {
 				t.Fatalf("got %q", s.Name)
 			}
 		})
+	}
+}
+
+func TestValidName(t *testing.T) {
+	for name, valid := range map[string]bool{
+		"nextcloud":                true,
+		"example.com":              true,
+		"my_stack-2":               true,
+		"web.old-20261113T202615Z": false,
+		"web.old-keep":             false,
+		"web.restore-tmp":          false,
+		"web.restore-tmp2":         true,
+		"bold-move":                true,
+		"-web":                     false,
+		"web/sub":                  false,
+		strings.Repeat("a", 129):   false,
+	} {
+		if got := ValidName(name); got != valid {
+			t.Errorf("ValidName(%q) = %v, want %v", name, got, valid)
+		}
+	}
+}
+
+func TestRestoreDirsAreNotStacks(t *testing.T) {
+	s := Stack{Name: "web", Dir: "/stacks/web"}
+	for _, dir := range []string{StagingDir(s), OldDir(s, time.Now())} {
+		if ValidName(filepath.Base(dir)) {
+			t.Errorf("%s would be discovered as a stack", dir)
+		}
+		if filepath.Dir(dir) != "/stacks" {
+			t.Errorf("%s is not a sibling of the stack directory", dir)
+		}
+	}
+	if got := OldDir(s, time.Date(2026, 11, 13, 21, 26, 15, 0, time.FixedZone("CET", 3600))); got != "/stacks/web.old-20261113T202615Z" {
+		t.Errorf("OldDir = %s", got)
 	}
 }

@@ -63,7 +63,7 @@ func (p *Pipeline) Restore(ctx context.Context, stack stacks.Stack, opts Restore
 	}
 	log.Info("snapshot verified", "id", snap.ID, "host", snap.Hostname, "path", srcPath, "time", snap.Time)
 
-	staging := stack.Dir + ".restore-tmp"
+	staging := stacks.StagingDir(stack)
 	if _, err := os.Lstat(staging); err == nil {
 		return res, fmt.Errorf("staging directory %s already exists (left over from a failed restore?); remove it manually", staging)
 	} else if !errors.Is(err, fs.ErrNotExist) {
@@ -132,7 +132,7 @@ func (p *Pipeline) Restore(ctx context.Context, stack stacks.Stack, opts Restore
 	}
 
 	// 5. Swap.
-	oldDir := fmt.Sprintf("%s.old-%s", stack.Dir, p.now().UTC().Format("20060102T150405Z"))
+	oldDir := stacks.OldDir(stack, p.now())
 	if err := os.Rename(stack.Dir, oldDir); err != nil {
 		return res, fmt.Errorf("moving current stack directory aside: %w", err)
 	}
