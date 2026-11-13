@@ -138,11 +138,18 @@ web        exited   -                    -                                sha256
    into the target, without recreating the absolute path
    (`<target>/home/docker/<stack>/...`). `<snapshot path>` is taken from the
    snapshot's `paths[0]`, so it works regardless of the source host's
-   `STACKS_ROOT`.
+   `STACKS_ROOT`. This form does not restore the metadata of the stack
+   directory itself (restic creates the target with mode 0700), so owner,
+   mode and mtime are read with `restic ls --json <snap> <snapshot path>`
+   and applied to the staging directory before the swap.
 5. **Swap**: rename `<stack>` to `<stack>.old-<ts>`, rename staging to `<stack>`
    (for a new stack: just rename staging to `<stack>`).
 6. **Start** the stack (services that were running at snapshot time, taken from
-   `metadata.txt`; fallback: all). Image versions are chosen per the restore
+   `metadata.txt`; fallback: all) with `docker compose up -d --force-recreate`.
+   Recreating is required: containers must pick up the restored compose
+   configuration, and Docker Desktop (WSL integration) pins bind mounts per
+   container, so a plain `start` would still show the renamed old directory.
+   Volumes are not removed. Image versions are chosen per the restore
    option "image versions" (see "Pinning image versions on restore").
 7. **Verify** health. On failure, report; keep `.old-<ts>` for manual rollback.
    Cleanup of `.old-*` is a separate explicit action.
@@ -281,7 +288,7 @@ type Client interface {
     Services(ctx context.Context, projectDir string) ([]ServiceState, error)
     Stop(ctx context.Context, projectDir string) error
     Start(ctx context.Context, projectDir string, services []string) error // compose start (after backup)
-    Up(ctx context.Context, projectDir string, services []string) error    // compose up -d (after restore; nil = all)
+    Up(ctx context.Context, projectDir string, services []string) error    // compose up -d --force-recreate (after restore; nil = all)
     WaitHealthy(ctx context.Context, projectDir string, services []string) error
 }
 
@@ -291,6 +298,7 @@ type Runner interface {
     Backup(ctx context.Context, repo Repo, path string, opts BackupOptions) (string, error)
     Snapshots(ctx context.Context, repo Repo, ids ...string) ([]Snapshot, error)
     Restore(ctx context.Context, repo Repo, snapshotID, subpath, target string) error // <id>:<subpath>
+    Node(ctx context.Context, repo Repo, snapshotID, path string) (Node, error)        // restic ls, metadata of path
 }
 ```
 
@@ -320,6 +328,10 @@ the repository from the environment:
 | backend variables (`AWS_*`, `RESTIC_REST_*`, ...) | read by restic; known secret values are redacted from output |
 | `STACKVAULT_JOB_TIMEOUT` | hard job timeout, Go duration, default `6h` |
 | `STACKVAULT_LOG_LEVEL` | `debug`, `info`, `warn`, `error` |
+
+End-to-end smoke test against the local Docker daemon and a temporary local
+repository: `scripts/e2e-local.sh` (`KEEP=1` keeps the temp directory and
+containers for inspection).
 
 Not yet in M1 (follow in M3/M4): `spec.json`/`status.json`/`log.txt` handoff
 via `/job`, the per-stack lock, restore into a not-yet-existing stack
