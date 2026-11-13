@@ -1,0 +1,125 @@
+package jobs
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+
+	"github.com/MB512/stackvault/internal/docker"
+	"github.com/MB512/stackvault/internal/restic"
+)
+
+var errBoom = errors.New("boom")
+
+// calls is a shared, ordered record of all fake calls, so tests can assert
+// the sequence across docker and restic.
+type calls struct {
+	mu  sync.Mutex
+	log []string
+}
+
+func (c *calls) add(format string, args ...any) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.log = append(c.log, fmt.Sprintf(format, args...))
+}
+
+func (c *calls) list() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]string(nil), c.log...)
+}
+
+type fakeDocker struct {
+	calls    *calls
+	services []docker.ServiceState
+	failOn   map[string]error // method name -> error
+	// startCtxErr records ctx.Err() seen by Start/Up, to verify that the
+	// restart is not affected by job cancellation.
+	startCtxErr error
+}
+
+func (f *fakeDocker) fail(m string) error { return f.failOn[m] }
+
+func (f *fakeDocker) Services(ctx context.Context, dir string) ([]docker.ServiceState, error) {
+	f.calls.add("docker.Services")
+	return f.services, f.fail("Services")
+}
+
+func (f *fakeDocker) Stop(ctx context.Context, dir string) error {
+	f.calls.add("docker.Stop")
+	return f.fail("Stop")
+}
+
+func (f *fakeDocker) Start(ctx context.Context, dir string, services []string) error {
+	f.calls.add("docker.Start %s", strings.Join(services, ","))
+	f.startCtxErr = ctx.Err()
+	return f.fail("Start")
+}
+
+func (f *fakeDocker) Up(ctx context.Context, dir string, services []string) error {
+	if services == nil {
+		f.calls.add("docker.Up <all>")
+	} else {
+		f.calls.add("docker.Up %s", strings.Join(services, ","))
+	}
+	f.startCtxErr = ctx.Err()
+	return f.fail("Up")
+}
+
+func (f *fakeDocker) WaitHealthy(ctx context.Context, dir string, services []string) error {
+	f.calls.add("docker.WaitHealthy")
+	return f.fail("WaitHealthy")
+}
+
+type fakeRestic struct {
+	calls     *calls
+	failOn    map[string]error // "CheckRepo", "Backup:<tag>", "Restore", "Snapshots"
+	snapshots []restic.Snapshot
+	// files written into the restore target by Restore (name -> content).
+	restoreFiles map[string]string
+	// cancel, if set, is called during the final backup to simulate a
+	// cancelled job.
+	cancelOnFinal context.CancelFunc
+}
+
+func (f *fakeRestic) CheckRepo(ctx context.Context, repo restic.Repo) error {
+	f.calls.add("restic.CheckRepo")
+	return f.failOn["CheckRepo"]
+}
+
+func (f *fakeRestic) Backup(ctx context.Context, repo restic.Repo, path string, opts restic.BackupOptions) (string, error) {
+	tag := strings.Join(opts.Tags, ",")
+	f.calls.add("restic.Backup tag=%s parent=%s host=%s", tag, opts.Parent, opts.Host)
+	if tag == TagFinal && f.cancelOnFinal != nil {
+		f.cancelOnFinal()
+		return "", context.Canceled
+	}
+	if err := f.failOn["Backup:"+tag]; err != nil {
+		return "", err
+	}
+	return "snap-" + tag, nil
+}
+
+func (f *fakeRestic) Snapshots(ctx context.Context, repo restic.Repo, ids ...string) ([]restic.Snapshot, error) {
+	f.calls.add("restic.Snapshots %s", strings.Join(ids, ","))
+	return f.snapshots, f.failOn["Snapshots"]
+}
+
+func (f *fakeRestic) Restore(ctx context.Context, repo restic.Repo, id, subpath, target string) error {
+	f.calls.add("restic.Restore %s:%s", id, subpath)
+	// Like restic, create the target and write some files before failing.
+	if err := os.MkdirAll(target, 0o755); err != nil {
+		return err
+	}
+	for name, content := range f.restoreFiles {
+		if err := os.WriteFile(filepath.Join(target, name), []byte(content), 0o644); err != nil {
+			return err
+		}
+	}
+	return f.failOn["Restore"]
+}
