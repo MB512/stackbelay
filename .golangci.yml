@@ -1,0 +1,58 @@
+# golangci-lint v2 configuration. Run: golangci-lint run
+version: "2"
+
+linters:
+  # "standard" = errcheck, govet, ineffassign, staticcheck, unused.
+  default: standard
+  enable:
+    - gosec       # security: exec with variable args, file permissions, ...
+    - errorlint   # use errors.Is/As and %w instead of == and %v on errors
+    - bodyclose   # HTTP response bodies are closed (manager, M3)
+    - noctx       # HTTP requests / exec carry a context
+    - misspell
+    - unconvert
+    - copyloopvar
+    - revive
+  settings:
+    errcheck:
+      exclude-functions:
+        # Writing diagnostics to stderr/stdout: nothing sensible to do on failure.
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - fmt.Fprint
+    gosec:
+      excludes:
+        # G204: subprocess launched with variable arguments. Running docker
+        # and restic with argument lists (never a shell) is the design; the
+        # inputs are validated before (see docs/security.md).
+        - G204
+    revive:
+      rules:
+        - name: exported
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: errorf
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: var-declaration
+        - name: indent-error-flow
+        - name: unused-parameter
+          disabled: true
+  exclusions:
+    presets:
+      - std-error-handling
+    rules:
+      # Tests may use relaxed file permissions and paths from temp dirs.
+      - path: _test\.go
+        linters:
+          - gosec
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/MB512/stackvault
