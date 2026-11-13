@@ -120,17 +120,20 @@ func (p *Pipeline) writeMetadata(log *slog.Logger, stack stacks.Stack, services 
 	}
 
 	tmp := filepath.Join(stack.Dir, MetadataFile+".tmp")
-	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
+	// tmp is inside a discovered stack directory; metadata.txt is meant to
+	// be world-readable like the rest of the stack.
+	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644) //nolint:gosec // G302/G304: see comment above
+
 	if err != nil {
 		return err
 	}
 	if err := WriteMetadata(f, m); err != nil {
-		f.Close()
-		os.Remove(tmp)
+		_ = f.Close() // best-effort cleanup; the write error is what matters
+		_ = os.Remove(tmp)
 		return err
 	}
 	if err := f.Close(); err != nil {
-		os.Remove(tmp)
+		_ = os.Remove(tmp)
 		return err
 	}
 	return os.Rename(tmp, filepath.Join(stack.Dir, MetadataFile))
@@ -201,7 +204,7 @@ func refRepository(ref string) string {
 }
 
 func fileSHA256(path string) (string, error) {
-	f, err := os.Open(path)
+	f, err := os.Open(path) //nolint:gosec // G304: path is a discovered compose file
 	if err != nil {
 		return "", err
 	}

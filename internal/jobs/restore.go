@@ -119,8 +119,10 @@ func (p *Pipeline) Restore(ctx context.Context, stack stacks.Stack, opts Restore
 	if err := p.Restic.Restore(ctx, p.Repo, snap.ID, srcPath, staging); err != nil {
 		return res, fmt.Errorf("restoring snapshot: %w", err)
 	}
-	if ok, err := stacks.HasComposeFile(staging); err != nil || !ok {
-		return res, fmt.Errorf("restored snapshot does not contain compose.yml/compose.yaml (err: %v)", err)
+	if ok, err := stacks.HasComposeFile(staging); err != nil {
+		return res, fmt.Errorf("checking restored compose file: %w", err)
+	} else if !ok {
+		return res, errors.New("restored snapshot does not contain compose.yml/compose.yaml")
 	}
 	if err := ctx.Err(); err != nil {
 		return res, err
