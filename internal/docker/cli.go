@@ -169,7 +169,7 @@ func (c *CLI) Start(ctx context.Context, dir string, services []string) error {
 
 // Up implements Client.
 func (c *CLI) Up(ctx context.Context, dir string, services []string) error {
-	args := []string{"up", "--detach", "--"}
+	args := []string{"up", "--detach", "--force-recreate", "--"}
 	_, err := c.compose(ctx, dir, append(args, services...)...)
 	return err
 }

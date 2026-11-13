@@ -34,8 +34,12 @@ type Client interface {
 	Stop(ctx context.Context, projectDir string) error
 	// Start starts existing containers of the given services (compose start).
 	Start(ctx context.Context, projectDir string, services []string) error
-	// Up creates/recreates and starts the given services (compose up -d).
-	// An empty list means all services.
+	// Up recreates and starts the given services (compose up -d
+	// --force-recreate). Used after a restore: recreating guarantees that
+	// containers use the restored directory and configuration. Docker
+	// Desktop (WSL) caches bind mounts per container, so a plain restart
+	// would keep showing the renamed previous directory. Named and anonymous
+	// volumes are kept. An empty list means all services.
 	Up(ctx context.Context, projectDir string, services []string) error
 	// WaitHealthy blocks until all given services are running and, if they
 	// have a healthcheck, healthy. It gives up when ctx is done.
