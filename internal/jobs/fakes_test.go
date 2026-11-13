@@ -82,6 +82,8 @@ type fakeRestic struct {
 	snapshots []restic.Snapshot
 	// files written into the restore target by Restore (name -> content).
 	restoreFiles map[string]string
+	// node is returned by Node (metadata of the stack directory).
+	node restic.Node
 	// cancel, if set, is called during the final backup to simulate a
 	// cancelled job.
 	cancelOnFinal context.CancelFunc
@@ -112,8 +114,8 @@ func (f *fakeRestic) Snapshots(ctx context.Context, repo restic.Repo, ids ...str
 
 func (f *fakeRestic) Restore(ctx context.Context, repo restic.Repo, id, subpath, target string) error {
 	f.calls.add("restic.Restore %s:%s", id, subpath)
-	// Like restic, create the target and write some files before failing.
-	if err := os.MkdirAll(target, 0o755); err != nil {
+	// Like restic, create the target (0700) and write some files before failing.
+	if err := os.MkdirAll(target, 0o700); err != nil {
 		return err
 	}
 	for name, content := range f.restoreFiles {
@@ -122,4 +124,11 @@ func (f *fakeRestic) Restore(ctx context.Context, repo restic.Repo, id, subpath,
 		}
 	}
 	return f.failOn["Restore"]
+}
+
+func (f *fakeRestic) Node(ctx context.Context, repo restic.Repo, id, path string) (restic.Node, error) {
+	f.calls.add("restic.Node %s:%s", id, path)
+	n := f.node
+	n.Path = path
+	return n, f.failOn["Node"]
 }

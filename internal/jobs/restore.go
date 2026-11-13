@@ -124,6 +124,9 @@ func (p *Pipeline) Restore(ctx context.Context, stack stacks.Stack, opts Restore
 	} else if !ok {
 		return res, errors.New("restored snapshot does not contain compose.yml/compose.yaml")
 	}
+	if err := p.applyDirMetadata(ctx, log, snap.ID, srcPath, staging); err != nil {
+		return res, err
+	}
 	if err := ctx.Err(); err != nil {
 		return res, err
 	}
@@ -159,6 +162,36 @@ func (p *Pipeline) Restore(ctx context.Context, stack stacks.Stack, opts Restore
 		return res, fmt.Errorf("starting restored stack (previous version kept at %s): %w", oldDir, err)
 	}
 	return res, nil
+}
+
+// applyDirMetadata sets owner, mode and mtime of the staging directory to
+// those of the stack directory in the snapshot. "restic restore <id>:<path>"
+// restores everything below path but creates the target itself with default
+// permissions (0700, current user).
+func (p *Pipeline) applyDirMetadata(ctx context.Context, log *slog.Logger, snapshotID, srcPath, dir string) error {
+	node, err := p.Restic.Node(ctx, p.Repo, snapshotID, srcPath)
+	if err != nil {
+		return fmt.Errorf("reading stack directory metadata from snapshot: %w", err)
+	}
+	if node.Type != "dir" {
+		return fmt.Errorf("snapshot path %s is a %q, not a directory", srcPath, node.Type)
+	}
+	// Owner first: chown clears setuid/setgid bits, chmod sets them again.
+	if err := os.Lchown(dir, int(node.UID), int(node.GID)); err != nil {
+		if os.Geteuid() == 0 {
+			return fmt.Errorf("setting owner of restored stack directory: %w", err)
+		}
+		log.Warn("not running as root; cannot restore owner of stack directory",
+			"uid", node.UID, "gid", node.GID, "error", err)
+	}
+	mode := node.Mode & (fs.ModePerm | fs.ModeSetuid | fs.ModeSetgid | fs.ModeSticky)
+	if err := os.Chmod(dir, mode); err != nil {
+		return fmt.Errorf("setting mode of restored stack directory: %w", err)
+	}
+	if err := os.Chtimes(dir, node.ModTime, node.ModTime); err != nil {
+		log.Warn("could not restore mtime of stack directory", "error", err)
+	}
+	return nil
 }
 
 // servicesToStart reads metadata.txt from the restored stack and returns the

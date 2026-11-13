@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -249,6 +250,11 @@ func restoreEnv(t *testing.T) *env {
 		"data.txt":    "restored",
 		MetadataFile:  "# stackvault-metadata v1\ncreated_at\t2026-11-01T00:00:00Z\nstack\tweb\napp\trunning\t-\t-\t-\t-\ndb\texited\t-\t-\t-\t-\n",
 	}
+	e.restic.node = restic.Node{
+		Type: "dir", Mode: fs.ModeDir | 0o750,
+		UID: uint32(os.Getuid()), GID: uint32(os.Getgid()), //nolint:gosec // G115: ids fit in uint32
+		ModTime: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC),
+	}
 	return e
 }
 
@@ -281,6 +287,7 @@ func TestRestoreSuccess(t *testing.T) {
 		"docker.Stop",
 		"restic.Backup tag=pre-restore parent= host=host-a",
 		"restic.Restore " + snapID + ":/home/docker/web",
+		"restic.Node " + snapID + ":/home/docker/web",
 		"docker.Up app", // only services running at backup time
 		"docker.WaitHealthy",
 	})
@@ -290,6 +297,13 @@ func TestRestoreSuccess(t *testing.T) {
 	}
 	if got := readData(t, e.stack.Dir); got != "restored" {
 		t.Errorf("stack dir has %q", got)
+	}
+	fi, err := os.Stat(e.stack.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode().Perm() != 0o750 || !fi.ModTime().Equal(e.restic.node.ModTime) {
+		t.Errorf("stack dir metadata not restored: mode %v, mtime %v", fi.Mode(), fi.ModTime())
 	}
 	if got := readData(t, wantOld); got != "original" {
 		t.Errorf("old dir has %q", got)
@@ -309,6 +323,13 @@ func TestRestoreRollback(t *testing.T) {
 			wantCalls: []string{"restic.CheckRepo", "restic.Snapshots " + snapID[:8], "docker.Services", "docker.Stop",
 				"restic.Backup tag=pre-restore parent= host=host-a", "restic.Restore " + snapID + ":/home/docker/web",
 				"docker.Start app,db", "docker.WaitHealthy"},
+		},
+		{
+			name:  "reading directory metadata fails",
+			setup: func(e *env) { e.restic.failOn["Node"] = errBoom },
+			wantCalls: []string{"restic.CheckRepo", "restic.Snapshots " + snapID[:8], "docker.Services", "docker.Stop",
+				"restic.Backup tag=pre-restore parent= host=host-a", "restic.Restore " + snapID + ":/home/docker/web",
+				"restic.Node " + snapID + ":/home/docker/web", "docker.Start app,db", "docker.WaitHealthy"},
 		},
 		{
 			name:  "safety snapshot fails",
