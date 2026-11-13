@@ -1,0 +1,22 @@
+# Go
+/bin/
+/dist/
+*.exe
+*.test
+*.out
+coverage.*
+
+# Local data
+/data/
+*.db
+*.db-journal
+*.sqlite
+
+# Env / secrets
+.env
+*.key
+
+# IDE
+.idea/
+.vscode/
+*.swp

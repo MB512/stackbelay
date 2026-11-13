@@ -1,0 +1,287 @@
+# Architecture
+
+## Components
+
+```
+ Browser ──HTTP──> manager (container, long-running)
+                     │  web UI, auth, RBAC, scheduler, SQLite
+                     │  creates job spec + starts worker via Docker socket
+                     ▼
+                  worker (container, one-shot, started per job)
+                     │  backup / restore pipeline
+                     ├── docker compose (stop/start/ps/images)
+                     └── restic (backup/restore/snapshots, append-only safe)
+```
+
+Both are binaries from the same image (`/app/manager`, `/app/worker`).
+The image contains `restic`, `docker-cli` and the `docker compose` plugin.
+
+### Why a separate worker
+
+- The manager's own stack can be backed up and restored: the worker is not part
+  of any compose project it stops, so it survives.
+- A crashing/restarting manager does not kill a running backup.
+- Least privilege can be split later (manager without socket access, only a
+  thin launcher with it).
+
+## Repository assumptions
+
+Repositories are served by `restic/rest-server` in **append-only mode**. The
+app therefore only uses operations that work there: `backup`, `restore`,
+`snapshots`, `ls`, `cat config`, and read-only `check`. It never calls `forget`,
+`prune` or `tag`, which would fail or are unwanted. Retention and pruning are
+the responsibility of the repository owner on the server. Deleting stale lock
+files is allowed in append-only mode.
+
+## Mounts
+
+Manager:
+
+- `STACKS_ROOT` (e.g. `/home/docker`) mounted at the **same absolute path** as
+  on the host (`/home/docker:/home/docker`). Needed so relative paths in compose
+  files resolve identically for the host daemon.
+- `/var/run/docker.sock` (to create workers and read stack state).
+- `/data` for DB and job directories (this lives inside the manager's own stack
+  folder, so it is part of the self-backup).
+
+Worker (started by manager):
+
+- `STACKS_ROOT` at the same path (read-write; restore replaces directories, so
+  mount the **parent**, not individual stack folders).
+- `/var/run/docker.sock`.
+- `/job` (bind of `/data/jobs/<id>`): job spec in, status/log out.
+- Restic cache volume (shared, named volume).
+- Run as root (needed to preserve ownership/permissions on backup and restore).
+
+Workers carry a label `stackvault.worker=true` and are NOT created through
+compose, so they are never affected by stopping a stack.
+
+## Job handoff
+
+The manager writes `/data/jobs/<id>/spec.json` (stack, type, repo id, options)
+and, separately, the repo credentials to a tmpfs-mounted secret file for the
+worker. The worker writes `status.json` (state, timestamps, snapshot ids,
+error) and `log.txt` as it goes. The manager reads these files (poll/inotify)
+and mirrors them into SQLite. Files, not the DB, are the handoff channel
+because the manager (and its SQLite file) may be stopped during a self-backup.
+On startup the manager reconciles all job directories with the DB.
+
+Job states: `queued -> running -> succeeded | failed | cancelled`.
+At most one job per stack at a time (lock in DB + lock file in the stack's
+job area); further jobs queue.
+
+## Backup pipeline
+
+1. **Preflight**: stack exists in discovery, repo reachable (`restic cat config`),
+   lock acquired.
+2. **Record state**: for each service, record whether it is running, plus the
+   image reference, the image ID and the **repo digest(s)**
+   (`docker compose ps --format json`, `docker image inspect` ->
+   `.Id` and `.RepoDigests`). Write `metadata.txt` into the stack folder (it is
+   then part of the snapshot). See "metadata.txt format" below.
+3. **Pre-stop snapshot (optional)**: stack still running, `restic backup`
+   with tag `pre-stop`. Not guaranteed consistent; its purpose is to make the
+   final run fast (parent snapshot, small delta). Failure here is non-fatal:
+   log a warning and continue without a parent.
+4. **Stop**: `docker compose stop` (not `down`, containers and networks are
+   preserved). Remember which services were running.
+5. **Final snapshot**: `restic backup --parent <pre-stop-id> --tag final`
+   of the stack directory. This is the snapshot that counts.
+6. **Start (always)**: in a `defer`, `docker compose start` only for services
+   that were running in step 2. Wait for health (bounded timeout), report
+   unhealthy services, but do not fail the backup because of them.
+7. **Finish**: write final status, release lock.
+
+Self-backup: identical. The worker stops the manager's own stack; the manager
+disappears, the worker finishes and restarts it, the manager reconciles the job.
+
+Error handling rules:
+
+- Anything after step 4 must still reach step 6.
+- Context cancellation and a hard job timeout both trigger step 6.
+- If `docker compose start` fails, the job is `failed` with a loud error; the
+  stack is left as is (no further automatic actions).
+
+### metadata.txt format
+
+Human-readable but strictly parseable, versioned, one record per line, tab
+separated, so the restore can rely on it:
+
+```
+# stackvault-metadata v1
+created_at     2026-11-12T20:15:00Z
+stack          nextcloud
+compose_sha256 <hash of compose.yml>
+# service  state    image_ref            repo_digest                      image_id        container_id
+app        running  nextcloud:29         nextcloud@sha256:ab12...         sha256:cd34...  9f8e...
+db         running  postgres:16          postgres@sha256:ef56...          sha256:7890...  1a2b...
+web        exited   -                    -                                sha256:...      ...
+```
+
+- `repo_digest` is what can be pulled again (`name@sha256:...`). The image ID
+  is only a local identifier and is NOT pullable; it is kept for diagnostics
+  and to detect whether the exact image is still present locally.
+- Images built locally (`build:`) have no repo digest: write `-`.
+- Services without a container (never created) are recorded with `-`.
+
+## Restore pipeline
+
+1. **Preflight**: permission re-checked by the manager, snapshot exists, lock.
+2. **Safety snapshot**: back up the current state with tag `pre-restore`
+   (stack is stopped first to keep it consistent; skip only if explicitly
+   disabled by an admin). Skipped if the stack directory does not exist yet
+   (see "Restore from another host").
+3. **Stop** the stack (skipped if it does not exist yet).
+4. **Restore to staging**: `restic restore <snap>:<snapshot path> --target <root>/<stack>.restore-tmp`
+   on the same filesystem (so renames are atomic). The `<snap>:<subfolder>`
+   syntax restores the *contents* of the snapshot's stack directory directly
+   into the target, without recreating the absolute path
+   (`<target>/home/docker/<stack>/...`). `<snapshot path>` is taken from the
+   snapshot's `paths[0]`, so it works regardless of the source host's
+   `STACKS_ROOT`.
+5. **Swap**: rename `<stack>` to `<stack>.old-<ts>`, rename staging to `<stack>`
+   (for a new stack: just rename staging to `<stack>`).
+6. **Start** the stack (services that were running at snapshot time, taken from
+   `metadata.txt`; fallback: all). Image versions are chosen per the restore
+   option "image versions" (see "Pinning image versions on restore").
+7. **Verify** health. On failure, report; keep `.old-<ts>` for manual rollback.
+   Cleanup of `.old-*` is a separate explicit action.
+
+Self-restore works for the same reason as self-backup. Mount the parent
+directory, never the stack folder itself, otherwise the swap would pull the
+mount point away from under the worker.
+
+## Pinning image versions on restore
+
+Goal: after a restore, run the image versions that were running at backup
+time, not whatever the tag (`:latest`, `:29`, ...) points to today.
+
+Restore option **image versions**:
+
+- `tags` (default): start as defined in `compose.yml`. Tags resolve to current
+  images (may pull newer ones).
+- `pinned`: use the repo digests from `metadata.txt`.
+
+How `pinned` works (the stack's own `compose.yml` is never modified):
+
+1. Parse `metadata.txt` from the restored directory.
+2. For each service with a repo digest: ensure the image is available
+   (already present locally, else `docker pull name@sha256:...`).
+3. Generate an override file `<job dir>/compose.pinned.yml`:
+   ```yaml
+   services:
+     app:
+       image: nextcloud@sha256:ab12...
+       pull_policy: never   # already pulled in step 2
+   ```
+4. Start with `docker compose -f compose.yml -f <job>/compose.pinned.yml up -d`
+   (the override file is passed by absolute path; the project directory stays
+   the stack directory).
+
+Notes and limits (show them in the UI):
+
+- Services with `build:` and no repo digest cannot be pinned. They are rebuilt
+  from the restored sources; base images may have changed. Warn per service.
+- The registry must still serve that digest. Registries can delete old
+  manifests. If a pull fails, offer: abort, or continue with `tags` for that
+  service.
+- Private registries: the worker needs registry credentials (mount a Docker
+  `config.json` read-only into the worker if required). Document this.
+- Compose `up -d` later, run manually with only `compose.yml`, will detect an
+  image change and recreate containers with the tag version. To make pinning
+  permanent, offer an explicit second action "write compose.override.yml with
+  pinned images" (never automatic, since an override file may already exist).
+- Multi-arch: the repo digest recorded from `docker image inspect` identifies
+  the manifest that was pulled; pulling by it yields the same platform content.
+- Also applies to cross-host migration: pinned is the recommended mode there.
+- Without `metadata.txt` (very old snapshots) the option is disabled.
+
+## Snapshot cache
+
+Listing snapshots on a remote repository can be slow, so the manager keeps a
+cache in the `snapshots` table (id, short id, time, host, paths, tags, size
+summary if available).
+
+- Refresh = `restic snapshots --json` against the stack's repository. It is a
+  read-only operation, so the manager runs it directly (decrypting the repo
+  credentials in memory and passing them to the child process via env), not
+  through a worker container.
+- Triggers: manual "Refresh" button, automatically after each successful
+  backup job, and when opening the restore dialog if the cache is older than a
+  configurable age. A background refresh runs at low frequency.
+- Snapshots that disappeared on the server (the repo owner pruned) are marked
+  `missing` on refresh and cannot be selected.
+- The cache is only a convenience for selection. The worker re-verifies the
+  selected snapshot against the repository before restoring.
+- Show the cache age in the UI ("last refreshed 3 min ago").
+
+## Restore from another host (stack migration)
+
+Use case: move a single stack from host A to host B (or rebuild a host).
+
+- Host B is configured with the same repository (location + credentials).
+- The stack name must stay the same. Import refuses a snapshot whose last
+  path component (`paths[0]`) differs from the stack name being imported.
+  Renaming on import is intentionally not supported.
+- Admin action **Import stack**: create a stack record for a name that does not
+  exist on disk yet (`present = 0`), attach the repository, refresh the snapshot
+  cache. Snapshots from other hosts are listed (no `--host` filter); host and
+  original path are shown per snapshot.
+- Restore then runs the normal pipeline minus stop, safety snapshot and swap,
+  because there is nothing to protect: restore into staging, rename to
+  `<STACKS_ROOT>/<stack>`.
+- By default the stack is **not started** automatically. Offer "Restore and
+  start" as an explicit checkbox.
+- After restore, compare `metadata.txt` (image digests of the source) with what
+  is available locally and show a warning if images differ or are missing
+  (`docker compose pull` is a separate, explicit action).
+- Known caveats to surface in the UI: numeric UID/GID are restored as-is (users
+  on host B may differ); host-specific settings in compose files (ports,
+  external networks, absolute paths outside the stack directory) can break;
+  only bind mounts inside the stack directory are covered.
+- Importing/creating stacks is admin-only.
+
+## Live logs
+
+The worker appends to `/job/log.txt` as JSON lines
+(`{"ts","level","step","msg"}`) and mirrors restic's `--json` progress
+messages (percent, bytes, files) into a `progress` field in `status.json`.
+
+- The manager tails these files and streams them to the browser via
+  Server-Sent Events (`text/event-stream`; HTMX SSE extension). Late joiners
+  get the existing log first, then live lines. Finished jobs show the stored log.
+- Self-backup / self-restore: the manager is stopped while the job runs, so no
+  live view is possible. The job page shows "manager is going offline" and
+  retries the SSE connection with backoff; once the manager is back it
+  reconciles the job and shows the complete log.
+- Log lines are filtered for known secret values before they are written.
+- Log files are kept per job and cleaned up by age (config option).
+
+## Scheduler
+
+`robfig/cron` in the manager. A schedule only creates a `queued` job; execution
+always goes through the same queue and worker path as manual runs. Missed runs
+(manager down) are not replayed by default; configurable later.
+
+## Stack discovery
+
+Every direct subdirectory of `STACKS_ROOT` containing `compose.yml` or
+`compose.yaml` is a stack. The directory name is the stack ID. Stacks can be
+disabled per stack. Discovery is the only source of stack names/paths.
+
+## Interfaces (for testing)
+
+```go
+type DockerClient interface {
+    Services(ctx context.Context, stack Stack) ([]ServiceState, error)
+    Stop(ctx context.Context, stack Stack) error
+    Start(ctx context.Context, stack Stack, services []string) error
+    WaitHealthy(ctx context.Context, stack Stack, services []string) error
+}
+
+type ResticRunner interface {
+    Backup(ctx context.Context, repo Repo, path string, opts BackupOpts) (SnapshotID, error)
+    Restore(ctx context.Context, repo Repo, snap SnapshotID, target string) error
+    Snapshots(ctx context.Context, repo Repo, filter Filter) ([]Snapshot, error)
+}
+```
