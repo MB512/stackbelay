@@ -5,12 +5,24 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/MB512/stackvault/internal/secrets"
 )
+
+// testBox returns a secrets box with a fixed test key.
+func testBox(t *testing.T) *secrets.Box {
+	t.Helper()
+	b, err := secrets.New([]byte("0123456789abcdef0123456789abcdef"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
 
 // openTest opens a fresh database in a temp directory.
 func openTest(t *testing.T) *Store {
 	t.Helper()
-	s, err := Open(context.Background(), filepath.Join(t.TempDir(), "test.db"))
+	s, err := Open(context.Background(), filepath.Join(t.TempDir(), "test.db"), testBox(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -22,7 +34,7 @@ func TestOpenAppliesMigrationsOnce(t *testing.T) {
 	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "test.db")
 	for i := 0; i < 2; i++ { // second open must not re-apply
-		s, err := Open(ctx, dbPath)
+		s, err := Open(ctx, dbPath, testBox(t))
 		if err != nil {
 			t.Fatalf("open #%d: %v", i+1, err)
 		}
@@ -62,7 +74,7 @@ func TestPragmas(t *testing.T) {
 func TestNewerSchemaIsRejected(t *testing.T) {
 	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "test.db")
-	s, err := Open(ctx, dbPath)
+	s, err := Open(ctx, dbPath, testBox(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,14 +82,14 @@ func TestNewerSchemaIsRejected(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = s.Close()
-	if _, err := Open(ctx, dbPath); err == nil || !strings.Contains(err.Error(), "newer") {
+	if _, err := Open(ctx, dbPath, testBox(t)); err == nil || !strings.Contains(err.Error(), "newer") {
 		t.Fatalf("expected newer-schema error, got %v", err)
 	}
 }
 
 func TestOpenRejectsBadPath(t *testing.T) {
 	for _, p := range []string{"", "/tmp/x.db?_pragma=foreign_keys(0)"} {
-		if _, err := Open(context.Background(), p); err == nil {
+		if _, err := Open(context.Background(), p, testBox(t)); err == nil {
 			t.Errorf("Open(%q): expected error", p)
 		}
 	}

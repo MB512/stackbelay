@@ -25,6 +25,11 @@ attackers reaching the UI, a leaked database file.
    the calls the manager itself needs.
 4. **Secrets at rest.** Repo passwords and backend credentials are encrypted
    with AES-256-GCM using `STACKVAULT_SECRET_KEY`. The key is not stored in the DB.
+   Each ciphertext is bound to its row via associated data, so an attacker
+   with write access to the DB cannot move a secret to another stack's
+   repository. Repository locations are plain text and must not embed
+   passwords. restic gets only an allow-listed environment, so the secrets
+   key never reaches a child process.
 5. **Secrets in transit to worker.** Delivered via a tmpfs-mounted file or env
    of the worker container, removed after the job. Never CLI arguments (visible
    in `ps`), never logged. Log output from restic is filtered for known secret

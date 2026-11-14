@@ -15,6 +15,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/MB512/stackvault/internal/secrets"
+
 	// Registers the pure-Go "sqlite" driver with database/sql. A blank
 	// import runs only the package's registration, similar to referencing an
 	// ADO.NET provider without using its types directly.
@@ -29,12 +31,16 @@ const timeFormat = time.RFC3339
 
 // Store wraps the database handle. Its methods are safe for concurrent use.
 type Store struct {
-	db *sql.DB
+	db  *sql.DB
+	box *secrets.Box // encrypts repository credentials
 }
 
 // Open opens (creating if necessary) the SQLite database at path and applies
-// pending migrations.
-func Open(ctx context.Context, dbPath string) (*Store, error) {
+// pending migrations. box encrypts and decrypts stored credentials.
+func Open(ctx context.Context, dbPath string, box *secrets.Box) (*Store, error) {
+	if box == nil {
+		return nil, errors.New("store: secrets box is required")
+	}
 	if dbPath == "" || strings.ContainsAny(dbPath, "?#") {
 		return nil, fmt.Errorf("invalid database path %q", dbPath)
 	}
@@ -48,7 +54,7 @@ func Open(ctx context.Context, dbPath string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("opening database: %w", err)
 	}
-	s := &Store{db: db}
+	s := &Store{db: db, box: box}
 	if err := s.migrate(ctx); err != nil {
 		_ = db.Close()
 		return nil, err
@@ -155,3 +161,11 @@ func (s *Store) inTx(ctx context.Context, fn func(*sql.Tx) error) error {
 var ErrNotFound = errors.New("not found")
 
 func formatTime(t time.Time) string { return t.UTC().Format(timeFormat) }
+
+func parseTime(s string) (time.Time, error) {
+	t, err := time.Parse(timeFormat, s)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("parsing stored time %q: %w", s, err)
+	}
+	return t, nil
+}

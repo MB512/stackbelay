@@ -108,6 +108,14 @@ CREATE TABLE audit_log (
   embedded via `embed`, applied at startup, each in its own transaction, and
   recorded in `schema_migrations`. Never edit an applied migration; add a new
   one. A database with a newer schema than the binary is refused.
+- `repositories.secret_enc`: AES-256-GCM (`internal/secrets`) of the JSON
+  `{"password": "...", "env": {"RESTIC_REST_USERNAME": "...", ...}}`, with
+  associated data `stackvault:repository:stack=<stack_id>`. Env keys must be
+  in `restic.BackendEnvVars`. `location` is stored in plain text and must not
+  contain a password (`rest:https://user:pw@...` is refused).
+- Changing a repository's `location` deletes its cached snapshots.
+- Snapshot cache refresh marks snapshots no longer in the repository as
+  `missing = 1` instead of deleting them.
 - All tables are `STRICT` (SQLite enforces column types). Connections enable
   `foreign_keys`, WAL mode, a busy timeout and `BEGIN IMMEDIATE` transactions.
 - Job logs live in files (`/data/jobs/<id>/log.txt`), not in the DB.
