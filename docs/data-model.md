@@ -46,7 +46,6 @@ CREATE TABLE snapshots (
   missing      INTEGER NOT NULL DEFAULT 0,  -- 1 = no longer in repo at last refresh
   PRIMARY KEY (repo_id, snapshot_id)
 );
--- repositories gets: snapshots_refreshed_at TEXT (cache age shown in UI)
 
 CREATE TABLE permissions (
   user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -105,5 +104,10 @@ CREATE TABLE audit_log (
 - Timestamps: UTC, RFC 3339 strings.
 - Secrets key: `STACKVAULT_SECRET_KEY` (32 bytes, base64) from env or file. Losing
   it means losing access to stored repo credentials; document in README.
-- Migrations: numbered SQL files embedded via `embed`, applied at startup.
+- Migrations: numbered SQL files (`internal/store/migrations/NNNN_name.sql`)
+  embedded via `embed`, applied at startup, each in its own transaction, and
+  recorded in `schema_migrations`. Never edit an applied migration; add a new
+  one. A database with a newer schema than the binary is refused.
+- All tables are `STRICT` (SQLite enforces column types). Connections enable
+  `foreign_keys`, WAL mode, a busy timeout and `BEGIN IMMEDIATE` transactions.
 - Job logs live in files (`/data/jobs/<id>/log.txt`), not in the DB.

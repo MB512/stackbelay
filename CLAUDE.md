@@ -36,7 +36,7 @@ Restart must ALWAYS happen (defer), even on failure. See `docs/architecture.md`.
 
 ## Tech decisions (do not change without discussion)
 
-- Go 1.23+, module `github.com/<owner>/stackvault`
+- Go 1.26+ (required by `modernc.org/sqlite`), module `github.com/MB512/stackvault`
 - Router: `go-chi/chi`; templates: `html/template`; UI: HTMX
 - DB: SQLite via `modernc.org/sqlite` (pure Go, no CGO), embedded SQL migrations
 - Scheduler: `robfig/cron/v3`
