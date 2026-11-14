@@ -39,14 +39,7 @@ func LoadWorker(getenv func(string) string) (Worker, error) {
 		JobTimeout:   6 * time.Hour,
 	}
 
-	switch {
-	case c.StacksRoot == "":
-		errs = append(errs, errors.New("STACKS_ROOT is required"))
-	case !filepath.IsAbs(c.StacksRoot):
-		errs = append(errs, errors.New("STACKS_ROOT must be an absolute path"))
-	default:
-		c.StacksRoot = filepath.Clean(c.StacksRoot)
-	}
+	c.StacksRoot, errs = absPath(getenv, "STACKS_ROOT", "", errs)
 
 	if c.Hostname == "" {
 		h, err := os.Hostname()
@@ -77,11 +70,33 @@ func LoadWorker(getenv func(string) string) (Worker, error) {
 		}
 	}
 
+	c.LogLevel, errs = logLevel(getenv, errs)
+
+	return c, errors.Join(errs...)
+}
+
+// absPath reads an absolute path variable. def is used if the variable is
+// unset; an empty def makes the variable required.
+func absPath(getenv func(string) string, name, def string, errs []error) (string, []error) {
+	v := getenv(name)
+	if v == "" {
+		v = def
+	}
+	switch {
+	case v == "":
+		return "", append(errs, fmt.Errorf("%s is required", name))
+	case !filepath.IsAbs(v):
+		return "", append(errs, fmt.Errorf("%s must be an absolute path", name))
+	}
+	return filepath.Clean(v), errs
+}
+
+func logLevel(getenv func(string) string, errs []error) (slog.Level, []error) {
+	var l slog.Level
 	if v := getenv("STACKVAULT_LOG_LEVEL"); v != "" {
-		if err := c.LogLevel.UnmarshalText([]byte(strings.ToUpper(v))); err != nil {
+		if err := l.UnmarshalText([]byte(strings.ToUpper(v))); err != nil {
 			errs = append(errs, fmt.Errorf("STACKVAULT_LOG_LEVEL: %w", err))
 		}
 	}
-
-	return c, errors.Join(errs...)
+	return l, errs
 }

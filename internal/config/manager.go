@@ -1,0 +1,103 @@
+package config
+
+import (
+	"errors"
+	"fmt"
+	"log/slog"
+	"path/filepath"
+	"strconv"
+	"time"
+
+	"github.com/MB512/stackvault/internal/secrets"
+)
+
+// Manager is the configuration of the manager binary.
+type Manager struct {
+	StacksRoot string // STACKS_ROOT, absolute
+	DataDir    string // STACKVAULT_DATA_DIR, absolute, default /data
+	// Hostname is passed to workers as STACKVAULT_HOSTNAME (restic --host).
+	// Required: inside a container os.Hostname() is a random container id.
+	Hostname   string
+	ListenAddr string        // STACKVAULT_LISTEN, default ":8080"
+	SessionTTL time.Duration // STACKVAULT_SESSION_TTL, default 12h
+	// AllowInsecureHTTP permits login over plain HTTP (no reverse proxy
+	// with TLS in front). STACKVAULT_ALLOW_INSECURE_HTTP, default false.
+	AllowInsecureHTTP bool
+	// WorkerImage is the image for worker containers
+	// (STACKVAULT_WORKER_IMAGE). Empty means: the manager's own image.
+	WorkerImage string
+	LogLevel    slog.Level // STACKVAULT_LOG_LEVEL, default info
+
+	// SecretKey encrypts repository credentials. From STACKVAULT_SECRET_KEY
+	// (base64) or STACKVAULT_SECRET_KEY_FILE (file containing the base64 key).
+	SecretKey []byte
+}
+
+// DBPath is the SQLite database file.
+func (m Manager) DBPath() string { return filepath.Join(m.DataDir, "stackvault.db") }
+
+// JobsDir holds one directory per job (spec, status, log).
+func (m Manager) JobsDir() string { return filepath.Join(m.DataDir, "jobs") }
+
+// LoadManager reads the manager configuration. readFile is usually
+// os.ReadFile (used for STACKVAULT_SECRET_KEY_FILE).
+func LoadManager(getenv func(string) string, readFile func(string) ([]byte, error)) (Manager, error) {
+	var errs []error
+	c := Manager{
+		Hostname:    getenv("STACKVAULT_HOSTNAME"),
+		ListenAddr:  getenv("STACKVAULT_LISTEN"),
+		WorkerImage: getenv("STACKVAULT_WORKER_IMAGE"),
+		SessionTTL:  12 * time.Hour,
+	}
+	c.StacksRoot, errs = absPath(getenv, "STACKS_ROOT", "", errs)
+	c.DataDir, errs = absPath(getenv, "STACKVAULT_DATA_DIR", "/data", errs)
+	c.LogLevel, errs = logLevel(getenv, errs)
+
+	if c.Hostname == "" {
+		errs = append(errs, errors.New("STACKVAULT_HOSTNAME is required (name of the Docker host, used as restic --host)"))
+	}
+	if c.ListenAddr == "" {
+		c.ListenAddr = ":8080"
+	}
+	if v := getenv("STACKVAULT_SESSION_TTL"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d < time.Minute {
+			errs = append(errs, fmt.Errorf("STACKVAULT_SESSION_TTL: invalid duration %q (minimum 1m)", v))
+		} else {
+			c.SessionTTL = d
+		}
+	}
+	if v := getenv("STACKVAULT_ALLOW_INSECURE_HTTP"); v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("STACKVAULT_ALLOW_INSECURE_HTTP: %w", err))
+		}
+		c.AllowInsecureHTTP = b
+	}
+
+	key, keyFile := getenv("STACKVAULT_SECRET_KEY"), getenv("STACKVAULT_SECRET_KEY_FILE")
+	switch {
+	case key != "" && keyFile != "":
+		errs = append(errs, errors.New("set only one of STACKVAULT_SECRET_KEY and STACKVAULT_SECRET_KEY_FILE"))
+	case key == "" && keyFile == "":
+		errs = append(errs, errors.New("STACKVAULT_SECRET_KEY or STACKVAULT_SECRET_KEY_FILE is required "+
+			"(32 random bytes, base64; generate with: openssl rand -base64 32)"))
+	default:
+		if keyFile != "" {
+			b, err := readFile(keyFile)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("STACKVAULT_SECRET_KEY_FILE: %w", err))
+				break
+			}
+			key = string(b)
+		}
+		k, err := secrets.ParseKey(key)
+		if err != nil {
+			// The error never contains the key itself.
+			errs = append(errs, fmt.Errorf("secret key: %w", err))
+		}
+		c.SecretKey = k
+	}
+
+	return c, errors.Join(errs...)
+}
