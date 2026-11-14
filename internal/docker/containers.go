@@ -62,7 +62,10 @@ var dockerEnv = []string{
 	"DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_CONFIG", "DOCKER_TLS_VERIFY", "DOCKER_CERT_PATH", "DOCKER_API_VERSION",
 }
 
-var envNamePattern = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
+var (
+	envNamePattern = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
+	signalPattern  = regexp.MustCompile(`^SIG[A-Z0-9]+$`)
+)
 
 // runArgs builds the "docker run" arguments for spec.
 func runArgs(spec ContainerSpec) ([]string, error) {
@@ -186,6 +189,16 @@ func (c *CLI) RemoveContainer(ctx context.Context, name string) error {
 		return err
 	}
 	return nil
+}
+
+// SignalContainer sends a signal (e.g. "SIGTERM") to a running container.
+// Unlike "docker stop" it never follows up with SIGKILL.
+func (c *CLI) SignalContainer(ctx context.Context, name, signal string) error {
+	if !signalPattern.MatchString(signal) {
+		return fmt.Errorf("invalid signal %q", signal)
+	}
+	_, err := c.run(ctx, "", "container", "kill", "--signal", signal, "--", name)
+	return err
 }
 
 func isNoSuchContainer(err error) bool {

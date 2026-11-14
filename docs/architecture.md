@@ -68,6 +68,7 @@ compose, so they are never affected by stopping a stack.
 | `STACKVAULT_SESSION_TTL` | session lifetime, default `12h` |
 | `STACKVAULT_ALLOW_INSECURE_HTTP` | accept logins over plain HTTP (testing without TLS proxy), default `false` |
 | `STACKVAULT_WORKER_IMAGE` | image for worker containers, default: the manager's own image |
+| `STACKVAULT_MAX_JOBS` | jobs running at the same time across all stacks, default `1` |
 | `STACKVAULT_LOG_LEVEL` | `debug`, `info`, `warn`, `error` |
 
 The database file is created with mode 0600. `/healthz` checks the database
@@ -94,8 +95,51 @@ because the manager (and its SQLite file) may be stopped during a self-backup.
 On startup the manager reconciles all job directories with the DB.
 
 Job states: `queued -> running -> succeeded | failed | cancelled`.
-At most one job per stack at a time (lock in DB + lock file in the stack's
-job area); further jobs queue.
+At most one job per stack at a time, enforced by a partial unique index in
+SQLite (see data-model.md); further jobs queue. A stack has at most one
+queued job per type.
+
+### Dispatcher (`internal/dispatch`)
+
+A loop in the manager (every 2 s, and immediately when a job is queued):
+
+1. For every `running` job: a final `status.json` finishes it (result into
+   the DB, audit entry `job.finish`, container removed, snapshot cache
+   refreshed if snapshots were created). A worker container that stopped or
+   vanished without a final status fails the job ("exit code N").
+2. Claim queued jobs (oldest first, stack not locked, at most
+   `STACKVAULT_MAX_JOBS` running in total), write `spec.json`, start the
+   worker container. Start errors (no repository, `docker run` failed) fail
+   the job and release the lock.
+
+All state is in the DB and the job directories, so a manager that was
+stopped by its own backup continues where it left off: running jobs are
+simply checked again. Cancelling a queued job marks it `cancelled`;
+cancelling a running job sends SIGTERM (never SIGKILL) to the worker, which
+restarts the stack and reports `cancelled`.
+
+Worker container template (fixed, nothing from user input):
+
+```
+docker run --detach --name stackvault-job-<id>
+  --label stackvault.worker=true --label stackvault.job=<ID>
+  --mount type=bind,source=$STACKS_ROOT,target=$STACKS_ROOT
+  --mount type=bind,source=<host docker socket>,target=/var/run/docker.sock
+  --mount <host jobs dir>/<ID> -> /job   (bind, or volume with volume-subpath)
+  --mount type=volume,source=stackvault-restic-cache,target=/cache
+  --env STACKS_ROOT --env STACKVAULT_HOSTNAME --env RESTIC_CACHE_DIR
+  --env RESTIC_REPOSITORY --env RESTIC_PASSWORD --env <backend variables>
+  <image> /app/worker run /job
+```
+
+The manager finds the host side of its mounts and its own image by
+inspecting its own container (id from `/proc/self/mountinfo`).
+`STACKS_ROOT` must be bind-mounted from the same path; `/data` may be a
+bind mount or a named volume (Docker >= 26 for `volume-subpath`). Outside a
+container (development) paths are used as they are and
+`STACKVAULT_WORKER_IMAGE` is required. The docker CLI gets an allow-listed
+environment (`PATH`, `HOME`, `DOCKER_*`) plus the job's credentials, which
+`--env NAME` forwards by name.
 
 ## Backup pipeline
 
@@ -428,7 +472,7 @@ End-to-end smoke test against the local Docker daemon and a temporary local
 repository: `scripts/e2e-local.sh` (`KEEP=1` keeps the temp directory and
 containers for inspection).
 
-Not yet implemented (M3/M4): the per-stack lock, restore into a not-yet-existing stack
+Not yet implemented (M4/M5): restore into a not-yet-existing stack
 (import), image pinning.
 
 ## Planned features (not implemented)
