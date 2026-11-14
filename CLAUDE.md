@@ -59,6 +59,7 @@ internal/stacks/    discovery of stacks under STACKS_ROOT
 internal/docker/    Client interface + CLI implementation
 internal/restic/    Runner interface + CLI implementation, JSON parsing
 internal/jobs/      job spec, state machine, backup/restore pipelines
+internal/snapshots/ snapshot cache refresh (read-only restic, run by manager)
 internal/scheduler/ cron -> job creation
 internal/web/       handlers, templates, static assets
 docs/               architecture, data model, security
