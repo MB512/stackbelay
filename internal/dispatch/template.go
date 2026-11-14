@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/MB512/stackvault/internal/docker"
+	"github.com/MB512/stackvault/internal/jobs"
 	"github.com/MB512/stackvault/internal/restic"
 )
 
@@ -93,6 +94,21 @@ func (t Template) Spec(jobID string, repo restic.Repo) (docker.ContainerSpec, er
 		Env: env,
 		Cmd: []string{WorkerBinary, "run", WorkerJobDir},
 	}, nil
+}
+
+// JobsDirInStack returns the jobs directory relative to the given stack's
+// directory, if it lies inside it (the manager's own stack, whose data
+// directory holds the job files), else "". A restore of that stack must
+// carry the job files over (jobs.Spec.CarryOverJobs).
+func (t Template) JobsDirInStack(stack string) string {
+	if t.Jobs.Type != "bind" {
+		return "" // a volume is not part of any stack directory
+	}
+	rel, err := filepath.Rel(path.Join(t.StacksRoot, stack), t.Jobs.Source)
+	if err != nil || !jobs.ValidCarryOver(rel) {
+		return ""
+	}
+	return rel
 }
 
 // TemplateConfig is what NewTemplate needs from the manager configuration.

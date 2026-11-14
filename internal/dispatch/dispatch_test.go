@@ -380,3 +380,114 @@ func TestRunWakesOnSubmit(t *testing.T) {
 	cancel()
 	<-done
 }
+
+// writeJobDir writes job files as the dispatcher and a worker would.
+func (e *env) writeJobDir(spec jobs.Spec, status *jobs.Status) {
+	e.t.Helper()
+	dir := filepath.Join(e.jobsDir, spec.ID)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		e.t.Fatal(err)
+	}
+	if err := jobs.WriteSpec(dir, spec); err != nil {
+		e.t.Fatal(err)
+	}
+	if status != nil {
+		status.ID = spec.ID
+		if err := jobs.WriteStatus(dir, *status); err != nil {
+			e.t.Fatal(err)
+		}
+	}
+}
+
+// After the manager restored its own stack, the database comes from the
+// snapshot, but the job files were carried over and are newer.
+func TestReconcileAfterSelfRestore(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	if _, err := e.st.CreateUser(ctx, store.User{Username: "alice", PasswordHash: "h"}); err != nil {
+		t.Fatal(err)
+	}
+	t0 := time.Date(2026, 11, 14, 9, 0, 0, 0, time.UTC)
+	newID := func(i int) string {
+		id, err := jobs.NewID(t0.Add(time.Duration(i) * time.Minute))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+
+	// The self-backup was running when its snapshot was taken ...
+	backup := e.submit("web", jobs.TypeBackup, store.JobOptions{})
+	e.d.Step(ctx)
+	e.docker.set(ContainerName(backup.ID), docker.ContainerState{}) // long gone
+	// ... and actually succeeded (its files were carried over).
+	e.workerDone(backup.ID, jobs.Status{State: jobs.StateSucceeded, Snapshot: "bbbbbbbb22222222"})
+
+	// The restore itself: unknown to the restored database, still running.
+	restoreID := newID(1)
+	started := t0.Add(90 * time.Second)
+	e.writeJobDir(jobs.Spec{ID: restoreID, Type: jobs.TypeRestore, Stack: "web", SnapshotID: "bbbbbbbb22222222",
+		CarryOverJobs: "data/jobs", Trigger: "manual", Requester: "alice"},
+		&jobs.Status{State: jobs.StateRunning, StartedAt: &started})
+	e.docker.set(ContainerName(restoreID), docker.ContainerState{Exists: true, Status: "running"})
+	// A job whose worker never started, a job of a vanished stack, junk.
+	neverID := newID(2)
+	e.writeJobDir(jobs.Spec{ID: neverID, Type: jobs.TypeBackup, Stack: "db"}, nil)
+	e.writeJobDir(jobs.Spec{ID: newID(3), Type: jobs.TypeBackup, Stack: "gone"}, &jobs.Status{State: jobs.StateSucceeded})
+	if err := os.Mkdir(filepath.Join(e.jobsDir, "not-a-job"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	restarted := e.newDispatcher()
+	restarted.Reconcile(ctx)
+
+	if j := e.job(backup.ID); j.State != jobs.StateSucceeded || j.Snapshot != "bbbbbbbb22222222" {
+		t.Fatalf("self-backup: %+v", j)
+	}
+	r := e.job(restoreID)
+	if r.State != jobs.StateRunning || r.Type != jobs.TypeRestore || r.Requester != "alice" || r.StackName != "web" ||
+		r.Options.SnapshotID != "bbbbbbbb22222222" || !r.QueuedAt.Equal(t0.Add(time.Minute)) || !r.StartedAt.Equal(started) {
+		t.Fatalf("imported restore: %+v", r)
+	}
+	if j := e.job(neverID); j.State != jobs.StateFailed || !strings.Contains(j.Error, "without a result") {
+		t.Fatalf("job without status: %+v", j)
+	}
+	if all, _ := e.st.ListJobs(ctx, 0, 100); len(all) != 3 {
+		t.Fatalf("jobs: %d, want 3 (the unknown stack is skipped)", len(all))
+	}
+
+	// The imported restore is followed like any running job.
+	restarted.Step(ctx)
+	if got := e.job(restoreID).State; got != jobs.StateRunning {
+		t.Fatalf("restore while its worker runs: %s", got)
+	}
+	e.workerDone(restoreID, jobs.Status{State: jobs.StateSucceeded, Snapshot: "bbbbbbbb22222222", StartedAt: &started})
+	restarted.Step(ctx)
+	if got := e.job(restoreID).State; got != jobs.StateSucceeded {
+		t.Fatalf("restore after its worker finished: %s", got)
+	}
+
+	// Reconciling again changes nothing.
+	restarted.Reconcile(ctx)
+	if all, _ := e.st.ListJobs(ctx, 0, 100); len(all) != 3 {
+		t.Fatalf("second reconcile: %d jobs", len(all))
+	}
+}
+
+func TestRestoreOfManagerStackCarriesJobsOver(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	e.d.Template.Jobs = docker.Mount{Type: "bind", Source: "/home/docker/web/data/jobs"} // the manager lives in "web"
+	own := e.submit("web", jobs.TypeRestore, store.JobOptions{SnapshotID: "aaaaaaaa11111111"})
+	other := e.submit("db", jobs.TypeRestore, store.JobOptions{SnapshotID: "aaaaaaaa11111111"})
+	e.d.Step(ctx)
+	for id, want := range map[string]string{own.ID: "data/jobs", other.ID: ""} {
+		spec, err := jobs.ReadSpec(filepath.Join(e.jobsDir, id))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if spec.CarryOverJobs != want || spec.Trigger != store.TriggerManual {
+			t.Errorf("spec of %s: carry-over %q, trigger %q", spec.Stack, spec.CarryOverJobs, spec.Trigger)
+		}
+	}
+}

@@ -89,10 +89,29 @@ a file. The worker writes `status.json` atomically (state, timestamps,
 snapshot ids, previous directory, error; see `jobs.Status`) when the job
 starts and when it ends, and `log.txt` as JSON lines. Both log and error are
 filtered for the credential values. If the spec is invalid, the worker
-still writes a `failed` status with the reason. The manager reads these files (poll/inotify)
+still writes a `failed` status with the reason. The manager reads these files
 and mirrors them into SQLite. Files, not the DB, are the handoff channel
 because the manager (and its SQLite file) may be stopped during a self-backup.
-On startup the manager reconciles all job directories with the DB.
+
+On startup the manager reconciles the job directories with the DB
+(`Dispatcher.Reconcile`, two passes): jobs the DB still has as queued or
+running whose directory holds a final status are finished from it; job
+directories the DB does not know are imported (spec + status; the spec
+carries trigger and requester for this; a directory without status becomes
+`failed`). Audit entry `job.import`.
+
+**Self-restore.** The manager's jobs directory lies inside its own stack
+(`/data` is part of it). Restoring that stack would move the job files away
+with the previous version and bring back an older database. So for a
+restore of the stack that contains the jobs directory, the spec carries
+`carry_over_jobs` (the jobs directory relative to the stack, e.g.
+`data/jobs`): right after the swap, before the stack starts, the worker
+copies it from the previous version into the restored stack, and at the
+end writes its final status and complete log into that copy too. The
+restarted manager then reconciles: the self-backup that was running when
+the snapshot was taken is finished from its real result, and the restore
+itself (and any later jobs) are imported. Users, repositories and
+permissions are those of the snapshot, as expected from a restore.
 
 Job states: `queued -> running -> succeeded | failed | cancelled`.
 At most one job per stack at a time, enforced by a partial unique index in

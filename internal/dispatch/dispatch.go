@@ -121,6 +121,7 @@ func (d *Dispatcher) Run(ctx context.Context) {
 	if interval <= 0 {
 		interval = 2 * time.Second
 	}
+	d.Reconcile(ctx)
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
@@ -131,6 +132,104 @@ func (d *Dispatcher) Run(ctx context.Context) {
 		case <-ticker.C:
 		case <-d.wakeChan():
 		}
+	}
+}
+
+// Reconcile brings the database in line with the job directories. Run
+// calls it once at start. The job files are the more recent record after
+// the manager restored its own stack (the database comes from the
+// snapshot, the job files were carried over from the previous version):
+//
+//   - a job the database still has as queued or running, whose directory
+//     has a final status, is finished from that status;
+//   - a job directory the database does not know is imported (e.g. the
+//     restore itself, or jobs that ran after the restored snapshot).
+func (d *Dispatcher) Reconcile(ctx context.Context) {
+	entries, err := os.ReadDir(d.JobsDir)
+	if err != nil {
+		d.Logger.Error("reconciling jobs: reading jobs directory", "error", err)
+		return
+	}
+	// Two passes: finishing known jobs first releases their stacks' locks,
+	// so an imported running job does not collide with a stale one.
+	for _, importing := range []bool{false, true} {
+		for _, e := range entries {
+			if e.IsDir() && jobs.ValidJobID(e.Name()) {
+				d.reconcileDir(ctx, e.Name(), importing)
+			}
+		}
+	}
+}
+
+// reconcileDir finishes a known job from its files, or (importing) imports
+// an unknown one.
+func (d *Dispatcher) reconcileDir(ctx context.Context, id string, importing bool) {
+	log := d.Logger.With("job_id", id)
+	dir := d.jobDir(id)
+	status, statusErr := jobs.ReadStatus(dir)
+	final := statusErr == nil && status.ID == id && status.State.Final()
+
+	known, err := d.Store.JobByID(ctx, id)
+	switch {
+	case err == nil:
+		if !importing && !known.State.Final() && final {
+			log.Info("reconciling jobs: finishing job from its job files", "state", status.State)
+			d.removeContainer(ctx, ContainerName(id))
+			d.finishWithStatus(ctx, known, status)
+		}
+		return
+	case !errors.Is(err, store.ErrNotFound):
+		log.Error("reconciling jobs: loading job", "error", err)
+		return
+	case !importing:
+		return
+	}
+
+	spec, err := jobs.ReadSpec(dir)
+	if err != nil {
+		log.Warn("reconciling jobs: skipping job directory", "error", err)
+		return
+	}
+	st, err := d.Store.StackByName(ctx, spec.Stack)
+	if err != nil {
+		log.Warn("reconciling jobs: skipping job of unknown stack", "stack", spec.Stack, "error", err)
+		return
+	}
+	queued, _ := jobs.IDTime(id)
+	j := store.Job{
+		ID: id, StackID: st.ID, StackName: st.Name, Type: spec.Type, Trigger: spec.Trigger, QueuedAt: queued,
+		Options: store.JobOptions{PreStop: spec.PreStop, SnapshotID: spec.SnapshotID,
+			SkipSafetySnapshot: spec.SkipSafetySnapshot, NoStart: spec.NoStart},
+	}
+	if j.Trigger == "" {
+		j.Trigger = store.TriggerManual
+	}
+	switch {
+	case statusErr == nil && status.ID == id:
+		j.State, j.Snapshot, j.Error = status.State, status.Snapshot, status.Error
+		j.Result = store.JobResult{PreStopSnapshot: status.PreStopSnapshot, SafetySnapshot: status.SafetySnapshot,
+			PreviousDir: status.PreviousDir}
+		if status.StartedAt != nil {
+			j.StartedAt = *status.StartedAt
+		}
+		if status.FinishedAt != nil {
+			j.FinishedAt = *status.FinishedAt
+		}
+	default: // the worker never wrote a status
+		j.State, j.FinishedAt = jobs.StateFailed, d.now()
+		j.Error = "found in the job files without a result (the worker did not start)"
+	}
+	if j.State == jobs.StateQueued { // workers never write "queued"
+		j.State = jobs.StateFailed
+	}
+	if err := d.Store.ImportJob(ctx, j, spec.Requester); err != nil {
+		log.Warn("reconciling jobs: importing job", "error", err)
+		return
+	}
+	log.Info("reconciling jobs: imported job from its job files", "stack", st.Name, "type", j.Type, "state", j.State)
+	if err := d.Store.AddAudit(ctx, store.AuditEntry{At: d.now(), Action: "job.import", StackID: st.ID,
+		Detail: fmt.Sprintf("job %s (%s, %s) rebuilt from its job files", id, j.Type, j.State)}); err != nil {
+		d.Logger.Error("writing audit log", "error", err)
 	}
 }
 
@@ -191,6 +290,11 @@ func (d *Dispatcher) start(ctx context.Context, j store.Job) {
 		ID: j.ID, Type: j.Type, Stack: j.StackName,
 		PreStop: j.Options.PreStop, SnapshotID: j.Options.SnapshotID,
 		SkipSafetySnapshot: j.Options.SkipSafetySnapshot, NoStart: j.Options.NoStart,
+		Trigger: j.Trigger, Requester: j.Requester,
+	}
+	if j.Type == jobs.TypeRestore {
+		// Restoring the manager's own stack: keep the job files.
+		spec.CarryOverJobs = d.Template.JobsDirInStack(j.StackName)
 	}
 	if err := jobs.WriteSpec(dir, spec); err != nil {
 		fail("writing job spec", err)

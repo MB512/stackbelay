@@ -73,3 +73,16 @@ func TestSpecRejectsUnknownRepoVariables(t *testing.T) {
 		t.Fatal("want error")
 	}
 }
+
+func TestJobsDirInStack(t *testing.T) {
+	tpl := Template{StacksRoot: "/home/docker", Jobs: docker.Mount{Type: "bind", Source: "/home/docker/stackvault/data/jobs"}}
+	for stack, want := range map[string]string{"stackvault": "data/jobs", "web": "", "stack": ""} {
+		if got := tpl.JobsDirInStack(stack); got != want {
+			t.Errorf("JobsDirInStack(%q) = %q, want %q", stack, got, want)
+		}
+	}
+	tpl.Jobs = docker.Mount{Type: "volume", Source: "stackvault_data", SubPath: "jobs"}
+	if got := tpl.JobsDirInStack("stackvault"); got != "" {
+		t.Errorf("volume: %q", got)
+	}
+}

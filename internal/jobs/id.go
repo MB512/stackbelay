@@ -3,6 +3,7 @@ package jobs
 import (
 	"crypto/rand"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -39,4 +40,17 @@ func NewID(now time.Time) (string, error) {
 	}
 	out[0] = crockford[acc&31] // remaining 3 bits
 	return string(out[:]), nil
+}
+
+// IDTime returns the creation time encoded in a job id (millisecond
+// precision). ok is false for invalid ids.
+func IDTime(id string) (t time.Time, ok bool) {
+	if !ValidJobID(id) {
+		return time.Time{}, false
+	}
+	var ms uint64
+	for _, c := range id[:10] { // 10 characters = 50 bits, the top 2 are zero
+		ms = ms<<5 | uint64(strings.IndexRune(crockford, c)) //nolint:gosec // G115: index of a valid character
+	}
+	return time.UnixMilli(int64(ms)).UTC(), true //nolint:gosec // G115: 48-bit value
 }

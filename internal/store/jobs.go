@@ -130,6 +130,37 @@ func parseOptionalTime(s string) (time.Time, error) {
 	return parseTime(s)
 }
 
+// ImportJob inserts a job rebuilt from its job directory, in any state and
+// with its times and results. RequesterName is resolved to a user if one
+// with that name exists. It fails with ErrConflict if the job exists or
+// would be a second running job of its stack.
+func (s *Store) ImportJob(ctx context.Context, j Job, requesterName string) error {
+	opts, err := json.Marshal(j.Options)
+	if err != nil {
+		return fmt.Errorf("encoding job options: %w", err)
+	}
+	res, err := json.Marshal(j.Result)
+	if err != nil {
+		return fmt.Errorf("encoding job result: %w", err)
+	}
+	opt := func(t time.Time) sql.NullString {
+		return sql.NullString{String: formatTime(t), Valid: !t.IsZero()}
+	}
+	_, err = s.db.ExecContext(ctx,
+		`INSERT INTO jobs (id, stack_id, type, trigger, requested_by, state, options, snapshot_id, error, result,
+		                   queued_at, started_at, finished_at)
+		 VALUES (?, ?, ?, ?, (SELECT id FROM users WHERE username = ? AND ? != ''), ?, ?, NULLIF(?, ''), NULLIF(?, ''), ?, ?, ?, ?)`,
+		j.ID, j.StackID, j.Type, j.Trigger, requesterName, requesterName, j.State, string(opts), j.Snapshot,
+		truncateRunes(j.Error, 2000), string(res), formatTime(j.QueuedAt), opt(j.StartedAt), opt(j.FinishedAt))
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return fmt.Errorf("importing job %s: %w", j.ID, ErrConflict)
+		}
+		return fmt.Errorf("importing job %s: %w", j.ID, err)
+	}
+	return nil
+}
+
 // JobByID returns a job or ErrNotFound.
 func (s *Store) JobByID(ctx context.Context, id string) (Job, error) {
 	j, err := scanJob(s.db.QueryRowContext(ctx, `SELECT `+jobColumns+jobFrom+`WHERE j.id = ?`, id))

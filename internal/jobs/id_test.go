@@ -27,6 +27,12 @@ func TestNewID(t *testing.T) {
 	if !sort.StringsAreSorted(ids) {
 		t.Fatal("ids do not sort by time")
 	}
+	if got, ok := IDTime(ids[5]); !ok || !got.Equal(t0.Add(5*time.Millisecond)) {
+		t.Fatalf("IDTime = %v %v", got, ok)
+	}
+	if _, ok := IDTime("nope"); ok {
+		t.Fatal("IDTime accepted an invalid id")
+	}
 	// Known timestamp prefix: the first 10 characters encode the milliseconds.
 	id, _ := NewID(time.UnixMilli(0))
 	if id[:10] != "0000000000" {
