@@ -44,14 +44,19 @@ cleanup() {
 		return
 	fi
 	compose down >/dev/null 2>&1 || true
-	for job in "$SELF"/data/jobs/*/ "$ROOT"/"$NAME".old-*/data/jobs/*/; do
-		[[ -d "$job" ]] && docker rm -f "stackvault-job-$(basename "$job" | tr 'A-Z' 'a-z')" >/dev/null 2>&1
+	for id in $(job_ids); do
+		docker rm -f "stackvault-job-$(tr 'A-Z' 'a-z' <<<"$id")" >/dev/null 2>&1 || true
 	done
 	docker run --rm -v "$(dirname "$WORK"):/p" busybox:1.36 rm -rf "/p/$(basename "$WORK")" >/dev/null 2>&1 || rm -rf "$WORK"
 }
 trap cleanup EXIT
 
 c() { curl -sS -c "$JAR" -b "$JAR" "$@"; }
+# job_ids: ids of all job directories (they belong to root: list them in a container).
+job_ids() {
+	docker run --rm -v "$ROOT:/r:ro" busybox:1.36 sh -c "ls /r/$NAME/data/jobs /r/$NAME.old-*/data/jobs 2>/dev/null" |
+		grep -E '^[0-9A-Z]{26}$' | sort -u || true
+}
 # job_state <job path>: state badge of the job page ("" while the manager is down).
 job_state() { c "$B$1" 2>/dev/null | grep -o 'badge [a-z]*">[a-z]*' | head -1 | sed 's/.*>//' || true; }
 wait_job() { # <job path> -> final state; the manager may be down in between
@@ -103,7 +108,7 @@ c -o /dev/null -d "username=admin" --data-urlencode "password=$PW" "$B/login"
 T="$(csrf /account/password)"
 c -o /dev/null --data-urlencode "csrf_token=$T" --data-urlencode "current=$PW" \
 	-d "new=e2e+long+password&confirm=e2e+long+password" "$B/account/password"
-c "$B/" | grep -q 'href="/stacks/$NAME"' || fail "own stack not discovered"
+c "$B/" | grep -q "href=\"/stacks/$NAME\"" || fail "own stack not discovered"
 pass "manager running in its stack, logged in"
 c --data-urlencode "csrf_token=$T" --data-urlencode "location=$REPO" -d "password=self-repo-pw" \
 	"$B/stacks/$NAME/repository" | grep -q 'Initialize repository</button>' || fail "init not offered"
@@ -145,12 +150,14 @@ S="$(job_state "$BACKUP")"
 pass "self-backup still shown as succeeded"
 compgen -G "$ROOT/$NAME.old-*" >/dev/null || fail "previous directory missing"
 pass "previous version kept"
-sleep 3
-for job in "$SELF"/data/jobs/*/; do
-	docker container inspect "stackvault-job-$(basename "$job" | tr 'A-Z' 'a-z')" >/dev/null 2>&1 &&
-		fail "worker container of $(basename "$job") left"
+sleep 5
+IDS="$(job_ids)"
+[[ "$(wc -w <<<"$IDS")" -ge 2 ]] || fail "expected at least 2 job directories, found: $IDS"
+for id in $IDS; do
+	docker container inspect "stackvault-job-$(tr 'A-Z' 'a-z' <<<"$id")" >/dev/null 2>&1 &&
+		fail "worker container of $id left"
 done
-pass "worker containers removed"
+pass "worker containers removed ($(wc -w <<<"$IDS") jobs checked)"
 docker logs "$CONTAINER" 2>&1 | grep -q 'imported job from its job files' || fail "no job import in the manager log"
 pass "manager imported the restore from the job files"
 
