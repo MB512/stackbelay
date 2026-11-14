@@ -287,6 +287,7 @@ form with `method`/`action`, so it works without JavaScript. An HTMX request
 |---|---|---|
 | `GET /` | logged in | stacks the user may view (admins: all) |
 | `GET /stacks/{name}` | view right | "Backups" tab: repository location, cached snapshots (same for every user) |
+| `POST /stacks/{name}/snapshots/refresh` | view right | refresh the snapshot cache (read-only restic; at most once per 10 s per stack; HTMX: returns the snapshot section) |
 | `GET /stacks/{name}/settings` | admin | "Settings" tab: repository, enable/disable, per-user permissions |
 | `POST /stacks/{name}/repository` | admin | create/update the repository, then refresh the snapshot cache as an access check |
 | `POST /stacks/{name}/permissions` | admin | set one user's backup/restore right (HTMX: returns the table row) |

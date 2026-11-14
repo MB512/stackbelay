@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -89,6 +90,10 @@ type backupsTab struct {
 	CanBackup, CanRestore bool
 	Repo                  *store.RepositoryInfo // nil = no repository configured
 	Snapshots             []store.CachedSnapshot
+	// CSRF and the refresh result, for the "snapshots" partial, which is
+	// also rendered on its own as the answer to an HTMX refresh.
+	CSRF                      string
+	RefreshInfo, RefreshError string
 }
 
 // settingsTab is the data of the admin-only "Settings" tab.
@@ -150,25 +155,82 @@ func (s *Server) stackDetail(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	page, err := s.loadBackupsTab(r, st, perm)
+	if err != nil {
+		s.internalError(w, r, "loading stack", err)
+		return
+	}
+	s.render(w, r, http.StatusOK, "stack.html", pageData{Title: st.Name, Data: page})
+}
+
+// loadBackupsTab collects the data of the Backups tab.
+func (s *Server) loadBackupsTab(r *http.Request, st store.Stack, perm store.Permission) (backupsTab, error) {
 	a := authFrom(r.Context())
 	page := backupsTab{
 		stackHeader: newStackHeader(a.User, st, tabBackups),
 		CanBackup:   auth.Allowed(a.User, perm, auth.ActionBackup),
 		CanRestore:  auth.Allowed(a.User, perm, auth.ActionRestore),
+		CSRF:        a.Session.CSRFToken,
 	}
 	repo, err := s.Store.RepositoryInfoForStack(r.Context(), st.ID)
-	switch {
-	case err == nil:
-		page.Repo = &repo
-		if page.Snapshots, err = s.Store.ListSnapshots(r.Context(), repo.ID); err != nil {
-			s.internalError(w, r, "listing snapshots", err)
-			return
-		}
-	case !errors.Is(err, store.ErrNotFound):
+	if errors.Is(err, store.ErrNotFound) {
+		return page, nil
+	}
+	if err != nil {
+		return page, err
+	}
+	page.Repo = &repo
+	page.Snapshots, err = s.Store.ListSnapshots(r.Context(), repo.ID)
+	return page, err
+}
+
+// refreshCooldown is the minimum time between two refreshes of a stack's
+// snapshot list from the UI, so repeated clicks do not start a restic
+// process each.
+const refreshCooldown = 10 * time.Second
+
+// refreshStackSnapshots refreshes the snapshot list of a stack (read-only
+// restic). Everyone who may view the stack may do this. HTMX requests get
+// the snapshot section back, plain posts a redirect to the Backups tab.
+func (s *Server) refreshStackSnapshots(w http.ResponseWriter, r *http.Request) {
+	st, perm, ok := s.loadStack(w, r, auth.ActionView)
+	if !ok {
+		return
+	}
+	repo, err := s.Store.RepositoryInfoForStack(r.Context(), st.ID)
+	if errors.Is(err, store.ErrNotFound) {
+		s.renderError(w, r, http.StatusBadRequest, "This stack has no repository.")
+		return
+	}
+	if err != nil {
 		s.internalError(w, r, "loading repository", err)
 		return
 	}
-	s.render(w, r, http.StatusOK, "stack.html", pageData{Title: st.Name, Data: page})
+
+	var info, errMsg string
+	if age := s.now().Sub(repo.SnapshotsRefreshedAt); age >= 0 && age < refreshCooldown {
+		info = "The list was refreshed just now."
+	} else {
+		s.audit(r, store.AuditEntry{UserID: authFrom(r.Context()).User.ID, Action: "snapshots.refresh", StackID: st.ID})
+		n, err := s.refreshSnapshots(r.Context(), st)
+		if err != nil {
+			errMsg = "Refresh failed: " + err.Error()
+		} else {
+			info = fmt.Sprintf("Refreshed: %s in the repository.", plural(n, "snapshot"))
+		}
+	}
+
+	if !isHTMX(r) {
+		http.Redirect(w, r, "/stacks/"+url.PathEscape(st.Name), http.StatusSeeOther)
+		return
+	}
+	page, err := s.loadBackupsTab(r, st, perm)
+	if err != nil {
+		s.internalError(w, r, "loading stack", err)
+		return
+	}
+	page.RefreshInfo, page.RefreshError = info, errMsg
+	s.renderPartial(w, "stack.html", "snapshots", page)
 }
 
 // stackSettings shows the admin-only settings of a stack: repository,

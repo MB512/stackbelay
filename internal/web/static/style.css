@@ -72,3 +72,7 @@ textarea {
   font: .9rem ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; resize: vertical;
 }
 .card.wide p.hint { margin: -.5rem 0 0; }
+.section-head { display: flex; align-items: center; gap: .9rem; flex-wrap: wrap; margin-top: 1.8rem; }
+.section-head h2 { margin: 0; }
+.section-head form { margin: 0; }
+button[disabled] { opacity: .6; cursor: progress; }

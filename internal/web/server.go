@@ -83,6 +83,7 @@ func (s *Server) Handler() (http.Handler, error) {
 
 			r.Get("/", s.stackList)
 			r.Get("/stacks/{name}", s.stackDetail)
+			r.Post("/stacks/{name}/snapshots/refresh", s.refreshStackSnapshots)
 
 			// Admin only.
 			r.Group(func(r chi.Router) {

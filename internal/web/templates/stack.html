@@ -6,16 +6,33 @@
   <h2>Repository</h2>
   {{- with .Repo}}
   <p><code>{{.Location}}</code></p>
-  <p class="hint">Snapshot list last refreshed: {{when .SnapshotsRefreshedAt}}</p>
   {{- else}}
   <p class="hint">No repository configured.
     {{- if $.User.IsAdmin}} <a href="/stacks/{{$.Data.Stack.Name}}/settings">Configure it in the settings.</a>{{end}}</p>
   {{- end}}
 </section>
 
-{{- if .Repo}}
-<section>
-  <h2>Snapshots</h2>
+{{- if .Repo}}{{template "snapshots" .}}{{end}}
+{{- end}}
+{{end}}
+
+{{- /* The snapshot list with its Refresh button. Rendered on its own as the
+       answer to an HTMX refresh, which replaces the whole section. Dot is a
+       backupsTab. */}}
+{{define "snapshots"}}
+<section id="snapshots">
+  <div class="section-head">
+    <h2>Snapshots</h2>
+    <form method="post" action="/stacks/{{.Stack.Name}}/snapshots/refresh"
+          hx-post="/stacks/{{.Stack.Name}}/snapshots/refresh" hx-target="#snapshots" hx-swap="outerHTML"
+          hx-disabled-elt="find button">
+      <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+      <button type="submit" class="secondary">Refresh</button>
+    </form>
+    <span class="hint">Last refreshed: {{when .Repo.SnapshotsRefreshedAt}}</span>
+  </div>
+  {{- if .RefreshError}}<p class="error" role="alert">{{.RefreshError}}</p>{{end}}
+  {{- if .RefreshInfo}}<p class="info" role="status">{{.RefreshInfo}}</p>{{end}}
   {{- if .Snapshots}}
   <table>
     <thead><tr><th>Time</th><th>ID</th><th>Tags</th><th>Host</th></tr></thead>
@@ -31,9 +48,7 @@
     </tbody>
   </table>
   {{- else}}
-  <p class="hint">No snapshots cached yet.</p>
+  <p class="hint">No snapshots{{if .Repo.SnapshotsRefreshedAt.IsZero}} cached yet. Use Refresh to load the list{{end}}.</p>
   {{- end}}
 </section>
-{{- end}}
-{{- end}}
 {{end}}

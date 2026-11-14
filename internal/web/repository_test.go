@@ -205,3 +205,72 @@ func TestParseEnvLines(t *testing.T) {
 		}
 	}
 }
+
+func TestRefreshSnapshots(t *testing.T) {
+	e := newEnv(t, true, true)
+	webID, dbID := e.setupStacks()
+	ctx := context.Background()
+	if _, err := e.st.SetRepository(ctx, webID, "/srv/restic/web", "pw", nil); err != nil {
+		t.Fatal(err)
+	}
+	e.snaps.snaps = []restic.Snapshot{
+		{ID: "aaaaaaaa11111111", ShortID: "aaaaaaaa", Time: time.Date(2026, 11, 13, 3, 0, 0, 0, time.UTC), Hostname: "h", Paths: []string{"/s/web"}},
+	}
+	e.loginAdmin()
+	alice, aliceID := e.createUser("alice")
+	if err := e.st.SetPermission(ctx, store.Permission{UserID: aliceID, StackID: webID, CanBackup: true}); err != nil {
+		t.Fatal(err)
+	}
+	token := csrfOf(e, alice, "/stacks/web")
+	refresh := func(path string, htmx bool) response {
+		h := map[string]string{}
+		if htmx {
+			h["HX-Request"] = "true"
+		}
+		return e.do(alice, http.MethodPost, path, url.Values{"csrf_token": {token}}, h)
+	}
+
+	// Before: nothing cached.
+	if r := e.do(alice, http.MethodGet, "/stacks/web", nil, nil); !strings.Contains(r.body, "Use Refresh to load the list") {
+		t.Fatalf("backups tab:\n%s", r.body)
+	}
+
+	// A viewer refreshes via HTMX and gets the snapshot section back.
+	r := refresh("/stacks/web/snapshots/refresh", true)
+	expect(t, r, http.StatusOK, "")
+	if !strings.HasPrefix(strings.TrimSpace(r.body), `<section id="snapshots">`) || strings.Contains(r.body, "<html") ||
+		!strings.Contains(r.body, "aaaaaaaa") || !strings.Contains(r.body, "Refreshed: 1 snapshot in the repository.") {
+		t.Fatalf("HTMX answer:\n%s", r.body)
+	}
+	// Right away again: cooldown, restic is not called.
+	r = refresh("/stacks/web/snapshots/refresh", true)
+	if !strings.Contains(r.body, "refreshed just now") || e.snaps.calls != 1 {
+		t.Fatalf("cooldown: calls=%d\n%s", e.snaps.calls, r.body)
+	}
+	// Later, as a plain form post: redirect back to the Backups tab.
+	e.advance(11 * time.Second)
+	expect(t, refresh("/stacks/web/snapshots/refresh", false), http.StatusSeeOther, "/stacks/web")
+	if e.snaps.calls != 2 {
+		t.Fatalf("calls = %d", e.snaps.calls)
+	}
+
+	// Failure is shown in the section.
+	e.advance(11 * time.Second)
+	e.snaps.err = errors.New("connection refused")
+	r = refresh("/stacks/web/snapshots/refresh", true)
+	if !strings.Contains(r.body, "Refresh failed: connection refused") {
+		t.Fatalf("failure:\n%s", r.body)
+	}
+
+	// Hidden stack, no repository, missing token.
+	expect(t, refresh("/stacks/db/snapshots/refresh", true), http.StatusNotFound, "")
+	if err := e.st.SetPermission(ctx, store.Permission{UserID: aliceID, StackID: dbID, CanRestore: true}); err != nil {
+		t.Fatal(err)
+	}
+	expect(t, refresh("/stacks/db/snapshots/refresh", true), http.StatusBadRequest, "")
+	expect(t, e.do(alice, http.MethodPost, "/stacks/web/snapshots/refresh", url.Values{}, nil), http.StatusForbidden, "")
+
+	if n := auditActions(t, e.st)["snapshots.refresh"]; n != 3 {
+		t.Fatalf("snapshots.refresh logged %d times", n)
+	}
+}
