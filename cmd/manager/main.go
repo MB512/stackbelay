@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/MB512/stackvault/internal/auth"
 	"github.com/MB512/stackvault/internal/config"
 	"github.com/MB512/stackvault/internal/secrets"
 	"github.com/MB512/stackvault/internal/stacks"
@@ -54,6 +55,10 @@ func run(ctx context.Context, getenv func(string) string, readFile func(string) 
 	}
 	defer st.Close()
 
+	if err := auth.EnsureInitialAdmin(ctx, st, stderr, log); err != nil {
+		log.Error("starting manager: initial admin", "error", err)
+		return 1
+	}
 	if err := syncStacks(ctx, cfg.StacksRoot, st, log); err != nil {
 		log.Error("starting manager", "error", err)
 		return 1

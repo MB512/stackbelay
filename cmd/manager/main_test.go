@@ -95,7 +95,8 @@ func TestRunServesAndShutsDown(t *testing.T) {
 	}
 
 	out := logs.String()
-	if !strings.Contains(out, `"stacks":["web"]`) || !strings.Contains(out, "shutting down") {
+	if !strings.Contains(out, `"stacks":["web"]`) || !strings.Contains(out, "shutting down") ||
+		!strings.Contains(out, `INITIAL ADMIN PASSWORD (user "admin")`) {
 		t.Fatalf("unexpected log:\n%s", out)
 	}
 	if _, err := os.Stat(filepath.Join(data, "stackvault.db")); err != nil {
