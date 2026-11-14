@@ -67,12 +67,31 @@ func (s *Store) ReplaceSnapshots(ctx context.Context, repoID int64, snaps []rest
 	return nil
 }
 
-// ListSnapshots returns the cached snapshots of a repository, newest first,
-// including missing ones.
+// ListSnapshots returns all cached snapshots of a repository, newest
+// first, including missing ones and those of other stacks or hosts.
 func (s *Store) ListSnapshots(ctx context.Context, repoID int64) ([]CachedSnapshot, error) {
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT snapshot_id, short_id, time, hostname, paths, tags, missing
-		 FROM snapshots WHERE repo_id = ? ORDER BY time DESC, snapshot_id`, repoID)
+	return s.querySnapshots(ctx, `SELECT `+snapshotColumns+` FROM snapshots WHERE repo_id = ? ORDER BY time DESC, snapshot_id`, repoID)
+}
+
+// StackSnapshots returns the cached snapshots of one stack from one host,
+// newest first, including missing ones. A repository may be shared by
+// several stacks and hosts; a snapshot belongs to a stack if its single
+// path ends in "/<stack>" (restic records the backed-up path in every
+// snapshot), and to a host by restic's --host. An empty host matches all
+// hosts.
+func (s *Store) StackSnapshots(ctx context.Context, repoID int64, stack, host string) ([]CachedSnapshot, error) {
+	// Numbered parameters: ?1 repository, ?2 "/<stack>", ?3 host.
+	return s.querySnapshots(ctx, `SELECT `+snapshotColumns+` FROM snapshots
+		 WHERE repo_id = ?1 AND json_array_length(paths) = 1
+		   AND substr(json_extract(paths, '$[0]'), -length(?2)) = ?2
+		   AND (?3 = '' OR hostname = ?3)
+		 ORDER BY time DESC, snapshot_id`, repoID, "/"+stack, host)
+}
+
+const snapshotColumns = `snapshot_id, short_id, time, hostname, paths, tags, missing`
+
+func (s *Store) querySnapshots(ctx context.Context, query string, args ...any) ([]CachedSnapshot, error) {
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("listing snapshots: %w", err)
 	}

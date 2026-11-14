@@ -45,6 +45,10 @@ type Server struct {
 	Stopping <-chan struct{}
 	// StreamInterval is how often live streams look for news; default 500ms.
 	StreamInterval time.Duration
+	// Hostname is this host's restic --host (STACKVAULT_HOSTNAME). Only
+	// snapshots of a stack made on this host are listed and restorable.
+	// Empty: snapshots of all hosts.
+	Hostname string
 	// Now returns the current time; defaults to time.Now (tests override it).
 	Now func() time.Time
 

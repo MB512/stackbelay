@@ -161,7 +161,7 @@ type refreshError struct {
 func (e *refreshError) Error() string { return e.msg }
 
 // refreshSnapshots runs a snapshot cache refresh and returns the number of
-// snapshots that exist in the repository. Errors are *refreshError, with a
+// snapshots of this stack and host that exist in the repository. Errors are *refreshError, with a
 // shortened message for display; restic output never contains the
 // credentials (see restic.CLI).
 func (s *Server) refreshSnapshots(ctx context.Context, st store.Stack) (int, error) {
@@ -170,7 +170,7 @@ func (s *Server) refreshSnapshots(ctx context.Context, st store.Stack) (int, err
 	}
 	ctx, cancel := context.WithTimeout(ctx, refreshTimeout)
 	defer cancel()
-	snaps, err := s.Snapshots.Refresh(ctx, st.ID)
+	_, err := s.Snapshots.Refresh(ctx, st.ID)
 	if err != nil {
 		s.Logger.Warn("refreshing snapshots", "stack", st.Name, "error", err)
 		msg := err.Error()
@@ -184,8 +184,16 @@ func (s *Server) refreshSnapshots(ctx context.Context, st store.Stack) (int, err
 		}
 		return 0, &refreshError{msg: truncate(msg, 300), noRepo: restic.IsNoRepository(err)}
 	}
+	repo, err := s.Store.RepositoryInfoForStack(ctx, st.ID)
+	if err != nil {
+		return 0, &refreshError{msg: "loading repository: " + err.Error()}
+	}
+	own, err := s.Store.StackSnapshots(ctx, repo.ID, st.Name, s.Hostname)
+	if err != nil {
+		return 0, &refreshError{msg: "listing snapshots: " + err.Error()}
+	}
 	n := 0
-	for _, sn := range snaps {
+	for _, sn := range own {
 		if !sn.Missing {
 			n++
 		}

@@ -304,6 +304,14 @@ summary if available).
 - The cache is only a convenience for selection. The worker re-verifies the
   selected snapshot against the repository before restoring.
 - Show the cache age in the UI ("last refreshed 3 min ago").
+- A repository may be shared by several stacks and hosts. The cache holds
+  everything restic lists, but the UI (snapshot list, counts, restore) only
+  uses the stack's own snapshots from this host: exactly one path whose
+  last component is the stack name (restic records the backed-up path in
+  every snapshot, so no extra tag is needed and older snapshots qualify
+  too) and `hostname` = `STACKVAULT_HOSTNAME` (`store.StackSnapshots`). The
+  page says how many other snapshots were hidden. The worker checks the
+  path again before stopping anything.
 
 ## Restore from another host (stack migration)
 
@@ -543,6 +551,14 @@ backups alone, so repositories and their indexes stay small.
     keep old secrets per known location or document the limitation.
   - The manual "Initialize repository" button (current behaviour) stays
     for locations without placeholders.
+
+### Source host for migration
+
+Snapshots are filtered by this host's `STACKVAULT_HOSTNAME`. To move a stack
+from host A to host B, B must list A's snapshots of the same stack name: a
+per-repository (or per-import) setting **source host** (default: this host)
+selects whose snapshots are listed and restored. Restoring another host's
+snapshot is an admin action; new backups always use this host's name.
 
 ### More stack tabs
 

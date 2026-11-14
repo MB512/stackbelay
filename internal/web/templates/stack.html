@@ -53,6 +53,10 @@
     <span class="hint">Last refreshed: {{when .Repo.SnapshotsRefreshedAt}}</span>
   </div>
   {{- if .RefreshError}}<p class="error" role="alert">{{.RefreshError}}</p>{{end}}
+  {{- if .OtherSnapshots}}
+  <p class="hint">Snapshots of this stack{{with .Host}} from host <code>{{.}}</code>{{end}}.
+    {{.OtherSnapshots}} other snapshot{{if ne .OtherSnapshots 1}}s{{end}} in this repository belong to other stacks or hosts and are not shown.</p>
+  {{- end}}
   {{- if .RefreshInfo}}<p class="info" role="status">{{.RefreshInfo}}</p>{{end}}
   {{- if .Snapshots}}
   <table>

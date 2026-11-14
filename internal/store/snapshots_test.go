@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -74,5 +75,50 @@ func TestReplaceSnapshotsErrors(t *testing.T) {
 	bad := restic.Snapshot{ID: "../../etc", ShortID: "x", Time: time.Now()}
 	if err := s.ReplaceSnapshots(ctx, repo, []restic.Snapshot{bad}, time.Now()); err == nil {
 		t.Fatal("invalid snapshot id accepted")
+	}
+}
+
+func TestStackSnapshotsFilter(t *testing.T) {
+	s := openTest(t)
+	ctx := context.Background()
+	web := stackID(t, s, "web")
+	repo, err := s.SetRepository(ctx, web, "/repos/shared", "pw", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t0 := time.Date(2026, 11, 1, 10, 0, 0, 0, time.UTC)
+	mk := func(id string, i int, host string, paths ...string) restic.Snapshot {
+		return restic.Snapshot{ID: id, ShortID: id[:8], Time: t0.Add(time.Duration(i) * time.Hour), Hostname: host, Paths: paths}
+	}
+	snaps := []restic.Snapshot{
+		mk("aaaaaaaa11111111", 1, "host-a", "/s/web"),         // ours
+		mk("bbbbbbbb22222222", 2, "host-b", "/other/web"),     // our stack, other host
+		mk("cccccccc33333333", 3, "host-a", "/s/db"),          // other stack, shared repository
+		mk("dddddddd44444444", 4, "host-a", "/s/myweb"),       // ends in "web", but is not "web"
+		mk("eeeeeeee55555555", 5, "host-a", "/s/web", "/etc"), // two paths: not made by StackVault
+	}
+	if err := s.ReplaceSnapshots(ctx, repo, snaps, t0); err != nil {
+		t.Fatal(err)
+	}
+	ids := func(cs []CachedSnapshot) string {
+		var out []string
+		for _, c := range cs {
+			out = append(out, c.ShortID)
+		}
+		return strings.Join(out, ",")
+	}
+	got, err := s.StackSnapshots(ctx, repo, "web", "host-a")
+	if err != nil || ids(got) != "aaaaaaaa" {
+		t.Fatalf("web on host-a: %s %v", ids(got), err)
+	}
+	if got, _ := s.StackSnapshots(ctx, repo, "web", ""); ids(got) != "bbbbbbbb,aaaaaaaa" {
+		t.Fatalf("web on all hosts: %s", ids(got))
+	}
+	if got, _ := s.ListSnapshots(ctx, repo); len(got) != 5 {
+		t.Fatalf("all: %d", len(got))
+	}
+	sums, err := s.StackSummaries(ctx, "host-a")
+	if err != nil || len(sums) != 1 || sums[0].Snapshots != 1 || !sums[0].LastSnapshot.Equal(t0.Add(time.Hour)) {
+		t.Fatalf("summary: %+v %v", sums, err)
 	}
 }

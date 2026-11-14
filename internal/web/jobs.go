@@ -88,7 +88,8 @@ type restorePage struct {
 }
 
 // restorableSnapshot returns the cached snapshot id of the stack, if it
-// exists in the cache and was not removed from the repository. The worker
+// exists in the cache, belongs to this stack and host (a repository may be
+// shared) and was not removed from the repository. The worker
 // verifies it against the repository again before restoring.
 func (s *Server) restorableSnapshot(ctx context.Context, st store.Stack, id string) (store.CachedSnapshot, bool, error) {
 	if !restic.SnapshotIDPattern.MatchString(id) {
@@ -101,7 +102,7 @@ func (s *Server) restorableSnapshot(ctx context.Context, st store.Stack, id stri
 	if err != nil {
 		return store.CachedSnapshot{}, false, err
 	}
-	snaps, err := s.Store.ListSnapshots(ctx, repo.ID)
+	snaps, err := s.Store.StackSnapshots(ctx, repo.ID, st.Name, s.Hostname)
 	if err != nil {
 		return store.CachedSnapshot{}, false, err
 	}

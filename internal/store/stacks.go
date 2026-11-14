@@ -66,15 +66,19 @@ type StackSummary struct {
 }
 
 // StackSummaries returns all stacks with repository and snapshot cache
-// information, ordered by name.
-func (s *Store) StackSummaries(ctx context.Context) ([]StackSummary, error) {
+// information, ordered by name. Only snapshots of the stack itself from
+// host count (see StackSnapshots); an empty host matches all hosts.
+func (s *Store) StackSummaries(ctx context.Context, host string) ([]StackSummary, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT s.id, s.name, s.enabled, s.present, r.id IS NOT NULL, COUNT(sn.snapshot_id), MAX(sn.time)
 		 FROM stacks s
 		 LEFT JOIN repositories r ON r.stack_id = s.id
 		 LEFT JOIN snapshots sn ON sn.repo_id = r.id AND sn.missing = 0
+		   AND json_array_length(sn.paths) = 1
+		   AND substr(json_extract(sn.paths, '$[0]'), -length(s.name) - 1) = '/' || s.name
+		   AND (? = '' OR sn.hostname = ?)
 		 GROUP BY s.id
-		 ORDER BY s.name`)
+		 ORDER BY s.name`, host, host)
 	if err != nil {
 		return nil, fmt.Errorf("listing stacks: %w", err)
 	}

@@ -24,7 +24,7 @@ type stackRow struct {
 // stackList shows the stacks the user may see.
 func (s *Server) stackList(w http.ResponseWriter, r *http.Request) {
 	a := authFrom(r.Context())
-	sums, err := s.Store.StackSummaries(r.Context())
+	sums, err := s.Store.StackSummaries(r.Context(), s.Hostname)
 	if err != nil {
 		s.internalError(w, r, "listing stacks", err)
 		return
@@ -96,6 +96,8 @@ type backupsTab struct {
 	RefreshInfo, RefreshError string
 	Jobs                      []store.Job // recent jobs, newest first
 	JobsUnavailable           string      // why jobs cannot be started, or ""
+	Host                      string      // snapshots are shown for this host ("" = all)
+	OtherSnapshots            int         // snapshots in the repository of other stacks or hosts
 }
 
 // settingsTab is the data of the admin-only "Settings" tab.
@@ -187,7 +189,11 @@ func (s *Server) loadBackupsTab(r *http.Request, st store.Stack, perm store.Perm
 		return page, err
 	}
 	page.Repo = &repo
-	page.Snapshots, err = s.Store.ListSnapshots(r.Context(), repo.ID)
+	if page.Snapshots, err = s.Store.StackSnapshots(r.Context(), repo.ID, st.Name, s.Hostname); err != nil {
+		return page, err
+	}
+	all, err := s.Store.ListSnapshots(r.Context(), repo.ID)
+	page.Host, page.OtherSnapshots = s.Hostname, len(all)-len(page.Snapshots)
 	return page, err
 }
 

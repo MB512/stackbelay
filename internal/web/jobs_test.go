@@ -252,3 +252,40 @@ func TestReadLogTail(t *testing.T) {
 		t.Fatalf("next=%d, last end=%d, want %d", next, lines[len(lines)-1].End, want)
 	}
 }
+
+// A repository shared by several stacks and hosts: only the stack's own
+// snapshots from this host are listed and restorable.
+func TestSharedRepositoryShowsOwnSnapshotsOnly(t *testing.T) {
+	e := newEnv(t, true, true)
+	e.server.Hostname = "host-a"
+	webID, _ := e.setupStacks()
+	ctx := context.Background()
+	repo, err := e.st.SetRepository(ctx, webID, "/srv/restic/shared", "pw", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t0 := time.Date(2026, 11, 13, 3, 0, 0, 0, time.UTC)
+	if err := e.st.ReplaceSnapshots(ctx, repo, []restic.Snapshot{
+		{ID: "aaaaaaaa11111111", ShortID: "aaaaaaaa", Time: t0, Hostname: "host-a", Paths: []string{"/s/web"}},
+		{ID: "bbbbbbbb22222222", ShortID: "bbbbbbbb", Time: t0, Hostname: "host-a", Paths: []string{"/s/db"}},
+		{ID: "cccccccc33333333", ShortID: "cccccccc", Time: t0, Hostname: "host-b", Paths: []string{"/s/web"}},
+	}, t0); err != nil {
+		t.Fatal(err)
+	}
+	e.loginAdmin()
+
+	r := e.get("/stacks/web")
+	if !strings.Contains(r.body, "aaaaaaaa") || strings.Contains(r.body, "bbbbbbbb") || strings.Contains(r.body, "cccccccc") {
+		t.Fatalf("snapshot list:\n%s", r.body)
+	}
+	if !strings.Contains(r.body, "2 other snapshots in this repository belong to other stacks or hosts") {
+		t.Fatal("no hint about hidden snapshots")
+	}
+	if r := e.get("/"); !strings.Contains(r.body, "<td>1</td>") {
+		t.Fatalf("stack list must count 1 snapshot:\n%s", r.body)
+	}
+	expect(t, e.get("/stacks/web/restore?snapshot=bbbbbbbb22222222"), http.StatusNotFound, "")
+	expect(t, e.post("/stacks/web/restore", url.Values{"csrf_token": {e.csrf("/stacks/web")}, "snapshot_id": {"cccccccc33333333"}}),
+		http.StatusBadRequest, "")
+	expect(t, e.get("/stacks/web/restore?snapshot=aaaaaaaa11111111"), http.StatusOK, "")
+}

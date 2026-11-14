@@ -139,7 +139,7 @@ func TestStackSummariesAndRepositoryInfo(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sums, err := s.StackSummaries(ctx)
+	sums, err := s.StackSummaries(ctx, "")
 	if err != nil || len(sums) != 2 {
 		t.Fatalf("StackSummaries: %+v, %v", sums, err)
 	}
