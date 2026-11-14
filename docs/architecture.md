@@ -430,3 +430,50 @@ containers for inspection).
 
 Not yet implemented (M3/M4): the per-stack lock, restore into a not-yet-existing stack
 (import), image pinning.
+
+## Planned features (not implemented)
+
+Ideas agreed on for later releases. Design notes are a starting point, not
+a commitment.
+
+### Time placeholders in the repository location + auto-init
+
+Goal: a new repository per period (e.g. per year) managed by the scheduled
+backups alone, so repositories and their indexes stay small.
+
+- Placeholders in the location, e.g.
+  `rest:https://backup.example/web-{year}`. Candidates: `{year}`,
+  `{month}` (two digits), maybe `{quarter}`. Only a fixed set of
+  placeholders, no expressions. Validation must run on the expanded
+  location too (no credentials, no leading `-`).
+- Expansion time: when the job is created (manager), stored in the job
+  spec, so a backup running over midnight on Dec 31 uses one location for
+  all its snapshots. Time zone: the manager's configured zone (new setting
+  or `TZ`), documented, since "year" changes at local midnight.
+- Per-repository setting **auto-init if missing** (off by default): if the
+  expanded location has no repository (restic exit code 10), the worker
+  runs `restic init` with the stored password before the backup and logs
+  it; audit entry `repository.init` with trigger `schedule`. Any other
+  error (wrong password, network) never triggers init.
+- Consequences to design:
+  - Snapshot cache and restore must see **all** periods, not only the
+    current one: keep a list of known expanded locations per repository
+    (e.g. a `repository_locations` table filled when a location is first
+    used or initialized), refresh and show snapshots across them, and
+    restore from the location the snapshot belongs to.
+  - The first backup in a new period has no parent snapshot (full upload);
+    the pre-stop/final parent chain only applies within one location.
+  - Same password for all periods (one stored secret); changing it applies
+    to new periods only, old repositories keep their old password. Either
+    keep old secrets per known location or document the limitation.
+  - The manual "Initialize repository" button (current behaviour) stays
+    for locations without placeholders.
+
+### More stack tabs
+
+Besides "Backups" and "Settings" (admin): **Logs** (container logs of the
+stack), **Status** (running services, restart), **compose.yml** (view and
+edit). Each tab gets its own permission (new columns in `permissions`,
+checked in `auth.Allowed` and in `newStackHeader`). Restarting and editing
+change the running stack and must be audited; editing `compose.yml` needs
+validation (`docker compose config`) and a backup of the previous file.
