@@ -20,7 +20,7 @@ ROOT="$WORK/stacks"
 STACK=e2edispatch
 DIR="$ROOT/$STACK"
 REPO="$ROOT/_repo/$STACK" # not a stack (no compose file); visible to manager and worker
-IMAGE=stackvault-e2e-worker:latest
+IMAGE=stackvault-e2e:latest
 PORT="${PORT:-18090}"
 B="http://127.0.0.1:$PORT"
 JAR="$WORK/cookies"
@@ -72,7 +72,8 @@ docker info --format '{{.OperatingSystem}}' | grep -q 'Docker Desktop' && DESKTO
 step "build"
 mkdir -p "$WORK/img" bin
 CGO_ENABLED=0 go build -o "$WORK/img/worker" ./cmd/worker
-docker build --quiet -f scripts/e2e-worker.Dockerfile -t "$IMAGE" "$WORK/img" >/dev/null
+CGO_ENABLED=0 go build -o "$WORK/img/manager" ./cmd/manager
+docker build --quiet -f scripts/e2e.Dockerfile -t "$IMAGE" "$WORK/img" >/dev/null
 go build -o bin/manager ./cmd/manager
 pass "worker image $IMAGE, bin/manager"
 

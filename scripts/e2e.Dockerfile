@@ -1,6 +1,9 @@
-# Throwaway worker image for scripts/e2e-dispatch.sh. The release image
-# (deploy/Dockerfile, M6) replaces it. Build context: a directory that
-# contains a statically linked "worker" binary.
+# Throwaway image for the end-to-end scripts (manager + worker, restic, the
+# docker CLI with compose). The release image (deploy/Dockerfile, M6)
+# replaces it. Build context: a directory with statically linked "manager"
+# and "worker" binaries.
 FROM docker:29-cli
 RUN apk add --no-cache restic && restic version && docker compose version
-COPY worker /app/worker
+COPY manager worker /app/
+ENTRYPOINT []
+CMD ["/app/manager"]
