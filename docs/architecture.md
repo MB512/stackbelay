@@ -58,10 +58,19 @@ compose, so they are never affected by stopping a stack.
 
 ## Job handoff
 
-The manager writes `/data/jobs/<id>/spec.json` (stack, type, repo id, options)
-and, separately, the repo credentials to a tmpfs-mounted secret file for the
-worker. The worker writes `status.json` (state, timestamps, snapshot ids,
-error) and `log.txt` as it goes. The manager reads these files (poll/inotify)
+The manager writes `/data/jobs/<id>/spec.json` and starts the worker with
+`worker run /job` (`/job` = bind of the job directory). The spec contains
+only the job (version, id, type, stack, options; see `jobs.Spec`) and is
+validated strictly by the worker (unknown fields rejected). Repository
+location and credentials are passed as environment variables of the worker
+container (`RESTIC_REPOSITORY`, `RESTIC_PASSWORD`, backend variables). The
+manager sets them with `docker run -e NAME` (name only), so the values come
+from the docker CLI's own environment and never appear in a command line or
+a file. The worker writes `status.json` atomically (state, timestamps,
+snapshot ids, previous directory, error; see `jobs.Status`) when the job
+starts and when it ends, and `log.txt` as JSON lines. Both log and error are
+filtered for the credential values. If the spec is invalid, the worker
+still writes a `failed` status with the reason. The manager reads these files (poll/inotify)
 and mirrors them into SQLite. Files, not the DB, are the handoff channel
 because the manager (and its SQLite file) may be stopped during a self-backup.
 On startup the manager reconciles all job directories with the DB.
@@ -313,14 +322,17 @@ requires restic >= 0.17.
 ## Worker CLI (M1)
 
 ```
+worker run <job-dir>
 worker backup  [--pre-stop] <stack>
 worker restore [--no-safety-snapshot] [--no-start] <stack> <snapshot-id>
 ```
 
+`run` is the manager's interface (see "Job handoff"); `backup` and `restore`
+are for manual use and tests.
+
 Flags go before positional arguments. Exit codes: 0 success, 1 job failed,
 2 usage/configuration error. Logs are JSON lines (`log/slog`) on stderr.
-Until the manager exists (M3), the job spec comes from the command line and
-the repository from the environment:
+The repository always comes from the environment:
 
 | Variable | Meaning |
 |---|---|
@@ -342,6 +354,5 @@ End-to-end smoke test against the local Docker daemon and a temporary local
 repository: `scripts/e2e-local.sh` (`KEEP=1` keeps the temp directory and
 containers for inspection).
 
-Not yet in M1 (follow in M3/M4): `spec.json`/`status.json`/`log.txt` handoff
-via `/job`, the per-stack lock, restore into a not-yet-existing stack
+Not yet implemented (M3/M4): the per-stack lock, restore into a not-yet-existing stack
 (import), image pinning.

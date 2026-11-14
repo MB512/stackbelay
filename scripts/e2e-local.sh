@@ -80,8 +80,8 @@ pass "app running, oneshot exited"
 
 step "backup with pre-stop snapshot"
 ./bin/worker backup --pre-stop "$STACK" 2>"$WORK/backup.log" || { cat "$WORK/backup.log"; fail "backup failed"; }
-SNAP="$(log_field "$WORK/backup.log" "backup succeeded" snapshot)"
-PRESTOP="$(log_field "$WORK/backup.log" "backup succeeded" pre_stop_snapshot)"
+SNAP="$(log_field "$WORK/backup.log" "job succeeded" snapshot)"
+PRESTOP="$(log_field "$WORK/backup.log" "job succeeded" pre_stop_snapshot)"
 [[ -n "$SNAP" && -n "$PRESTOP" ]] || fail "no snapshot ids in log"
 pass "final $SNAP, pre-stop $PRESTOP"
 [[ "$(state app)" == running ]] || fail "app not restarted after backup"
@@ -95,11 +95,30 @@ PARENT="$(restic snapshots --json "$SNAP" | python3 -I -c 'import json,sys; s=js
 [[ "$PARENT" == "$PRESTOP"* && "$PARENT" == *" final e2e-host $DIR" ]] || fail "unexpected final snapshot: $PARENT"
 pass "final snapshot: parent=pre-stop, tag final, host e2e-host, path $DIR"
 
+step "backup via job directory (worker run)"
+JOB="$WORK/job"
+mkdir -p "$JOB"
+printf '{"version":1,"id":"01JCZ8G3T4S5V6W7X8Y9Z0ABCD","type":"backup","stack":"%s"}\n' "$STACK" >"$JOB/spec.json"
+# Password via environment here, to check that it is redacted from the log.
+env -u RESTIC_PASSWORD_FILE RESTIC_PASSWORD="$(cat "$WORK/pw")" ./bin/worker run "$JOB" 2>/dev/null ||
+	{ cat "$JOB/log.txt"; fail "worker run failed"; }
+python3 -I - "$JOB/status.json" <<'PY' || fail "unexpected status.json: $(cat "$JOB/status.json")"
+import json, sys
+s = json.load(open(sys.argv[1]))
+assert s["state"] == "succeeded" and s["snapshot"] and s["started_at"] and s["finished_at"], s
+PY
+pass "status.json: succeeded with snapshot"
+grep -q '"msg":"job succeeded"' "$JOB/log.txt" || fail "log.txt incomplete"
+grep -q "$(cat "$WORK/pw")" "$JOB/log.txt" && fail "repository password in log.txt"
+pass "log.txt written as JSON lines, password not in log"
+[[ "$(state app)" == running ]] || fail "app not restarted after job"
+pass "app restarted"
+
 step "change data, then restore"
 echo v2 >"$DIR/data/value.txt"
 ./bin/worker restore "$STACK" "${SNAP:0:8}" 2>"$WORK/restore.log" || { cat "$WORK/restore.log"; fail "restore failed"; }
-OLD="$(log_field "$WORK/restore.log" "restore succeeded" previous_dir)"
-SAFETY="$(log_field "$WORK/restore.log" "restore succeeded" safety_snapshot)"
+OLD="$(log_field "$WORK/restore.log" "job succeeded" previous_dir)"
+SAFETY="$(log_field "$WORK/restore.log" "job succeeded" safety_snapshot)"
 [[ "$(cat "$DIR/data/value.txt")" == v1 ]] || fail "data not restored"
 pass "data restored (v1)"
 [[ "$(stat -c %a "$DIR")" == 750 ]] || fail "stack dir mode not restored: $(stat -c %a "$DIR")"
