@@ -5,7 +5,8 @@
 // ends the stream. Every line event carries its end offset in log.txt as
 // event id; after a lost connection (e.g. the manager is stopped by its own
 // backup) the script reconnects with ?offset=<last id> and backoff, so no
-// line is shown twice or missed. Plain script, no build step; the HTML in
+// line is shown twice or missed. Before reconnecting it checks the job page
+// and stops if the job is unknown (404) or the session has ended. Plain script, no build step; the HTML in
 // the events is rendered and escaped by the server (html/template).
 (function () {
 	"use strict";
@@ -78,9 +79,29 @@
 				return;
 			}
 			status("connection lost, reconnecting…");
-			window.setTimeout(connect, delay);
+			window.setTimeout(retry, delay);
 			delay = Math.min(delay * 2, 15000);
 		};
+	}
+
+	// retry asks the job page first: there is no point in reconnecting to
+	// a job that no longer exists or when the session has ended.
+	function retry() {
+		window.fetch(window.location.pathname, {credentials: "same-origin", redirect: "manual", cache: "no-store"})
+			.then(function (resp) {
+				if (resp.status === 404) {
+					status("this job is not known (any more); reload the page");
+				} else if (resp.type === "opaqueredirect" || resp.status === 401) {
+					status("logged out; reload the page to log in again");
+				} else if (resp.ok) {
+					connect();
+				} else {
+					source.onerror(); // e.g. 502 while the manager is down
+				}
+			})
+			.catch(function () {
+				source.onerror(); // manager not reachable
+			});
 	}
 
 	connect();
