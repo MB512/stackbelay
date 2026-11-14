@@ -1,11 +1,27 @@
 {{define "content"}}
-{{- with .Data}}{{template "job" .}}{{end}}
+{{- with .Data}}
+{{- /* static/joblog.js follows a job that is not final through the event
+       stream (Server-Sent Events): new log lines are appended, the details
+       section is replaced when the job changes. data-offset is the position
+       in log.txt after the lines shown here. */}}
+<div id="job" data-events="/jobs/{{.Job.ID}}/events" data-offset="{{.LogOffset}}"{{if .Job.State.Final}} data-final{{end}}>
+  {{template "job-details" .}}
+
+  <h2>Log <span id="job-live" class="hint" role="status"></span></h2>
+  {{- if .LogCut}}<p class="hint">Only the end of the log is shown.</p>{{end}}
+  <div class="log" id="job-log" role="log">{{range .Log}}{{template "log-line" .}}{{end}}</div>
+  {{- if not .Log}}
+  <p class="hint" id="job-log-empty">{{if .Job.State.Final}}No log.{{else}}The log appears when the worker starts.{{end}}</p>
+  {{- end}}
+</div>
+<script src="/static/joblog.js" defer></script>
+{{- end}}
 {{end}}
 
-{{- /* The job section. While the job is not final it polls itself every
-       3 seconds and HTMX replaces it with the fresh version. */}}
-{{define "job"}}
-<div id="job"{{if not .Job.State.Final}} hx-get="/jobs/{{.Job.ID}}" hx-trigger="every 3s" hx-swap="outerHTML"{{end}}>
+{{- /* Job state, times, results and the cancel button. Also sent as a
+       "details" event of the live stream. */}}
+{{define "job-details"}}
+<section id="job-details">
   <h1>{{if eq (print .Job.Type) "restore"}}Restore{{else}}Backup{{end}} of
     <a href="/stacks/{{.Job.StackName}}">{{.Job.StackName}}</a> {{template "job-state" .Job.State}}</h1>
 
@@ -36,17 +52,10 @@
     <span class="hint">A running job restarts the stack before it stops.</span>
   </form>
   {{- end}}
-
-  <h2>Log</h2>
-  {{- if .Log}}
-  {{- if .LogCut}}<p class="hint">Only the end of the log is shown.</p>{{end}}
-  <div class="log" role="log">
-    {{- range .Log}}
-    <div class="line {{.Level}}"><span class="ts">{{.Time}}</span> <span class="lvl">{{.Level}}</span> {{.Msg}}{{with .Attrs}} <span class="attrs">{{.}}</span>{{end}}</div>
-    {{- end}}
-  </div>
-  {{- else}}
-  <p class="hint">{{if .Job.State.Final}}No log.{{else}}The log appears when the worker starts.{{end}}</p>
-  {{- end}}
-</div>
+</section>
 {{end}}
+
+{{- /* One log line. Also sent as a "line" event of the live stream. */}}
+{{define "log-line" -}}
+<div class="line {{.Level}}"><span class="ts">{{.Time}}</span> <span class="lvl">{{.Level}}</span> {{.Msg}}{{with .Attrs}} <span class="attrs">{{.}}</span>{{end}}</div>
+{{- end}}

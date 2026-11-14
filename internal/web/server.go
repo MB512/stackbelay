@@ -39,6 +39,12 @@ type Server struct {
 	JobsDisabledReason string
 	// JobsDir is the jobs directory (for job logs).
 	JobsDir string
+	// Stopping is closed when the manager shuts down; open live streams
+	// then end at once instead of delaying the shutdown (clients
+	// reconnect). nil: streams only end with their client.
+	Stopping <-chan struct{}
+	// StreamInterval is how often live streams look for news; default 500ms.
+	StreamInterval time.Duration
 	// Now returns the current time; defaults to time.Now (tests override it).
 	Now func() time.Time
 
@@ -97,6 +103,7 @@ func (s *Server) Handler() (http.Handler, error) {
 			r.Get("/stacks/{name}/restore", s.restoreForm)
 			r.Post("/stacks/{name}/restore", s.startRestore)
 			r.Get("/jobs/{id}", s.jobDetail)
+			r.Get("/jobs/{id}/events", s.jobEvents)
 			r.Post("/jobs/{id}/cancel", s.cancelJob)
 
 			// Admin only.

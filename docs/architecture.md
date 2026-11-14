@@ -346,7 +346,8 @@ form with `method`/`action`, so it works without JavaScript. An HTMX request
 | `POST /stacks/{name}/backup` | backup right | queue a backup (option: pre-stop snapshot) |
 | `GET /stacks/{name}/restore?snapshot=<id>` | restore right | confirmation page with options |
 | `POST /stacks/{name}/restore` | restore right | queue a restore of a cached, not removed snapshot; only admins may skip the safety snapshot |
-| `GET /jobs/{id}` | view right on the job's stack | job details and log; polls every 3 s (HTMX) while not final |
+| `GET /jobs/{id}` | view right on the job's stack | job details and log; followed live by `static/joblog.js` while not final |
+| `GET /jobs/{id}/events` | view right on the job's stack | live stream of the job (SSE), see "Live logs" |
 | `POST /jobs/{id}/cancel` | backup/restore right (by job type) | cancel a queued or running job |
 | `POST /stacks/{name}/snapshots/refresh` | view right | refresh the snapshot cache (read-only restic; at most once per 10 s per stack; HTMX: returns the snapshot section) |
 | `GET /stacks/{name}/settings` | admin | "Settings" tab: repository, enable/disable, per-user permissions |
@@ -394,19 +395,29 @@ meta) to work with the strict CSP: no injected indicator styles, no
 
 ## Live logs
 
-The worker appends to `/job/log.txt` as JSON lines
-(`{"ts","level","step","msg"}`) and mirrors restic's `--json` progress
-messages (percent, bytes, files) into a `progress` field in `status.json`.
+The worker appends to `/job/log.txt` as JSON lines (`log/slog`; secrets
+redacted before writing).
 
-- The manager tails these files and streams them to the browser via
-  Server-Sent Events (`text/event-stream`; HTMX SSE extension). Late joiners
-  get the existing log first, then live lines. Finished jobs show the stored log.
-- Self-backup / self-restore: the manager is stopped while the job runs, so no
-  live view is possible. The job page shows "manager is going offline" and
-  retries the SSE connection with backoff; once the manager is back it
-  reconciles the job and shows the complete log.
-- Log lines are filtered for known secret values before they are written.
-- Log files are kept per job and cleaned up by age (config option).
+- `GET /jobs/{id}/events?offset=N` streams a job as Server-Sent Events
+  (`text/event-stream`): `line` (one log line as server-rendered HTML; event
+  id = byte offset in `log.txt` after the line), `details` (the job details
+  section as HTML, sent when state, times or results change), `done` (job
+  final and log sent completely; the stream ends). Only complete lines are
+  sent; a line the worker is still writing waits for the next round
+  (every 500 ms). A comment every 15 s keeps idle connections open.
+- The job page renders the end of the log (up to 512 KiB) and its offset;
+  `static/joblog.js` (plain script, no build step) continues the stream
+  from there. It does not use the HTMX SSE extension: the browser's own
+  reconnect gives up on HTTP errors (e.g. 502 from a reverse proxy while the
+  manager is down), and a resumed stream must start exactly behind the last
+  received line. The script reconnects with `?offset=<last event id>` and
+  backoff (1 s doubling up to 15 s) and shows "reconnecting…".
+- Self-backup / self-restore: the manager is stopped while the job runs; its
+  open streams end immediately on SIGTERM (`web.Server.Stopping`) instead of
+  delaying the shutdown. The browser keeps reconnecting until the manager is
+  back, then receives the missed lines and the final details.
+- Viewing the stream needs the view right on the job's stack (like the job
+  page). Log files are kept per job; cleanup by age is a later option.
 
 ## Scheduler
 

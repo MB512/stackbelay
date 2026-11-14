@@ -114,19 +114,15 @@ func TestBackupJob(t *testing.T) {
 		t.Fatalf("second backup: %d", r.status)
 	}
 
-	// Job page: visible for viewers of the stack, polls while not final.
+	// Job page: visible for viewers of the stack, followed live while not final.
 	r = e.do(alice, http.MethodGet, "/jobs/"+id, nil, nil)
 	expect(t, r, http.StatusOK, "")
-	if !strings.Contains(r.body, `hx-trigger="every 3s"`) || !strings.Contains(r.body, "/cancel") {
+	if !strings.Contains(r.body, `data-events="/jobs/`+id+`/events"`) || strings.Contains(r.body, "data-final") ||
+		!strings.Contains(r.body, "/static/joblog.js") || !strings.Contains(r.body, "/cancel") {
 		t.Fatalf("job page:\n%s", r.body)
 	}
 	if r := e.do(bob, http.MethodGet, "/jobs/"+id, nil, nil); r.status != http.StatusOK || strings.Contains(r.body, "/cancel") {
 		t.Fatalf("bob may view but not cancel a backup: %d", r.status)
-	}
-	// HTMX poll returns only the job section.
-	r = e.do(alice, http.MethodGet, "/jobs/"+id, nil, map[string]string{"HX-Request": "true"})
-	if !strings.HasPrefix(strings.TrimSpace(r.body), `<div id="job"`) || strings.Contains(r.body, "<html") {
-		t.Fatalf("HTMX job section:\n%s", r.body)
 	}
 
 	// Bob (restore only) may not start or cancel backups.
@@ -140,7 +136,7 @@ func TestBackupJob(t *testing.T) {
 		t.Fatal("not cancelled")
 	}
 	r = e.do(alice, http.MethodGet, "/jobs/"+id, nil, nil)
-	if strings.Contains(r.body, "every 3s") || !strings.Contains(r.body, "cancelled") {
+	if !strings.Contains(r.body, "data-final") || !strings.Contains(r.body, "cancelled") {
 		t.Fatalf("cancelled job page:\n%s", r.body)
 	}
 	// Cancelling again just shows the job.
@@ -240,14 +236,19 @@ not json
 	}
 }
 
-func TestReadLogCut(t *testing.T) {
+func TestReadLogTail(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "log.txt")
 	line := `{"time":"2026-11-14T10:00:00Z","level":"INFO","msg":"` + strings.Repeat("x", 100) + `"}` + "\n"
-	if err := os.WriteFile(p, []byte(strings.Repeat(line, maxLogBytes/len(line)+10)), 0o600); err != nil {
+	content := strings.Repeat(line, maxLogBytes/len(line)+10) + `{"msg":"half writ` // the worker is still writing
+	if err := os.WriteFile(p, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	lines, cut, err := readLog(p)
+	lines, cut, next, err := readLogTail(p)
 	if err != nil || !cut || len(lines) == 0 || lines[0].Level != "INFO" {
-		t.Fatalf("cut=%v lines=%d err=%v first=%+v", cut, len(lines), err, lines[0])
+		t.Fatalf("cut=%v lines=%d err=%v", cut, len(lines), err)
+	}
+	// The incomplete last line is left for the live stream.
+	if want := int64(len(content) - len(`{"msg":"half writ`)); next != want || lines[len(lines)-1].End != want {
+		t.Fatalf("next=%d, last end=%d, want %d", next, lines[len(lines)-1].End, want)
 	}
 }

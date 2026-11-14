@@ -1,21 +1,12 @@
 package web
 
 import (
-	"bufio"
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"maps"
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
-	"slices"
-	"strings"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -208,33 +199,35 @@ func jobAction(t jobs.Type) auth.Action {
 type jobPage struct {
 	Job       store.Job
 	Log       []logLine
-	LogCut    bool // only the end of the log is shown
+	LogCut    bool  // only the end of the log is shown
+	LogOffset int64 // byte offset in log.txt after the shown lines; the live stream continues there
 	CanCancel bool
 	CSRF      string
 }
 
-// jobDetail shows a job with its log. While the job is not final the page
-// polls itself (HTMX) and replaces the job section.
+// jobDetail shows a job with its log. While the job is not final,
+// static/joblog.js follows it live through jobEvents (SSE).
 func (s *Server) jobDetail(w http.ResponseWriter, r *http.Request) {
 	j, perm, ok := s.loadJob(w, r)
 	if !ok {
 		return
 	}
-	a := authFrom(r.Context())
-	page := jobPage{Job: j, CSRF: a.Session.CSRFToken,
-		CanCancel: !j.State.Final() && s.Jobs != nil && auth.Allowed(a.User, perm, jobAction(j.Type))}
+	page := s.newJobPage(r.Context(), j, perm)
 	if s.JobsDir != "" {
 		var err error
-		page.Log, page.LogCut, err = readLog(filepath.Join(s.JobsDir, j.ID, jobs.LogFile))
+		page.Log, page.LogCut, page.LogOffset, err = readLogTail(s.logPath(j.ID))
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			s.Logger.Warn("reading job log", "job_id", j.ID, "error", err)
 		}
 	}
-	if isHTMX(r) {
-		s.renderPartial(w, "job.html", "job", page)
-		return
-	}
 	s.render(w, r, http.StatusOK, "job.html", pageData{Title: fmt.Sprintf("%s of %s", capitalize(string(j.Type)), j.StackName), Data: page})
+}
+
+// newJobPage returns the job page data without the log.
+func (s *Server) newJobPage(ctx context.Context, j store.Job, perm store.Permission) jobPage {
+	a := authFrom(ctx)
+	return jobPage{Job: j, CSRF: a.Session.CSRFToken,
+		CanCancel: !j.State.Final() && s.Jobs != nil && auth.Allowed(a.User, perm, jobAction(j.Type))}
 }
 
 // cancelJob cancels a queued or running job. It needs the same right as
@@ -263,79 +256,6 @@ func (s *Server) cancelJob(w http.ResponseWriter, r *http.Request) {
 	}
 	s.audit(r, store.AuditEntry{UserID: a.User.ID, Action: "job.cancel", StackID: j.StackID, Detail: "job " + j.ID})
 	http.Redirect(w, r, jobURL(j.ID), http.StatusSeeOther)
-}
-
-// logLine is one parsed line of a job log (JSON lines written by slog).
-type logLine struct {
-	Time  string
-	Level string
-	Msg   string
-	Attrs string // remaining fields as "key=value ..."
-}
-
-// maxLogBytes is how much of the end of a job log is shown.
-const maxLogBytes = 512 << 10
-
-// readLog reads the end of a job log. Lines that are not JSON are shown as
-// they are. The worker already redacted secrets.
-func readLog(path string) (lines []logLine, cut bool, err error) {
-	f, err := os.Open(path) //nolint:gosec // G304: path is built from a validated job id
-	if err != nil {
-		return nil, false, err
-	}
-	defer f.Close()
-	info, err := f.Stat()
-	if err != nil {
-		return nil, false, err
-	}
-	if info.Size() > maxLogBytes {
-		if _, err := f.Seek(-maxLogBytes, io.SeekEnd); err != nil {
-			return nil, false, err
-		}
-		cut = true
-	}
-	data, err := io.ReadAll(io.LimitReader(f, maxLogBytes))
-	if err != nil {
-		return nil, false, err
-	}
-	if cut { // drop the partial first line
-		if i := bytes.IndexByte(data, '\n'); i >= 0 {
-			data = data[i+1:]
-		}
-	}
-	sc := bufio.NewScanner(bytes.NewReader(data))
-	sc.Buffer(make([]byte, 64<<10), maxLogBytes)
-	for sc.Scan() {
-		if line := strings.TrimSpace(sc.Text()); line != "" {
-			lines = append(lines, parseLogLine(line))
-		}
-	}
-	return lines, cut, sc.Err()
-}
-
-func parseLogLine(line string) logLine {
-	var rec map[string]any
-	if err := json.Unmarshal([]byte(line), &rec); err != nil {
-		return logLine{Msg: line}
-	}
-	l := logLine{}
-	if v, ok := rec["time"].(string); ok {
-		if t, err := time.Parse(time.RFC3339Nano, v); err == nil {
-			l.Time = t.UTC().Format("15:04:05")
-		}
-	}
-	l.Level, _ = rec["level"].(string)
-	l.Msg, _ = rec["msg"].(string)
-	var attrs []string
-	for _, k := range slices.Sorted(maps.Keys(rec)) {
-		switch k {
-		case "time", "level", "msg", "job_id":
-			continue
-		}
-		attrs = append(attrs, fmt.Sprintf("%s=%v", k, rec[k]))
-	}
-	l.Attrs = strings.Join(attrs, " ")
-	return l
 }
 
 // jobURL is the path of a job page.
