@@ -8,7 +8,8 @@
   <p><code>{{.Location}}</code></p>
   <p class="hint">Snapshot list last refreshed: {{when .SnapshotsRefreshedAt}}</p>
   {{- else}}
-  <p class="hint">No repository configured.</p>
+  <p class="hint">No repository configured.
+    {{- if $.User.IsAdmin}} <a href="/stacks/{{$.Data.Stack.Name}}/settings">Configure it in the settings.</a>{{end}}</p>
   {{- end}}
 </section>
 

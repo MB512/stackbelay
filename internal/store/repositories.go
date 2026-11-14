@@ -59,7 +59,7 @@ func repoAAD(stackID int64) []byte {
 // SetRepository creates or replaces the repository of a stack. If the
 // location changes, the snapshot cache of the old location is dropped.
 func (s *Store) SetRepository(ctx context.Context, stackID int64, location, password string, env map[string]string) (int64, error) {
-	if err := validateRepository(location, password, env); err != nil {
+	if err := ValidateRepository(location, password, env); err != nil {
 		return 0, err
 	}
 	// The JSON is encrypted right below and never stored or logged in plain text.
@@ -172,7 +172,9 @@ func (s *Store) RepositoryForStack(ctx context.Context, stackID int64) (Reposito
 	return r, nil
 }
 
-func validateRepository(location, password string, env map[string]string) error {
+// ValidateRepository checks a repository before it is saved; SetRepository
+// calls it too. The error messages are meant for the user.
+func ValidateRepository(location, password string, env map[string]string) error {
 	switch {
 	case location == "" || strings.TrimSpace(location) != location:
 		return errors.New("repository location must not be empty or have surrounding spaces")

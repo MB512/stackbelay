@@ -27,6 +27,7 @@ type testEnv struct {
 	srv     *httptest.Server
 	client  *http.Client
 	adminPW string
+	snaps   *fakeRefresher
 
 	mu  sync.Mutex
 	now time.Time
@@ -69,10 +70,11 @@ func newEnv(t *testing.T, tls, secureCookies bool) *testEnv {
 		t.Fatal("no admin password")
 	}
 
-	e := &testEnv{t: t, st: st, adminPW: m[1], now: time.Date(2026, 11, 14, 10, 0, 0, 0, time.UTC)}
+	e := &testEnv{t: t, st: st, adminPW: m[1], now: time.Date(2026, 11, 14, 10, 0, 0, 0, time.UTC),
+		snaps: &fakeRefresher{st: st}}
 	s := &Server{
 		Store: st, Logger: discard, SessionTTL: time.Hour, SecureCookies: secureCookies,
-		Limiter: &auth.LoginLimiter{Now: e.clock}, Now: e.clock,
+		Limiter: &auth.LoginLimiter{Now: e.clock}, Now: e.clock, Snapshots: e.snaps,
 	}
 	h, err := s.Handler()
 	if err != nil {

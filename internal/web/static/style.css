@@ -67,3 +67,8 @@ nav.tabs a {
 }
 nav.tabs a:hover { color: var(--fg); }
 nav.tabs a[aria-current="page"] { color: var(--fg); border-bottom-color: var(--accent); font-weight: 600; }
+textarea {
+  padding: .45rem .55rem; border: 1px solid var(--border); border-radius: 5px;
+  font: .9rem ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; resize: vertical;
+}
+.card.wide p.hint { margin: -.5rem 0 0; }

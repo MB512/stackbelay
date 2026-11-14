@@ -27,6 +27,9 @@ type Server struct {
 	// false with STACKVAULT_ALLOW_INSECURE_HTTP.
 	SecureCookies bool
 	Limiter       *auth.LoginLimiter
+	// Snapshots refreshes snapshot caches (read-only restic). If nil,
+	// refreshing is reported as unavailable.
+	Snapshots SnapshotRefresher
 	// Now returns the current time; defaults to time.Now (tests override it).
 	Now func() time.Time
 
@@ -85,6 +88,7 @@ func (s *Server) Handler() (http.Handler, error) {
 			r.Group(func(r chi.Router) {
 				r.Use(s.requireAdmin)
 				r.Get("/stacks/{name}/settings", s.stackSettings)
+				r.Post("/stacks/{name}/repository", s.saveRepository)
 				r.Post("/stacks/{name}/permissions", s.setPermission)
 				r.Post("/stacks/{name}/enabled", s.setStackEnabled)
 				r.Get("/admin/users", s.userList)

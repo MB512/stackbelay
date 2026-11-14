@@ -94,6 +94,7 @@ type backupsTab struct {
 // settingsTab is the data of the admin-only "Settings" tab.
 type settingsTab struct {
 	stackHeader
+	Repo        repoForm
 	Permissions []permRow
 }
 
@@ -170,20 +171,40 @@ func (s *Server) stackDetail(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, http.StatusOK, "stack.html", pageData{Title: st.Name, Data: page})
 }
 
-// stackSettings shows the admin-only settings of a stack: enable/disable
-// and the per-user permissions.
+// stackSettings shows the admin-only settings of a stack: repository,
+// enable/disable and the per-user permissions.
 func (s *Server) stackSettings(w http.ResponseWriter, r *http.Request) {
 	st, _, ok := s.loadStack(w, r, auth.ActionView)
 	if !ok {
 		return
+	}
+	s.renderSettings(w, r, st, http.StatusOK, "", "", "")
+}
+
+// renderSettings renders the Settings tab with optional messages. A
+// non-empty location replaces the stored one in the form (to keep the
+// user's input after an error).
+func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, st store.Stack, status int, info, errMsg, location string) {
+	repo, err := s.loadRepoForm(r.Context(), st)
+	if err != nil {
+		s.internalError(w, r, "loading repository", err)
+		return
+	}
+	if location != "" {
+		repo.Location = location
 	}
 	rows, err := s.permissionRows(r, st)
 	if err != nil {
 		s.internalError(w, r, "listing permissions", err)
 		return
 	}
-	page := settingsTab{stackHeader: newStackHeader(authFrom(r.Context()).User, st, tabSettings), Permissions: rows}
-	s.render(w, r, http.StatusOK, "stack_settings.html", pageData{Title: st.Name + " settings", Data: page})
+	page := settingsTab{
+		stackHeader: newStackHeader(authFrom(r.Context()).User, st, tabSettings),
+		Repo:        repo,
+		Permissions: rows,
+	}
+	s.render(w, r, status, "stack_settings.html",
+		pageData{Title: st.Name + " settings", Info: info, Error: errMsg, Data: page})
 }
 
 // permissionRows lists all non-admin users with their permission on st.

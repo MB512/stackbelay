@@ -287,12 +287,22 @@ form with `method`/`action`, so it works without JavaScript. An HTMX request
 |---|---|---|
 | `GET /` | logged in | stacks the user may view (admins: all) |
 | `GET /stacks/{name}` | view right | "Backups" tab: repository location, cached snapshots (same for every user) |
-| `GET /stacks/{name}/settings` | admin | "Settings" tab: enable/disable, per-user permissions |
+| `GET /stacks/{name}/settings` | admin | "Settings" tab: repository, enable/disable, per-user permissions |
+| `POST /stacks/{name}/repository` | admin | create/update the repository, then refresh the snapshot cache as an access check |
 | `POST /stacks/{name}/permissions` | admin | set one user's backup/restore right (HTMX: returns the table row) |
 | `POST /stacks/{name}/enabled` | admin | enable/disable the stack for scheduled backups |
 | `GET/POST /admin/users` | admin | list users, create a user with a generated one-time password |
 | `POST /admin/users/{id}` | admin | set admin/disabled flags (not on one's own account) |
 | `POST /admin/users/{id}/password` | admin | generate a new password (must be changed, sessions end) |
+
+Repository form: the location may be a `rest:` URL with `user:password`,
+which is split off into `RESTIC_REST_USERNAME`/`RESTIC_REST_PASSWORD`.
+An empty password field keeps the stored password; backend variables are
+entered as `KEY=value` lines and replace all stored variables (empty =
+keep). Secret values are never rendered back into the page, only the names
+of stored variables. After saving, a snapshot cache refresh checks access;
+if it fails the repository stays saved and the restic error is shown.
+`restic init` is not offered: the repository owner creates repositories.
 
 Stack pages share a header with tabs (`stack-header` in `partials.html`).
 The tab list is built per user in `newStackHeader`; a tab is only shown if

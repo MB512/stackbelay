@@ -19,7 +19,9 @@ import (
 
 	"github.com/MB512/stackvault/internal/auth"
 	"github.com/MB512/stackvault/internal/config"
+	"github.com/MB512/stackvault/internal/restic"
 	"github.com/MB512/stackvault/internal/secrets"
+	"github.com/MB512/stackvault/internal/snapshots"
 	"github.com/MB512/stackvault/internal/stacks"
 	"github.com/MB512/stackvault/internal/store"
 	"github.com/MB512/stackvault/internal/web"
@@ -66,6 +68,8 @@ func run(ctx context.Context, getenv func(string) string, readFile func(string) 
 
 	handler, err := (&web.Server{
 		Store: st, Logger: log, SessionTTL: cfg.SessionTTL, SecureCookies: !cfg.AllowInsecureHTTP,
+		// The manager runs only read-only restic commands itself.
+		Snapshots: &snapshots.Cache{Store: st, Restic: &restic.CLI{Logger: log}},
 	}).Handler()
 	if err != nil {
 		log.Error("starting manager", "error", err)
