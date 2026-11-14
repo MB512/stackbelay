@@ -79,6 +79,9 @@ CREATE TABLE jobs (
   finished_at   TEXT
 );
 CREATE INDEX jobs_stack_state ON jobs(stack_id, state);
+-- migration 0003:
+--   result TEXT NOT NULL DEFAULT '{}'  -- JSON: pre_stop_snapshot, safety_snapshot, previous_dir
+--   UNIQUE INDEX jobs_one_running_per_stack ON jobs(stack_id) WHERE state = 'running'
 
 CREATE TABLE audit_log (
   id         INTEGER PRIMARY KEY,
@@ -128,4 +131,9 @@ CREATE TABLE audit_log (
   `missing = 1` instead of deleting them.
 - All tables are `STRICT` (SQLite enforces column types). Connections enable
   `foreign_keys`, WAL mode, a busy timeout and `BEGIN IMMEDIATE` transactions.
+- Job ids are ULIDs (`jobs.NewID`), so they sort by creation time.
+- Per-stack lock: the partial unique index `jobs_one_running_per_stack`
+  allows at most one `running` job per stack, enforced by SQLite itself.
+  `ClaimNextJob` starts the oldest queued job whose stack is free, up to a
+  global limit of running jobs. A stack has at most one queued job per type.
 - Job logs live in files (`/data/jobs/<id>/log.txt`), not in the DB.
