@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"path"
 	"sort"
 	"strconv"
@@ -44,6 +45,18 @@ func Open(ctx context.Context, dbPath string, box *secrets.Box) (*Store, error) 
 	if dbPath == "" || strings.ContainsAny(dbPath, "?#") {
 		return nil, fmt.Errorf("invalid database path %q", dbPath)
 	}
+	// Create the file ourselves so it is only readable by its owner: it
+	// holds password hashes and encrypted credentials. SQLite would use the
+	// umask (typically 0644), and its -wal/-shm files copy the mode of the
+	// database file.
+	f, err := os.OpenFile(dbPath, os.O_RDWR|os.O_CREATE, 0o600) //nolint:gosec // G304: path from configuration
+	if err != nil {
+		return nil, fmt.Errorf("creating database file: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		return nil, err
+	}
+
 	// Per-connection settings: enforce foreign keys, WAL for concurrent
 	// readers, wait instead of failing when the database is busy, and start
 	// transactions as writers (BEGIN IMMEDIATE) to avoid lock upgrades that
@@ -64,6 +77,9 @@ func Open(ctx context.Context, dbPath string, box *secrets.Box) (*Store, error) 
 
 // Close closes the database.
 func (s *Store) Close() error { return s.db.Close() }
+
+// Ping checks that the database is reachable (used by the health check).
+func (s *Store) Ping(ctx context.Context) error { return s.db.PingContext(ctx) }
 
 type migration struct {
 	version int

@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -91,6 +92,24 @@ func TestOpenRejectsBadPath(t *testing.T) {
 	for _, p := range []string{"", "/tmp/x.db?_pragma=foreign_keys(0)"} {
 		if _, err := Open(context.Background(), p, testBox(t)); err == nil {
 			t.Errorf("Open(%q): expected error", p)
+		}
+	}
+}
+
+func TestDatabaseFileIsPrivate(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	s, err := Open(context.Background(), dbPath, testBox(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	for _, p := range []string{dbPath, dbPath + "-wal"} {
+		fi, err := os.Stat(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if fi.Mode().Perm() != 0o600 {
+			t.Errorf("%s has mode %v, want 0600", filepath.Base(p), fi.Mode().Perm())
 		}
 	}
 }
