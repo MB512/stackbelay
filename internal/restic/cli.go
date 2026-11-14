@@ -125,6 +125,27 @@ func (e *Error) Error() string {
 
 func (e *Error) Unwrap() error { return e.Err }
 
+// Message returns restic's own error message for display, e.g. "Fatal:
+// wrong password or no key found". With --json restic reports fatal errors
+// as {"message_type":"exit_error","message":...}; without such a line the
+// redacted stderr tail is returned.
+func (e *Error) Message() string {
+	lines := strings.Split(strings.TrimSpace(e.Stderr), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		var m struct {
+			Type    string `json:"message_type"`
+			Message string `json:"message"`
+		}
+		if json.Unmarshal([]byte(lines[i]), &m) == nil && m.Type == "exit_error" && m.Message != "" {
+			return m.Message
+		}
+	}
+	if s := strings.TrimSpace(e.Stderr); s != "" {
+		return s
+	}
+	return e.Err.Error()
+}
+
 // ExitCode returns restic's exit code, or -1 if it did not exit normally.
 func (e *Error) ExitCode() int {
 	var ee *exec.ExitError

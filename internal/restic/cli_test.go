@@ -1,6 +1,7 @@
 package restic
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -109,6 +110,25 @@ func TestEnviron(t *testing.T) {
 	for _, bad := range []string{"RESTIC_PASSWORD_COMMAND=sh -c id", "LD_PRELOAD=/x.so", "PATH=/tmp", "NOEQUALS", "RESTIC_REPOSITORY=/other"} {
 		if _, err := environ(Repo{Env: []string{bad}}, lookup); err == nil {
 			t.Errorf("%q: expected error", bad)
+		}
+	}
+}
+
+func TestErrorMessage(t *testing.T) {
+	exitErr := errors.New("exit status 12")
+	tests := []struct {
+		stderr, want string
+	}{
+		{`{"message_type":"exit_error","code":12,"message":"Fatal: wrong password or no key found"}` + "\n",
+			"Fatal: wrong password or no key found"},
+		{"some warning\n" + `{"message_type":"exit_error","code":1,"message":"Fatal: unable to open repo"}`, "Fatal: unable to open repo"},
+		{"Fatal: plain text error\n", "Fatal: plain text error"},
+		{"", "exit status 12"},
+	}
+	for _, tc := range tests {
+		e := &Error{Op: "snapshots", Err: exitErr, Stderr: tc.stderr}
+		if got := e.Message(); got != tc.want {
+			t.Errorf("Message() = %q, want %q", got, tc.want)
 		}
 	}
 }
