@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/MB512/stackvault/internal/restic"
 	"github.com/MB512/stackvault/internal/stacks"
@@ -22,6 +24,12 @@ type RestoreOptions struct {
 	SkipSafetySnapshot bool
 	// NoStart leaves the stack stopped after a successful restore.
 	NoStart bool
+	// CarryOver is a directory inside the stack (relative path) that is
+	// copied from the previous version into the restored stack right after
+	// the swap, before the stack starts. Used when the manager restores its
+	// own stack: its job files live there and must survive the restore
+	// (the restored copy is older). Empty: nothing is carried over.
+	CarryOver string
 }
 
 // RestoreResult reports what a restore job did.
@@ -148,6 +156,15 @@ func (p *Pipeline) Restore(ctx context.Context, stack stacks.Stack, opts Restore
 	res.OldDir = oldDir
 	log.Info("stack directory replaced", "previous", oldDir)
 
+	if opts.CarryOver != "" {
+		// Not fatal: the restore itself succeeded; only job history is lost.
+		if err := CopyTree(filepath.Join(oldDir, opts.CarryOver), filepath.Join(stack.Dir, opts.CarryOver)); err != nil {
+			log.Error("could not carry job files over into the restored stack", "dir", opts.CarryOver, "error", err)
+		} else {
+			log.Info("job files carried over into the restored stack", "dir", opts.CarryOver)
+		}
+	}
+
 	// 6./7. Start and verify.
 	if opts.NoStart {
 		log.Info("not starting stack (requested)")
@@ -162,6 +179,71 @@ func (p *Pipeline) Restore(ctx context.Context, stack stacks.Stack, opts Restore
 		return res, fmt.Errorf("starting restored stack (previous version kept at %s): %w", oldDir, err)
 	}
 	return res, nil
+}
+
+// ValidCarryOver reports whether dir may be used as RestoreOptions.CarryOver:
+// a clean relative path inside the stack.
+func ValidCarryOver(dir string) bool {
+	return dir != "" && dir != "." && filepath.IsLocal(dir) && filepath.Clean(dir) == dir
+}
+
+// CopyTree copies the directories and regular files below src into dst,
+// overwriting existing files and keeping mode, owner (when root) and
+// modification time. Symlinks and other special files are skipped. A
+// missing src is not an error.
+func CopyTree(src, dst string) error {
+	if _, err := os.Lstat(src); errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	return filepath.WalkDir(src, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, p)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dst, rel)
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		switch {
+		case d.IsDir():
+			if err := os.MkdirAll(target, info.Mode().Perm()); err != nil {
+				return err
+			}
+		case info.Mode().IsRegular():
+			if err := copyFile(p, target, info.Mode().Perm()); err != nil {
+				return err
+			}
+		default:
+			return nil // symlinks, sockets, ...: job directories have none
+		}
+		if st, ok := info.Sys().(*syscall.Stat_t); ok && os.Geteuid() == 0 {
+			if err := os.Lchown(target, int(st.Uid), int(st.Gid)); err != nil {
+				return err
+			}
+		}
+		return os.Chtimes(target, info.ModTime(), info.ModTime())
+	})
+}
+
+func copyFile(src, dst string, mode fs.FileMode) error {
+	in, err := os.Open(src) //nolint:gosec // G304: paths inside the stack's job directory
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode) //nolint:gosec // G304: see above
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		_ = out.Close()
+		return err
+	}
+	return out.Close()
 }
 
 // applyDirMetadata sets owner, mode and mtime of the staging directory to

@@ -15,7 +15,8 @@ const testJobID = "01JCZ8G3T4S5V6W7X8Y9Z0ABCD"
 
 func TestSpecRoundTrip(t *testing.T) {
 	dir := t.TempDir()
-	want := Spec{ID: testJobID, Type: TypeRestore, Stack: "web", SnapshotID: "0123abcd", NoStart: true}
+	want := Spec{ID: testJobID, Type: TypeRestore, Stack: "web", SnapshotID: "0123abcd", NoStart: true,
+		CarryOverJobs: "data/jobs", Trigger: "manual", Requester: "alice"}
 	if err := WriteSpec(dir, want); err != nil {
 		t.Fatal(err)
 	}
@@ -45,6 +46,11 @@ func TestReadSpecRejects(t *testing.T) {
 		{"restore with flag-like snapshot", `{"version":1,"id":"` + testJobID + `","type":"restore","stack":"web","snapshot_id":"--help"}`},
 		{"backup with restore option", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"web","no_start":true}`},
 		{"restore with backup option", `{"version":1,"id":"` + testJobID + `","type":"restore","stack":"web","snapshot_id":"0123abcd","pre_stop":true}`},
+		{"carry-over outside the stack", `{"version":1,"id":"` + testJobID + `","type":"restore","stack":"web","snapshot_id":"0123abcd","carry_over_jobs":"../manager/data"}`},
+		{"absolute carry-over", `{"version":1,"id":"` + testJobID + `","type":"restore","stack":"web","snapshot_id":"0123abcd","carry_over_jobs":"/data/jobs"}`},
+		{"carry-over on a backup", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"web","carry_over_jobs":"data/jobs"}`},
+		{"bad trigger", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"web","trigger":"cron"}`},
+		{"control chars in requester", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"web","requester":"a\nb"}`},
 		{"too large", `{"version":1,"x":"` + strings.Repeat("a", 70<<10) + `"}`},
 	}
 	for _, tt := range tests {

@@ -136,6 +136,17 @@ func run(args []string, getenv func(string) string, stderr io.Writer) int {
 	if jobDir != "" && !writeFinalStatus(jobDir, status, log, stderr) {
 		return 1
 	}
+	if jobDir != "" && spec.CarryOverJobs != "" && status.PreviousDir != "" {
+		// The manager restored its own stack: our job directory moved away
+		// with the previous version. The job files were carried over into
+		// the restored stack before it started; complete that copy, so the
+		// restarted manager sees the final result and the whole log.
+		carried := filepath.Join(cfg.StacksRoot, spec.Stack, spec.CarryOverJobs, spec.ID)
+		if err := finishCarriedOver(jobDir, carried, status); err != nil {
+			fmt.Fprintf(stderr, "updating carried-over job files: %v\n", err)
+			return 1
+		}
+	}
 	return code
 }
 
@@ -193,6 +204,7 @@ func execute(ctx context.Context, p *jobs.Pipeline, cfg config.Worker, spec jobs
 	case jobs.TypeRestore:
 		res, err := p.Restore(ctx, stack, jobs.RestoreOptions{
 			SnapshotID: spec.SnapshotID, SkipSafetySnapshot: spec.SkipSafetySnapshot, NoStart: spec.NoStart,
+			CarryOver: spec.CarryOverJobs,
 		})
 		status.Snapshot, status.SafetySnapshot, status.PreviousDir = res.Snapshot, res.SafetySnapshot, res.OldDir
 		if res.OldDir != "" {
@@ -219,6 +231,22 @@ func writeFinalStatus(dir string, s jobs.Status, log *slog.Logger, stderr io.Wri
 		return false
 	}
 	return true
+}
+
+// finishCarriedOver writes the final status and the complete log into the
+// carried-over copy of the job directory.
+func finishCarriedOver(jobDir, carried string, status jobs.Status) error {
+	if err := os.MkdirAll(carried, 0o700); err != nil {
+		return err
+	}
+	if err := jobs.MatchDirOwner(carried); err != nil {
+		return err
+	}
+	// Log first: once the status is final the manager stops reading.
+	if err := jobs.CopyTree(filepath.Join(jobDir, jobs.LogFile), filepath.Join(carried, jobs.LogFile)); err != nil {
+		return err
+	}
+	return jobs.WriteStatus(carried, status)
 }
 
 // secretValues extracts the values of "KEY=value" entries.

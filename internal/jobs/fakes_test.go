@@ -41,6 +41,7 @@ type fakeDocker struct {
 	// startCtxErr records ctx.Err() seen by Start/Up, to verify that the
 	// restart is not affected by job cancellation.
 	startCtxErr error
+	onUp        func() // called by Up, to inspect the stack directory at start
 }
 
 func (f *fakeDocker) fail(m string) error { return f.failOn[m] }
@@ -68,6 +69,9 @@ func (f *fakeDocker) Up(ctx context.Context, dir string, services []string) erro
 		f.calls.add("docker.Up %s", strings.Join(services, ","))
 	}
 	f.startCtxErr = ctx.Err()
+	if f.onUp != nil {
+		f.onUp()
+	}
 	return f.fail("Up")
 }
 

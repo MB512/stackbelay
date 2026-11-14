@@ -461,3 +461,50 @@ func TestRestoreStartVariants(t *testing.T) {
 }
 
 func ptr(s string) *string { return &s }
+
+// The manager restoring its own stack: its job files are carried over from
+// the previous version into the restored stack before it starts.
+func TestRestoreCarriesOverJobFiles(t *testing.T) {
+	e := restoreEnv(t)
+	jobDir := filepath.Join(e.stack.Dir, "data", "jobs", "J1")
+	if err := os.MkdirAll(jobDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(jobDir, "status.json"), []byte("newest"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// Started after the files are copied: the stack sees them at start.
+	var seenAtStart string
+	e.docker.onUp = func() {
+		b, _ := os.ReadFile(filepath.Join(e.stack.Dir, "data", "jobs", "J1", "status.json"))
+		seenAtStart = string(b)
+	}
+	res, err := e.p.Restore(context.Background(), e.stack, RestoreOptions{SnapshotID: snapID[:8], CarryOver: "data/jobs"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if seenAtStart != "newest" {
+		t.Fatalf("job files at start: %q", seenAtStart)
+	}
+	if got := readData(t, e.stack.Dir); got != "restored" {
+		t.Fatalf("stack not restored: %q", got)
+	}
+	fi, err := os.Stat(filepath.Join(e.stack.Dir, "data", "jobs", "J1", "status.json"))
+	if err != nil || fi.Mode().Perm() != 0o600 {
+		t.Fatalf("carried-over file: %v %v", fi, err)
+	}
+	if _, err := os.Stat(filepath.Join(res.OldDir, "data", "jobs", "J1", "status.json")); err != nil {
+		t.Fatal("previous version must keep its files")
+	}
+}
+
+func TestValidCarryOver(t *testing.T) {
+	for dir, want := range map[string]bool{
+		"data/jobs": true, "jobs": true, "": false, ".": false, "../jobs": false,
+		"/data/jobs": false, "data/../jobs": false, "data/jobs/": false,
+	} {
+		if got := ValidCarryOver(dir); got != want {
+			t.Errorf("ValidCarryOver(%q) = %v", dir, got)
+		}
+	}
+}
