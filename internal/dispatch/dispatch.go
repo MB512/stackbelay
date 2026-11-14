@@ -210,50 +210,62 @@ func (d *Dispatcher) start(ctx context.Context, j store.Job) {
 
 // check looks at a running job: a final status.json finishes it; a worker
 // container that is gone or stopped without a final status fails it.
+//
+// The container is removed before the result is recorded: if the manager
+// stops in between (e.g. it is part of the stack being backed up), the job
+// is still "running" and the next check finishes it. The other order could
+// leave a container behind for a job that is never checked again.
 func (d *Dispatcher) check(ctx context.Context, j store.Job) {
 	name := ContainerName(j.ID)
-	if d.finishFromStatus(ctx, j) {
+	if st, ok, _ := d.finalStatus(j); ok {
 		d.removeContainer(ctx, name)
+		d.finishWithStatus(ctx, j, st)
 		return
 	}
-	st, err := d.Docker.InspectContainer(ctx, name)
+	cs, err := d.Docker.InspectContainer(ctx, name)
 	if err != nil {
 		d.Logger.Warn("inspecting worker container", "job_id", j.ID, "error", err)
 		return // Docker unreachable: try again later
 	}
-	if st.Running() {
+	if cs.Running() {
 		return
 	}
 	// The worker may have written its final status right before exiting.
-	if d.finishFromStatus(ctx, j) {
-		d.removeContainer(ctx, name)
+	st, ok, readErr := d.finalStatus(j)
+	d.removeContainer(ctx, name)
+	if ok {
+		d.finishWithStatus(ctx, j, st)
 		return
 	}
 	msg := "the worker container disappeared without reporting a result"
-	if st.Exists {
-		msg = fmt.Sprintf("the worker container stopped (exit code %d) without reporting a result", st.ExitCode)
+	if cs.Exists {
+		msg = fmt.Sprintf("the worker container stopped (exit code %d) without reporting a result", cs.ExitCode)
+	}
+	if readErr != nil {
+		msg += fmt.Sprintf(" (%v)", readErr)
 	}
 	d.Logger.Error("job lost", "job_id", j.ID, "stack", j.StackName, "reason", msg)
 	d.finish(ctx, j, jobs.StateFailed, "", msg, store.JobResult{})
-	d.removeContainer(ctx, name)
 }
 
-// finishFromStatus records the worker's final status, if there is one.
-func (d *Dispatcher) finishFromStatus(ctx context.Context, j store.Job) bool {
-	st, err := jobs.ReadStatus(d.jobDir(j.ID))
+// finalStatus returns the worker's final status, if it wrote one. err is
+// set if a status file exists but cannot be read.
+func (d *Dispatcher) finalStatus(j store.Job) (st jobs.Status, ok bool, err error) {
+	st, err = jobs.ReadStatus(d.jobDir(j.ID))
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
-		return false
+		return st, false, nil
 	case err != nil:
 		d.Logger.Warn("reading job status", "job_id", j.ID, "error", err)
-		return false
-	case st.ID != j.ID || !st.State.Final():
-		return false
+		return st, false, err
 	}
+	return st, st.ID == j.ID && st.State.Final(), nil
+}
+
+func (d *Dispatcher) finishWithStatus(ctx context.Context, j store.Job, st jobs.Status) {
 	d.finish(ctx, j, st.State, st.Snapshot, st.Error, store.JobResult{
 		PreStopSnapshot: st.PreStopSnapshot, SafetySnapshot: st.SafetySnapshot, PreviousDir: st.PreviousDir,
 	})
-	return true
 }
 
 // finish records the final state and refreshes the snapshot cache if the

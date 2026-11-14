@@ -315,6 +315,21 @@ func TestDispatchSurvivesManagerRestart(t *testing.T) {
 	}
 }
 
+// A manager that stopped after removing the container but before recording
+// the result finishes the job on the next check.
+func TestFinishAfterContainerAlreadyRemoved(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	j := e.submit("web", jobs.TypeBackup, store.JobOptions{})
+	e.d.Step(ctx)
+	e.workerDone(j.ID, jobs.Status{State: jobs.StateSucceeded, Snapshot: "bbbbbbbb22222222"})
+	e.docker.set(ContainerName(j.ID), docker.ContainerState{}) // already removed
+	e.newDispatcher().Step(ctx)
+	if got := e.job(j.ID); got.State != jobs.StateSucceeded || got.Snapshot != "bbbbbbbb22222222" {
+		t.Fatalf("job: %+v", got)
+	}
+}
+
 func TestCancel(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
