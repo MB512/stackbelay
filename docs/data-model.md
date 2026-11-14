@@ -10,11 +10,12 @@ CREATE TABLE users (
   password_hash TEXT NOT NULL,              -- argon2id
   is_admin      INTEGER NOT NULL DEFAULT 0, -- admins manage users/stacks/repos
   disabled      INTEGER NOT NULL DEFAULT 0,
-  created_at    TEXT NOT NULL
+  created_at    TEXT NOT NULL,
+  must_change_password INTEGER NOT NULL DEFAULT 0 -- generated password (initial admin); migration 0002
 );
 
 CREATE TABLE sessions (
-  id          TEXT PRIMARY KEY,             -- random 256 bit, stored hashed
+  id          TEXT PRIMARY KEY,             -- SHA-256 (hex) of the random 256-bit cookie token
   user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   csrf_token  TEXT NOT NULL,
   expires_at  TEXT NOT NULL
