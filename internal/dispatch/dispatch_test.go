@@ -501,3 +501,36 @@ func TestRestoreOfManagerStackCarriesJobsOver(t *testing.T) {
 		}
 	}
 }
+
+// The restarted manager may find a job that already finished: imported as
+// final, and its exited container is removed. One whose container still
+// runs is imported as running and finished by the regular check.
+func TestReconcileImportRemovesExitedContainer(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	done, _ := jobs.NewID(time.Date(2026, 11, 14, 9, 0, 0, 0, time.UTC))
+	busy, _ := jobs.NewID(time.Date(2026, 11, 14, 9, 1, 0, 0, time.UTC))
+	e.writeJobDir(jobs.Spec{ID: done, Type: jobs.TypeBackup, Stack: "web"}, &jobs.Status{State: jobs.StateSucceeded, Snapshot: "aaaaaaaa11111111"})
+	e.docker.set(ContainerName(done), docker.ContainerState{Exists: true, Status: "exited"})
+	e.writeJobDir(jobs.Spec{ID: busy, Type: jobs.TypeBackup, Stack: "db"}, &jobs.Status{State: jobs.StateSucceeded, Snapshot: "bbbbbbbb22222222"})
+	e.docker.set(ContainerName(busy), docker.ContainerState{Exists: true, Status: "running"}) // about to exit
+
+	e.d.Reconcile(ctx)
+	if j := e.job(done); j.State != jobs.StateSucceeded || j.Snapshot != "aaaaaaaa11111111" {
+		t.Fatalf("finished job: %+v", j)
+	}
+	if j := e.job(busy); j.State != jobs.StateRunning {
+		t.Fatalf("job with running container: %+v", j)
+	}
+	if len(e.docker.removed) != 1 || e.docker.removed[0] != ContainerName(done) {
+		t.Fatalf("removed: %v", e.docker.removed)
+	}
+	e.docker.set(ContainerName(busy), docker.ContainerState{Exists: true, Status: "exited"})
+	e.d.Step(ctx)
+	if j := e.job(busy); j.State != jobs.StateSucceeded || j.Snapshot != "bbbbbbbb22222222" {
+		t.Fatalf("after exit: %+v", j)
+	}
+	if len(e.docker.removed) != 2 {
+		t.Fatalf("removed: %v", e.docker.removed)
+	}
+}

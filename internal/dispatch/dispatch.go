@@ -168,6 +168,17 @@ func (d *Dispatcher) reconcileDir(ctx context.Context, id string, importing bool
 	dir := d.jobDir(id)
 	status, statusErr := jobs.ReadStatus(dir)
 	final := statusErr == nil && status.ID == id && status.State.Final()
+	// A worker that is still running (it may have just written its final
+	// status) is left to the regular check, which finishes the job once the
+	// container has exited and then removes it.
+	cs, err := d.Docker.InspectContainer(ctx, ContainerName(id))
+	if err != nil {
+		log.Warn("reconciling jobs: inspecting worker container", "error", err)
+		return
+	}
+	if cs.Running() {
+		final = false
+	}
 
 	known, err := d.Store.JobByID(ctx, id)
 	switch {
@@ -221,6 +232,12 @@ func (d *Dispatcher) reconcileDir(ctx context.Context, id string, importing bool
 	}
 	if j.State == jobs.StateQueued { // workers never write "queued"
 		j.State = jobs.StateFailed
+	}
+	switch {
+	case cs.Running():
+		j.State, j.FinishedAt, j.Snapshot, j.Error, j.Result = jobs.StateRunning, time.Time{}, "", "", store.JobResult{}
+	case cs.Exists:
+		d.removeContainer(ctx, ContainerName(id))
 	}
 	if err := d.Store.ImportJob(ctx, j, spec.Requester); err != nil {
 		log.Warn("reconciling jobs: importing job", "error", err)
