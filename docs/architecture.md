@@ -56,6 +56,24 @@ Worker (started by manager):
 Workers carry a label `stackvault.worker=true` and are NOT created through
 compose, so they are never affected by stopping a stack.
 
+## Manager configuration
+
+| Variable | Meaning |
+|---|---|
+| `STACKS_ROOT` | absolute stacks root, mounted at the same path as on the host (required) |
+| `STACKVAULT_HOSTNAME` | name of the Docker host, passed to workers for `restic --host` (required) |
+| `STACKVAULT_SECRET_KEY` / `STACKVAULT_SECRET_KEY_FILE` | 32-byte key, base64 (`openssl rand -base64 32`); exactly one is required. Not part of any backup: keep a copy elsewhere |
+| `STACKVAULT_DATA_DIR` | database and job directories, default `/data` |
+| `STACKVAULT_LISTEN` | listen address, default `:8080` |
+| `STACKVAULT_SESSION_TTL` | session lifetime, default `12h` |
+| `STACKVAULT_ALLOW_INSECURE_HTTP` | accept logins over plain HTTP (testing without TLS proxy), default `false` |
+| `STACKVAULT_WORKER_IMAGE` | image for worker containers, default: the manager's own image |
+| `STACKVAULT_LOG_LEVEL` | `debug`, `info`, `warn`, `error` |
+
+The database file is created with mode 0600. `/healthz` checks the database
+and is meant for the container health check. Stacks are discovered at
+startup and mirrored into the database.
+
 ## Job handoff
 
 The manager writes `/data/jobs/<id>/spec.json` and starts the worker with
