@@ -27,8 +27,8 @@ The image contains `restic`, `docker-cli` and the `docker compose` plugin.
 ## Repository assumptions
 
 Repositories are served by `restic/rest-server` in **append-only mode**. The
-app therefore only uses operations that work there: `backup`, `restore`,
-`snapshots`, `ls`, `cat config`, and read-only `check`. It never calls `forget`,
+app therefore only uses operations that work there: `init`, `backup`,
+`restore`, `snapshots`, `ls`, `cat config`, and read-only `check`. It never calls `forget`,
 `prune` or `tag`, which would fail or are unwanted. Retention and pruning are
 the responsibility of the repository owner on the server. Deleting stale lock
 files is allowed in append-only mode.
@@ -290,6 +290,7 @@ form with `method`/`action`, so it works without JavaScript. An HTMX request
 | `POST /stacks/{name}/snapshots/refresh` | view right | refresh the snapshot cache (read-only restic; at most once per 10 s per stack; HTMX: returns the snapshot section) |
 | `GET /stacks/{name}/settings` | admin | "Settings" tab: repository, enable/disable, per-user permissions |
 | `POST /stacks/{name}/repository` | admin | create/update the repository, then refresh the snapshot cache as an access check |
+| `POST /stacks/{name}/repository/init` | admin | `restic init` at the stored location (offered only when no repository exists there) |
 | `POST /stacks/{name}/permissions` | admin | set one user's backup/restore right (HTMX: returns the table row) |
 | `POST /stacks/{name}/enabled` | admin | enable/disable the stack for scheduled backups |
 | `GET/POST /admin/users` | admin | list users, create a user with a generated one-time password |
@@ -303,7 +304,14 @@ entered as `KEY=value` lines and replace all stored variables (empty =
 keep). Secret values are never rendered back into the page, only the names
 of stored variables. After saving, a snapshot cache refresh checks access;
 if it fails the repository stays saved and the restic error is shown.
-`restic init` is not offered: the repository owner creates repositories.
+If the check reports that no repository exists at the location (restic
+exit code 10, `restic.IsNoRepository`), the Settings tab offers an
+**Initialize repository** button (`POST /stacks/{name}/repository/init`,
+admin, audited as `repository.init`). The manager runs `restic init`
+directly with the stored password; restic refuses if a repository already
+exists, so nothing is overwritten. This works with an append-only
+rest-server and makes it easy to start a fresh repository e.g. per year,
+keeping repositories and their indexes small.
 
 Stack pages share a header with tabs (`stack-header` in `partials.html`).
 The tab list is built per user in `newStackHeader`; a tab is only shown if

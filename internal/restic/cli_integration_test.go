@@ -30,16 +30,24 @@ func TestCLIIntegration(t *testing.T) {
 
 	// Repo does not exist yet.
 	var rerr *Error
-	if err := c.CheckRepo(ctx, repo); !errors.As(err, &rerr) {
-		t.Fatalf("expected *Error for missing repo, got %v", err)
+	if err := c.CheckRepo(ctx, repo); !errors.As(err, &rerr) || !IsNoRepository(err) {
+		t.Fatalf("expected a no-repository *Error for missing repo, got %v", err)
 	}
-	init := exec.Command("restic", "init")
-	init.Env = append(os.Environ(), "RESTIC_REPOSITORY="+repoDir, "RESTIC_PASSWORD_FILE="+pwFile)
-	if out, err := init.CombinedOutput(); err != nil {
-		t.Fatalf("restic init: %v: %s", err, out)
+	if _, err := c.Snapshots(ctx, repo); !IsNoRepository(err) {
+		t.Fatalf("snapshots on missing repo: want IsNoRepository, got %v", err)
+	}
+	if err := c.Init(ctx, repo); err != nil {
+		t.Fatal(err)
 	}
 	if err := c.CheckRepo(ctx, repo); err != nil {
 		t.Fatal(err)
+	}
+	// A second init is refused and is not "no repository".
+	if err := c.Init(ctx, repo); err == nil || IsNoRepository(err) {
+		t.Fatalf("second init: want a refusal, got %v", err)
+	}
+	if err := c.CheckRepo(ctx, Repo{Location: repoDir, Env: []string{"RESTIC_PASSWORD=wrong-pw"}}); err == nil || IsNoRepository(err) {
+		t.Fatalf("wrong password: want an error that is not IsNoRepository, got %v", err)
 	}
 
 	stack := filepath.Join(tmp, "stacks", "web")

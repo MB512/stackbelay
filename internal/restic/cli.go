@@ -146,6 +146,17 @@ func (e *Error) Message() string {
 	return e.Err.Error()
 }
 
+// exitNoRepository is restic's exit code for "repository does not exist"
+// (restic >= 0.17).
+const exitNoRepository = 10
+
+// IsNoRepository reports whether err means that there is no repository at
+// the location (as opposed to e.g. a wrong password or a network error).
+func IsNoRepository(err error) bool {
+	var re *Error
+	return errors.As(err, &re) && re.ExitCode() == exitNoRepository
+}
+
 // ExitCode returns restic's exit code, or -1 if it did not exit normally.
 func (e *Error) ExitCode() int {
 	var ee *exec.ExitError
@@ -153,6 +164,15 @@ func (e *Error) ExitCode() int {
 		return ee.ExitCode()
 	}
 	return -1
+}
+
+// Init creates a new repository at repo.Location (restic init) with the
+// password from repo.Env. restic refuses if a repository already exists
+// there, so this never overwrites anything; it is allowed with an
+// append-only rest-server. Only the manager calls it, on an explicit admin
+// action, so it is not part of Runner.
+func (c *CLI) Init(ctx context.Context, repo Repo) error {
+	return c.runJSON(ctx, repo, func([]byte) {}, "init")
 }
 
 // CheckRepo implements Runner.

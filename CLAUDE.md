@@ -134,5 +134,9 @@ Retention is deliberately NOT handled by the app: repositories are expected to
 be served by `restic/rest-server` in append-only mode, where clients cannot
 delete or rewrite data. Do not add code that calls `restic forget`, `prune`,
 `tag` or anything else that rewrites/deletes snapshots or pack files. Only
-create and read operations (`backup`, `restore`, `snapshots`, `ls`, `cat`,
-`check` read-only). Pruning is done by the repository owner on the server side.
+create and read operations (`init`, `backup`, `restore`, `snapshots`, `ls`,
+`cat`, `check` read-only). `init` only runs as an explicit admin action when
+restic reports that no repository exists at the location (restic refuses to
+init over an existing one); it lets admins start e.g. a new repository per
+year to keep repositories small. Pruning is done by the repository owner on
+the server side.
