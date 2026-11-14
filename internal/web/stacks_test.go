@@ -89,6 +89,7 @@ func TestStackAccessControl(t *testing.T) {
 		}
 	}
 	expect(t, e.get("/stacks/db"), http.StatusOK, "")
+	expect(t, e.get("/stacks/nope/settings"), http.StatusNotFound, "")
 
 	// Without grants alice sees nothing; hidden stacks look like unknown ones.
 	r = get("/")
@@ -101,7 +102,7 @@ func TestStackAccessControl(t *testing.T) {
 	}
 
 	// Admin grants backup on "web" via HTMX: the updated row comes back.
-	token := e.csrf("/stacks/web")
+	token := e.csrf("/stacks/web/settings")
 	r = e.do(e.client, http.MethodPost, "/stacks/web/permissions",
 		url.Values{"csrf_token": {token}, "user_id": {itoa(aliceID)}, "can_backup": {"on"}},
 		map[string]string{"HX-Request": "true"})
@@ -116,11 +117,20 @@ func TestStackAccessControl(t *testing.T) {
 	if !strings.Contains(r.body, `href="/stacks/web"`) || strings.Contains(r.body, `href="/stacks/db"`) {
 		t.Fatalf("alice should see web only:\n%s", r.body)
 	}
+	// The Backups tab looks the same for alice and the admin, except the
+	// admin's extra Settings tab.
 	r = get("/stacks/web")
 	expect(t, r, http.StatusOK, "")
-	if strings.Contains(r.body, "/permissions") || strings.Contains(r.body, "/enabled") {
-		t.Fatal("non-admin sees admin forms on the stack page")
+	adminView := e.get("/stacks/web")
+	for _, view := range []response{r, adminView} {
+		if strings.Contains(view.body, "/permissions") || strings.Contains(view.body, "/enabled") {
+			t.Fatal("settings forms on the Backups tab")
+		}
 	}
+	if strings.Contains(r.body, "/stacks/web/settings") || !strings.Contains(adminView.body, `href="/stacks/web/settings"`) {
+		t.Fatal("Settings tab must be shown to admins only")
+	}
+	expect(t, get("/stacks/web/settings"), http.StatusForbidden, "")
 	expect(t, get("/stacks/db"), http.StatusNotFound, "")
 
 	// Admin-only endpoints are refused for alice, even with a valid token.
@@ -136,7 +146,7 @@ func TestStackAccessControl(t *testing.T) {
 
 	// Revoking (plain form post) hides the stack again.
 	expect(t, e.post("/stacks/web/permissions", url.Values{"csrf_token": {token}, "user_id": {itoa(aliceID)}}),
-		http.StatusSeeOther, "/stacks/web")
+		http.StatusSeeOther, "/stacks/web/settings")
 	expect(t, get("/stacks/web"), http.StatusNotFound, "")
 
 	// Permissions for admins or unknown users are refused.
@@ -187,13 +197,18 @@ func TestStackDetailShowsRepositoryAndSnapshots(t *testing.T) {
 		t.Errorf("stack list lacks last snapshot time:\n%s", r.body)
 	}
 
-	// Disable and enable the stack.
-	token := e.csrf("/stacks/web")
-	expect(t, e.post("/stacks/web/enabled", url.Values{"csrf_token": {token}, "enabled": {"false"}}), http.StatusSeeOther, "/stacks/web")
+	// Disable and enable the stack on the Settings tab.
+	r = e.get("/stacks/web/settings")
+	expect(t, r, http.StatusOK, "")
+	if !strings.Contains(r.body, `action="/stacks/web/enabled"`) || !strings.Contains(r.body, `aria-current="page">Settings`) {
+		t.Fatalf("settings tab:\n%s", r.body)
+	}
+	token := e.csrf("/stacks/web/settings")
+	expect(t, e.post("/stacks/web/enabled", url.Values{"csrf_token": {token}, "enabled": {"false"}}), http.StatusSeeOther, "/stacks/web/settings")
 	if st, _ := e.st.StackByName(ctx, "web"); st.Enabled {
 		t.Fatal("stack still enabled")
 	}
-	expect(t, e.post("/stacks/web/enabled", url.Values{"csrf_token": {token}, "enabled": {"true"}}), http.StatusSeeOther, "/stacks/web")
+	expect(t, e.post("/stacks/web/enabled", url.Values{"csrf_token": {token}, "enabled": {"true"}}), http.StatusSeeOther, "/stacks/web/settings")
 	if st, _ := e.st.StackByName(ctx, "web"); !st.Enabled {
 		t.Fatal("stack still disabled")
 	}

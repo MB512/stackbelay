@@ -57,3 +57,13 @@ code.secret { font-size: 1.1rem; user-select: all; }
 @media (max-width: 40rem) {
   table { display: block; overflow-x: auto; }
 }
+
+/* Tab bar of the stack pages. */
+h1 + nav.tabs { margin-top: -.4rem; }
+nav.tabs { display: flex; gap: .2rem; border-bottom: 1px solid var(--border); margin-bottom: 1.2rem; }
+nav.tabs a {
+  padding: .5rem .9rem; text-decoration: none; color: var(--muted);
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+nav.tabs a:hover { color: var(--fg); }
+nav.tabs a[aria-current="page"] { color: var(--fg); border-bottom-color: var(--accent); font-weight: 600; }

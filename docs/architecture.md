@@ -286,12 +286,19 @@ form with `method`/`action`, so it works without JavaScript. An HTMX request
 | Route | Who | |
 |---|---|---|
 | `GET /` | logged in | stacks the user may view (admins: all) |
-| `GET /stacks/{name}` | view right | repository location, cached snapshots; admins also settings and permissions |
+| `GET /stacks/{name}` | view right | "Backups" tab: repository location, cached snapshots (same for every user) |
+| `GET /stacks/{name}/settings` | admin | "Settings" tab: enable/disable, per-user permissions |
 | `POST /stacks/{name}/permissions` | admin | set one user's backup/restore right (HTMX: returns the table row) |
 | `POST /stacks/{name}/enabled` | admin | enable/disable the stack for scheduled backups |
 | `GET/POST /admin/users` | admin | list users, create a user with a generated one-time password |
 | `POST /admin/users/{id}` | admin | set admin/disabled flags (not on one's own account) |
 | `POST /admin/users/{id}/password` | admin | generate a new password (must be changed, sessions end) |
+
+Stack pages share a header with tabs (`stack-header` in `partials.html`).
+The tab list is built per user in `newStackHeader`; a tab is only shown if
+the user may open it, and its handler checks the permission again. Planned
+tabs (logs, status with restart, editing `compose.yml`) are added there
+with their own permissions.
 
 Stacks a user may not view answer 404 (not 403), so stack names are not
 revealed. `{name}` must pass `stacks.ValidName` and exist in the database

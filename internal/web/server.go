@@ -84,6 +84,7 @@ func (s *Server) Handler() (http.Handler, error) {
 			// Admin only.
 			r.Group(func(r chi.Router) {
 				r.Use(s.requireAdmin)
+				r.Get("/stacks/{name}/settings", s.stackSettings)
 				r.Post("/stacks/{name}/permissions", s.setPermission)
 				r.Post("/stacks/{name}/enabled", s.setStackEnabled)
 				r.Get("/admin/users", s.userList)

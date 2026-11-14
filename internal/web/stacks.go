@@ -50,13 +50,51 @@ func (s *Server) stackList(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, http.StatusOK, "stacks.html", pageData{Title: "Stacks", Data: rows})
 }
 
-// stackPage is the data of the stack detail page.
-type stackPage struct {
-	Stack                 store.Stack
+// stackTab is one tab in the header of the stack pages.
+type stackTab struct {
+	Label  string
+	URL    string
+	Active bool
+}
+
+// stackHeader is the common top of all stack pages: name, status and the
+// tabs the user may open.
+type stackHeader struct {
+	Stack store.Stack
+	Tabs  []stackTab
+}
+
+// Tab ids, also the last path segment of the tab ("" = the stack's root).
+const (
+	tabBackups  = ""
+	tabSettings = "settings"
+)
+
+// newStackHeader builds the tab list for user. Every tab has its own
+// permission check here and again in its handler; tabs the user may not
+// open are not shown.
+func newStackHeader(user store.User, st store.Stack, active string) stackHeader {
+	base := "/stacks/" + url.PathEscape(st.Name)
+	tabs := []stackTab{{Label: "Backups", URL: base, Active: active == tabBackups}}
+	if user.IsAdmin {
+		tabs = append(tabs, stackTab{Label: "Settings", URL: base + "/" + tabSettings, Active: active == tabSettings})
+	}
+	return stackHeader{Stack: st, Tabs: tabs}
+}
+
+// backupsTab is the data of the "Backups" tab. It looks the same for every
+// user who may view the stack.
+type backupsTab struct {
+	stackHeader           // embedded: .Stack and .Tabs are available directly
 	CanBackup, CanRestore bool
 	Repo                  *store.RepositoryInfo // nil = no repository configured
 	Snapshots             []store.CachedSnapshot
-	Permissions           []permRow // admins only
+}
+
+// settingsTab is the data of the admin-only "Settings" tab.
+type settingsTab struct {
+	stackHeader
+	Permissions []permRow
 }
 
 // permRow is one user in the permission table of a stack (admin view). It
@@ -112,12 +150,11 @@ func (s *Server) stackDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a := authFrom(r.Context())
-	page := stackPage{
-		Stack:      st,
-		CanBackup:  auth.Allowed(a.User, perm, auth.ActionBackup),
-		CanRestore: auth.Allowed(a.User, perm, auth.ActionRestore),
+	page := backupsTab{
+		stackHeader: newStackHeader(a.User, st, tabBackups),
+		CanBackup:   auth.Allowed(a.User, perm, auth.ActionBackup),
+		CanRestore:  auth.Allowed(a.User, perm, auth.ActionRestore),
 	}
-
 	repo, err := s.Store.RepositoryInfoForStack(r.Context(), st.ID)
 	switch {
 	case err == nil:
@@ -130,14 +167,23 @@ func (s *Server) stackDetail(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, r, "loading repository", err)
 		return
 	}
-
-	if a.User.IsAdmin {
-		if page.Permissions, err = s.permissionRows(r, st); err != nil {
-			s.internalError(w, r, "listing permissions", err)
-			return
-		}
-	}
 	s.render(w, r, http.StatusOK, "stack.html", pageData{Title: st.Name, Data: page})
+}
+
+// stackSettings shows the admin-only settings of a stack: enable/disable
+// and the per-user permissions.
+func (s *Server) stackSettings(w http.ResponseWriter, r *http.Request) {
+	st, _, ok := s.loadStack(w, r, auth.ActionView)
+	if !ok {
+		return
+	}
+	rows, err := s.permissionRows(r, st)
+	if err != nil {
+		s.internalError(w, r, "listing permissions", err)
+		return
+	}
+	page := settingsTab{stackHeader: newStackHeader(authFrom(r.Context()).User, st, tabSettings), Permissions: rows}
+	s.render(w, r, http.StatusOK, "stack_settings.html", pageData{Title: st.Name + " settings", Data: page})
 }
 
 // permissionRows lists all non-admin users with their permission on st.
@@ -202,11 +248,11 @@ func (s *Server) setPermission(w http.ResponseWriter, r *http.Request) {
 		Detail: fmt.Sprintf("user %q: backup=%t restore=%t", user.Username, p.CanBackup, p.CanRestore)})
 
 	if isHTMX(r) {
-		s.renderPartial(w, "stack.html", "perm-row",
+		s.renderPartial(w, "stack_settings.html", "perm-row",
 			permRow{StackName: st.Name, CSRF: a.Session.CSRFToken, User: user, Perm: p})
 		return
 	}
-	http.Redirect(w, r, "/stacks/"+url.PathEscape(st.Name), http.StatusSeeOther)
+	http.Redirect(w, r, settingsURL(st), http.StatusSeeOther) //nolint:gosec // G710: same-site path, see settingsURL
 }
 
 // setStackEnabled enables or disables a stack (admin only). Disabled
@@ -226,7 +272,7 @@ func (s *Server) setStackEnabled(w http.ResponseWriter, r *http.Request) {
 		action = "stack.enable"
 	}
 	s.audit(r, store.AuditEntry{UserID: authFrom(r.Context()).User.ID, Action: action, StackID: st.ID})
-	http.Redirect(w, r, "/stacks/"+url.PathEscape(st.Name), http.StatusSeeOther)
+	http.Redirect(w, r, settingsURL(st), http.StatusSeeOther) //nolint:gosec // G710: same-site path, see settingsURL
 }
 
 // requireAdmin answers 403 for non-admins.
@@ -244,4 +290,11 @@ func (s *Server) requireAdmin(next http.Handler) http.Handler {
 func (s *Server) internalError(w http.ResponseWriter, r *http.Request, doing string, err error) {
 	s.Logger.Error(doing, "path", r.URL.Path, "error", err)
 	s.renderError(w, r, http.StatusInternalServerError, "Internal error.")
+}
+
+// settingsURL is the path of a stack's Settings tab. It always starts with
+// "/stacks/" and the name (a discovered stack name) is path-escaped, so it
+// can never point to another site.
+func settingsURL(st store.Stack) string {
+	return "/stacks/" + url.PathEscape(st.Name) + "/" + tabSettings
 }

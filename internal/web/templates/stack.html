@@ -1,6 +1,6 @@
 {{define "content"}}
 {{- with .Data}}
-<h1>{{.Stack.Name}} {{template "stack-status" .Stack}}</h1>
+{{template "stack-header" .}}
 
 <section>
   <h2>Repository</h2>
@@ -8,7 +8,7 @@
   <p><code>{{.Location}}</code></p>
   <p class="hint">Snapshot list last refreshed: {{when .SnapshotsRefreshedAt}}</p>
   {{- else}}
-  <p class="hint">No repository configured{{if $.User.IsAdmin}}; the repository form follows in the next step{{end}}.</p>
+  <p class="hint">No repository configured.</p>
   {{- end}}
 </section>
 
@@ -34,56 +34,5 @@
   {{- end}}
 </section>
 {{- end}}
-
-{{- if $.User.IsAdmin}}
-<section>
-  <h2>Settings</h2>
-  <form method="post" action="/stacks/{{.Stack.Name}}/enabled" class="inline">
-    <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
-    {{- if .Stack.Enabled}}
-    <input type="hidden" name="enabled" value="false">
-    <button type="submit" class="secondary">Disable stack</button>
-    <span class="hint">Disabled stacks are skipped by scheduled backups.</span>
-    {{- else}}
-    <input type="hidden" name="enabled" value="true">
-    <button type="submit">Enable stack</button>
-    {{- end}}
-  </form>
-</section>
-
-<section>
-  <h2>Permissions</h2>
-  {{- if .Permissions}}
-  <p class="hint">Administrators may do everything and are not listed. Users with any permission can see the stack.</p>
-  <table>
-    <thead><tr><th>User</th><th>Backup</th><th>Restore</th><th></th></tr></thead>
-    <tbody>
-      {{- range .Permissions}}{{template "perm-row" .}}{{end}}
-    </tbody>
-  </table>
-  {{- else}}
-  <p class="hint">There are no non-admin users. <a href="/admin/users">Create one</a> to grant permissions.</p>
-  {{- end}}
-</section>
 {{- end}}
-{{- end}}
-{{end}}
-
-{{- /* One row of the permission table. Rendered on its own as the answer to
-       an HTMX post, which replaces the row (hx-target="closest tr"). A table
-       row cannot contain a form, so the inputs refer to it via form=. */}}
-{{define "perm-row"}}
-<tr>
-  <td>{{.User.Username}}{{if .User.Disabled}} <span class="badge">disabled</span>{{end}}</td>
-  <td><input type="checkbox" name="can_backup" form="perm-{{.User.ID}}" aria-label="Backup"{{if .Perm.CanBackup}} checked{{end}}></td>
-  <td><input type="checkbox" name="can_restore" form="perm-{{.User.ID}}" aria-label="Restore"{{if .Perm.CanRestore}} checked{{end}}></td>
-  <td>
-    <form id="perm-{{.User.ID}}" method="post" action="/stacks/{{.StackName}}/permissions"
-          hx-post="/stacks/{{.StackName}}/permissions" hx-target="closest tr" hx-swap="outerHTML">
-      <input type="hidden" name="csrf_token" value="{{.CSRF}}">
-      <input type="hidden" name="user_id" value="{{.User.ID}}">
-      <button type="submit" class="secondary">Save</button>
-    </form>
-  </td>
-</tr>
 {{end}}
