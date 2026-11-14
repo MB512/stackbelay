@@ -79,3 +79,24 @@ func TestHealthStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestProjectOwner(t *testing.T) {
+	name, err := parseProjectName([]byte(`{"name":"stackvault","services":{}}`))
+	if err != nil || name != "stackvault" {
+		t.Fatalf("parseProjectName: %q %v", name, err)
+	}
+	if _, err := parseProjectName([]byte(`{"services":{}}`)); err == nil {
+		t.Fatal("missing name accepted")
+	}
+	out := []byte("stackvault-manager-1\t/home/docker/stackvault\nstackvault-db-1\t/home/docker/stackvault/\n")
+	if f := foreignContainers(out, "/home/docker/stackvault"); len(f) != 0 {
+		t.Fatalf("own containers reported as foreign: %v", f)
+	}
+	out = append(out, []byte("stackvault-manager-1\t/tmp/test/stacks/stackvault\n")...)
+	if f := foreignContainers(out, "/home/docker/stackvault"); len(f) != 1 || f[0] != "stackvault-manager-1 (/tmp/test/stacks/stackvault)" {
+		t.Fatalf("foreign containers: %v", f)
+	}
+	if f := foreignContainers(nil, "/home/docker/stackvault"); len(f) != 0 {
+		t.Fatalf("no containers: %v", f)
+	}
+}

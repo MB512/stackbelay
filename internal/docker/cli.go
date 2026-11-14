@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -52,8 +53,12 @@ func (c *CLI) compose(ctx context.Context, dir string, args ...string) ([]byte, 
 	return c.run(ctx, dir, full...)
 }
 
-// Services implements Client.
+// Services implements Client. It first makes sure that the compose project
+// really belongs to dir (see checkProjectOwner).
 func (c *CLI) Services(ctx context.Context, dir string) ([]ServiceState, error) {
+	if err := c.checkProjectOwner(ctx, dir); err != nil {
+		return nil, err
+	}
 	out, err := c.compose(ctx, dir, "config", "--services")
 	if err != nil {
 		return nil, err
@@ -150,6 +155,60 @@ func (c *CLI) imageInfo(ctx context.Context, dir, imageID string) (imageInfo, er
 		return imageInfo{}, fmt.Errorf("image inspect returned %d entries", len(infos))
 	}
 	return infos[0], nil
+}
+
+// checkProjectOwner refuses a stack whose compose project name is also used
+// by containers created from another directory. Compose identifies a
+// project only by its name (the directory name, or "name:" in compose.yml);
+// a stack of the same name elsewhere, or one started with "-p", would
+// otherwise make stop/start/up act on someone else's containers.
+func (c *CLI) checkProjectOwner(ctx context.Context, dir string) error {
+	out, err := c.compose(ctx, dir, "config", "--format", "json")
+	if err != nil {
+		return err
+	}
+	project, err := parseProjectName(out)
+	if err != nil {
+		return err
+	}
+	out, err = c.run(ctx, dir, "ps", "--all", "--filter", "label=com.docker.compose.project="+project,
+		"--format", `{{.Names}}`+"\t"+`{{.Label "com.docker.compose.project.working_dir"}}`)
+	if err != nil {
+		return err
+	}
+	if foreign := foreignContainers(out, dir); len(foreign) > 0 {
+		return fmt.Errorf("compose project %q is also used by containers from another directory (%s); "+
+			"refusing to touch it. Give the stacks different names, or start this stack from its own "+
+			"directory without -p", project, strings.Join(foreign, ", "))
+	}
+	return nil
+}
+
+func parseProjectName(out []byte) (string, error) {
+	var cfg struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(out, &cfg); err != nil {
+		return "", fmt.Errorf("parsing compose config: %w", err)
+	}
+	if cfg.Name == "" {
+		return "", errors.New("compose config has no project name")
+	}
+	return cfg.Name, nil
+}
+
+// foreignContainers returns "name (working dir)" for every container in
+// "docker ps" output (name<TAB>working_dir lines) that was not created from
+// dir.
+func foreignContainers(out []byte, dir string) []string {
+	var foreign []string
+	for _, line := range parseLines(out) {
+		name, wd, _ := strings.Cut(line, "\t")
+		if filepath.Clean(wd) != filepath.Clean(dir) {
+			foreign = append(foreign, fmt.Sprintf("%s (%s)", name, wd))
+		}
+	}
+	return foreign
 }
 
 // Stop implements Client.

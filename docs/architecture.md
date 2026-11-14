@@ -489,7 +489,13 @@ type Runner interface {
 
 Compose commands run with the stack directory as working and project
 directory and without `-f`, so `compose.override.yml` is honoured exactly as
-when a user runs `docker compose` there. `restic restore <id>:<subpath>`
+when a user runs `docker compose` there. The compose project name is therefore
+the directory name (or `name:` in `compose.yml`). Before touching a stack,
+`docker.CLI` checks that every existing container of that project was
+created from this stack's directory (label
+`com.docker.compose.project.working_dir`); otherwise the job fails before
+anything is stopped. This protects against a stack of the same name
+elsewhere on the host or one started with `docker compose -p`. `restic restore <id>:<subpath>`
 requires restic >= 0.17.
 
 ## Worker CLI (M1)
@@ -528,7 +534,7 @@ repository: `scripts/e2e-local.sh` (`KEEP=1` keeps the temp directory and
 containers for inspection). `scripts/e2e-dispatch.sh` tests the manager
 with real worker containers through the web UI (repository init, backup,
 queueing, restore); it builds a throwaway worker image from
-`scripts/e2e-worker.Dockerfile`.
+`scripts/e2e.Dockerfile`.
 
 Not yet implemented (M4/M5): restore into a not-yet-existing stack
 (import), image pinning.
