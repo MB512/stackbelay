@@ -118,7 +118,11 @@ CREATE TABLE audit_log (
   `{"password": "...", "env": {"RESTIC_REST_USERNAME": "...", ...}}`, with
   associated data `stackvault:repository:stack=<stack_id>`. Env keys must be
   in `restic.BackendEnvVars`. `location` is stored in plain text and must not
-  contain a password (`rest:https://user:pw@...` is refused).
+  contain a password (`rest:https://user:pw@...` is refused, and so is a URL
+  that does not parse cleanly but contains `@`, e.g. an unescaped `/` or `#`
+  in a password). The repository form splits such REST URLs into the
+  location and `RESTIC_REST_USERNAME`/`RESTIC_REST_PASSWORD`
+  (`restic.SplitRESTCredentials`).
 - Changing a repository's `location` deletes its cached snapshots.
 - Snapshot cache refresh marks snapshots no longer in the repository as
   `missing = 1` instead of deleting them.

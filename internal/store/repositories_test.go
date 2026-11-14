@@ -158,6 +158,8 @@ func TestSetRepositoryValidation(t *testing.T) {
 		{"flag", web, "--insecure-tls", "pw", nil, "'-'"},
 		{"password in rest url", web, "rest:https://u:secret@host/r", "pw", nil, "password"},
 		{"password in s3 url", web, "s3:https://ak:sk@s3.example/b", "pw", nil, "password"},
+		{"password with slash", web, "rest:https://u:12/x@host/r", "pw", nil, "cannot be parsed"},
+		{"password with hash", web, "rest:https://u:p#w@host/r", "pw", nil, "cannot be parsed"},
 		{"empty password", web, "/r", "", nil, "password"},
 		{"password command", web, "/r", "pw", map[string]string{"RESTIC_PASSWORD_COMMAND": "id"}, "not allowed"},
 		{"password in env", web, "/r", "pw", map[string]string{"RESTIC_PASSWORD": "x"}, "not allowed"},

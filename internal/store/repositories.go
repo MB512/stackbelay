@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -186,14 +185,11 @@ func validateRepository(location, password string, env map[string]string) error 
 	}
 	// The location is stored unencrypted, so it must not carry a password,
 	// e.g. "rest:https://user:pass@host/repo". Use RESTIC_REST_USERNAME /
-	// RESTIC_REST_PASSWORD instead.
-	if i := strings.Index(location, "://"); i >= 0 {
-		start := strings.LastIndex(location[:i], ":") + 1 // skip "rest:" / "s3:" prefix
-		if u, err := url.Parse(location[start:]); err == nil && u.User != nil {
-			if _, hasPw := u.User.Password(); hasPw {
-				return errors.New("repository location must not contain a password; use RESTIC_REST_USERNAME/RESTIC_REST_PASSWORD")
-			}
-		}
+	// RESTIC_REST_PASSWORD instead (restic.SplitRESTCredentials).
+	if _, _, _, hasPw, err := restic.URLCredentials(location); err != nil {
+		return fmt.Errorf("repository location: %w", err)
+	} else if hasPw {
+		return errors.New("repository location must not contain a password; use RESTIC_REST_USERNAME/RESTIC_REST_PASSWORD")
 	}
 	if password == "" || strings.ContainsRune(password, 0) {
 		return errors.New("repository password must not be empty")
