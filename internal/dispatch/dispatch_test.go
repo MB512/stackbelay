@@ -223,6 +223,16 @@ func TestDispatchLifecycle(t *testing.T) {
 		t.Fatalf("b1 while running: %s", got)
 	}
 
+	// Final status written, but the container has not exited yet: wait,
+	// so the container can be removed when the job is finished.
+	if err := jobs.WriteStatus(filepath.Join(e.jobsDir, b1.ID), jobs.Status{ID: b1.ID, State: jobs.StateSucceeded}); err != nil {
+		t.Fatal(err)
+	}
+	e.d.Step(ctx)
+	if got := e.job(b1.ID).State; got != jobs.StateRunning || len(e.docker.removed) != 0 {
+		t.Fatalf("b1 with final status but running container: %s, removed %v", got, e.docker.removed)
+	}
+
 	// The backup worker finishes: result recorded, container removed,
 	// snapshots refreshed, and the restore on web starts.
 	e.workerDone(b1.ID, jobs.Status{State: jobs.StateSucceeded, Snapshot: "bbbbbbbb22222222", PreStopSnapshot: "cccccccc33333333"})

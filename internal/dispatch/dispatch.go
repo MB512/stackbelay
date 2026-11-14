@@ -315,23 +315,22 @@ func (d *Dispatcher) start(ctx context.Context, j store.Job) {
 // check looks at a running job: a final status.json finishes it; a worker
 // container that is gone or stopped without a final status fails it.
 //
-// The container is removed before the result is recorded: if the manager
+// The job is finished only once the container has stopped, and the
+// container is removed before the result is recorded: if the manager
 // stops in between (e.g. it is part of the stack being backed up), the job
 // is still "running" and the next check finishes it. The other order could
 // leave a container behind for a job that is never checked again.
 func (d *Dispatcher) check(ctx context.Context, j store.Job) {
 	name := ContainerName(j.ID)
-	if st, ok, _ := d.finalStatus(j); ok {
-		d.removeContainer(ctx, name)
-		d.finishWithStatus(ctx, j, st)
-		return
-	}
 	cs, err := d.Docker.InspectContainer(ctx, name)
 	if err != nil {
 		d.Logger.Warn("inspecting worker container", "job_id", j.ID, "error", err)
 		return // Docker unreachable: try again later
 	}
 	if cs.Running() {
+		// Even with a final status: the worker writes it right before it
+		// exits, and a running container cannot be removed. The next round
+		// finishes the job.
 		return
 	}
 	// The worker may have written its final status right before exiting.
