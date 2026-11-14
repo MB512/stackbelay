@@ -10,6 +10,7 @@ import (
 	"errors"
 	"os"
 	"regexp"
+	"slices"
 	"time"
 )
 
@@ -18,9 +19,10 @@ type Repo struct {
 	// Location is the restic repository string (path, rest:..., s3:...).
 	// It is passed via RESTIC_REPOSITORY, not as an argument.
 	Location string
-	// Env holds secret environment variables ("KEY=value") for restic, e.g.
-	// RESTIC_PASSWORD_FILE or backend credentials. Values are redacted from
-	// any output and never appear on the command line.
+	// Env holds environment variables ("KEY=value") for restic: password
+	// and backend credentials. Only keys in BackendEnvVars are accepted.
+	// Values are redacted from any output and never appear on the command
+	// line.
 	Env []string
 }
 
@@ -44,6 +46,24 @@ type Node struct {
 	GID     uint32      `json:"gid"`
 	Mode    os.FileMode `json:"mode"` // Go FileMode bits, as stored by restic
 	ModTime time.Time   `json:"mtime"`
+}
+
+// BackendEnvVars are the environment variables a repository may carry:
+// the password and the credentials of the supported backends. The list is
+// an explicit allow-list. RESTIC_PASSWORD_COMMAND is deliberately missing:
+// it would turn stored configuration into command execution.
+var BackendEnvVars = []string{
+	"RESTIC_PASSWORD", "RESTIC_PASSWORD_FILE",
+	"RESTIC_REST_USERNAME", "RESTIC_REST_PASSWORD",
+	"AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_DEFAULT_REGION",
+	"B2_ACCOUNT_ID", "B2_ACCOUNT_KEY",
+	"AZURE_ACCOUNT_NAME", "AZURE_ACCOUNT_KEY", "AZURE_ACCOUNT_SAS",
+	"GOOGLE_PROJECT_ID", "GOOGLE_APPLICATION_CREDENTIALS", "GOOGLE_ACCESS_TOKEN",
+}
+
+// ValidEnvKey reports whether key may be set in Repo.Env.
+func ValidEnvKey(key string) bool {
+	return slices.Contains(BackendEnvVars, key)
 }
 
 // BackupOptions control a single backup run.

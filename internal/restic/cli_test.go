@@ -1,6 +1,7 @@
 package restic
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -83,5 +84,31 @@ func TestParseNodeLine(t *testing.T) {
 	if n.Path != "/s/web" || n.Type != "dir" || n.UID != 1000 || n.GID != 1001 ||
 		!n.Mode.IsDir() || n.Mode.Perm() != 0o755 || n.ModTime.IsZero() {
 		t.Fatalf("unexpected node %+v", n)
+	}
+}
+
+func TestEnviron(t *testing.T) {
+	own := map[string]string{
+		"PATH":                  "/usr/bin",
+		"HOME":                  "/root",
+		"STACKVAULT_SECRET_KEY": "master-key",
+		"RESTIC_PASSWORD":       "from-process",
+		"AWS_SECRET_ACCESS_KEY": "from-process",
+	}
+	lookup := func(k string) (string, bool) { v, ok := own[k]; return v, ok }
+
+	env, err := environ(Repo{Location: "rest:https://x/r", Env: []string{"RESTIC_PASSWORD=pw", "AWS_ACCESS_KEY_ID=id"}}, lookup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"PATH=/usr/bin", "HOME=/root", "RESTIC_REPOSITORY=rest:https://x/r", "RESTIC_PASSWORD=pw", "AWS_ACCESS_KEY_ID=id"}
+	if strings.Join(env, "|") != strings.Join(want, "|") {
+		t.Fatalf("env = %v, want %v", env, want)
+	}
+
+	for _, bad := range []string{"RESTIC_PASSWORD_COMMAND=sh -c id", "LD_PRELOAD=/x.so", "PATH=/tmp", "NOEQUALS", "RESTIC_REPOSITORY=/other"} {
+		if _, err := environ(Repo{Env: []string{bad}}, lookup); err == nil {
+			t.Errorf("%q: expected error", bad)
+		}
 	}
 }

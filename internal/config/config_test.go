@@ -28,8 +28,9 @@ func TestLoadWorker(t *testing.T) {
 		c.LogLevel != slog.LevelDebug || c.RepoLocation != "rest:https://backup.example/web" {
 		t.Fatalf("unexpected config %+v", c)
 	}
-	if len(c.RepoSecretEnv) != 1 || c.RepoSecretEnv[0] != "AWS_SECRET_ACCESS_KEY=aws-secret" {
-		t.Fatalf("unexpected secret env %v", c.RepoSecretEnv)
+	want := []string{"RESTIC_PASSWORD_FILE=/run/secrets/pw", "AWS_SECRET_ACCESS_KEY=aws-secret"}
+	if strings.Join(c.RepoEnv, "|") != strings.Join(want, "|") {
+		t.Fatalf("RepoEnv = %v, want %v", c.RepoEnv, want)
 	}
 }
 

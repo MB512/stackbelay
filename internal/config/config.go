@@ -9,20 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-)
 
-// secretEnvVars are restic/backend variables whose values must never be
-// logged. Their values are passed to restic and redacted from its output.
-var secretEnvVars = []string{
-	"RESTIC_PASSWORD",
-	"RESTIC_REST_PASSWORD",
-	"AWS_SECRET_ACCESS_KEY",
-	"AWS_SESSION_TOKEN",
-	"B2_ACCOUNT_KEY",
-	"AZURE_ACCOUNT_KEY",
-	"AZURE_ACCOUNT_SAS",
-	"GOOGLE_ACCESS_TOKEN",
-}
+	"github.com/MB512/stackvault/internal/restic"
+)
 
 // Worker is the configuration of the worker binary.
 type Worker struct {
@@ -31,12 +20,12 @@ type Worker struct {
 	JobTimeout time.Duration // STACKVAULT_JOB_TIMEOUT, default 6h
 	LogLevel   slog.Level    // STACKVAULT_LOG_LEVEL, default info
 
-	// RepoLocation is RESTIC_REPOSITORY. Credentials (RESTIC_PASSWORD_FILE,
-	// backend keys, ...) are read by restic from the environment.
+	// RepoLocation is RESTIC_REPOSITORY.
 	RepoLocation string
-	// RepoSecretEnv holds "KEY=value" for all secretEnvVars that are set,
-	// so their values can be redacted.
-	RepoSecretEnv []string
+	// RepoEnv holds "KEY=value" for every restic.BackendEnvVars variable
+	// that is set (password, backend credentials). restic does not inherit
+	// anything else from the worker's environment.
+	RepoEnv []string
 }
 
 // LoadWorker reads the worker configuration. getenv is usually os.Getenv;
@@ -70,12 +59,12 @@ func LoadWorker(getenv func(string) string) (Worker, error) {
 	if c.RepoLocation == "" {
 		errs = append(errs, errors.New("RESTIC_REPOSITORY is required"))
 	}
-	if getenv("RESTIC_PASSWORD") == "" && getenv("RESTIC_PASSWORD_FILE") == "" && getenv("RESTIC_PASSWORD_COMMAND") == "" {
-		errs = append(errs, errors.New("one of RESTIC_PASSWORD_FILE, RESTIC_PASSWORD or RESTIC_PASSWORD_COMMAND is required"))
+	if getenv("RESTIC_PASSWORD") == "" && getenv("RESTIC_PASSWORD_FILE") == "" {
+		errs = append(errs, errors.New("RESTIC_PASSWORD_FILE or RESTIC_PASSWORD is required"))
 	}
-	for _, k := range secretEnvVars {
+	for _, k := range restic.BackendEnvVars {
 		if v := getenv(k); v != "" {
-			c.RepoSecretEnv = append(c.RepoSecretEnv, k+"="+v)
+			c.RepoEnv = append(c.RepoEnv, k+"="+v)
 		}
 	}
 

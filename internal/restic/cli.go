@@ -39,17 +39,53 @@ func (c *CLI) logger() *slog.Logger {
 
 // command prepares a restic command. Credentials go into the environment,
 // never into args.
-func (c *CLI) command(ctx context.Context, repo Repo, args ...string) *exec.Cmd {
+func (c *CLI) command(ctx context.Context, repo Repo, args ...string) (*exec.Cmd, error) {
+	env, err := environ(repo, os.LookupEnv)
+	if err != nil {
+		return nil, err
+	}
 	cmd := exec.CommandContext(ctx, c.binary(), args...)
-	env := append(os.Environ(), "RESTIC_REPOSITORY="+repo.Location)
-	cmd.Env = append(env, repo.Env...) // later entries win on duplicates
-	return cmd
+	cmd.Env = env
+	return cmd, nil
+}
+
+// passThroughEnv are the only variables restic inherits from our own
+// process. Everything else (in the manager e.g. STACKVAULT_SECRET_KEY) must
+// not reach the child process.
+var passThroughEnv = []string{
+	"PATH", "HOME", "TMPDIR", "TZ", "LANG", "LC_ALL",
+	"RESTIC_CACHE_DIR", "XDG_CACHE_HOME",
+	"SSL_CERT_FILE", "SSL_CERT_DIR",
+	"HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "no_proxy",
+}
+
+// environ builds restic's environment: an allow-listed subset of our own
+// environment, the repository location and the repository's variables.
+func environ(repo Repo, lookup func(string) (string, bool)) ([]string, error) {
+	var env []string
+	for _, k := range passThroughEnv {
+		if v, ok := lookup(k); ok {
+			env = append(env, k+"="+v)
+		}
+	}
+	env = append(env, "RESTIC_REPOSITORY="+repo.Location)
+	for _, kv := range repo.Env {
+		k, _, ok := strings.Cut(kv, "=")
+		if !ok || !ValidEnvKey(k) {
+			return nil, fmt.Errorf("repository environment variable %q is not allowed", k)
+		}
+		env = append(env, kv)
+	}
+	return env, nil
 }
 
 // runJSON runs restic with --json and calls onLine for every stdout line.
 // On failure it returns an *Error containing the redacted tail of stderr.
 func (c *CLI) runJSON(ctx context.Context, repo Repo, onLine func([]byte), args ...string) error {
-	cmd := c.command(ctx, repo, append([]string{"--json"}, args...)...)
+	cmd, err := c.command(ctx, repo, append([]string{"--json"}, args...)...)
+	if err != nil {
+		return err
+	}
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	stdout, err := cmd.StdoutPipe()

@@ -327,8 +327,14 @@ the repository from the environment:
 | `STACKS_ROOT` | absolute stacks root (required) |
 | `STACKVAULT_HOSTNAME` | value for `restic --host` (defaults to `os.Hostname()`, which is random inside a container, so set it there) |
 | `RESTIC_REPOSITORY` | repository (required) |
-| `RESTIC_PASSWORD_FILE` / `RESTIC_PASSWORD` / `RESTIC_PASSWORD_COMMAND` | one is required |
-| backend variables (`AWS_*`, `RESTIC_REST_*`, ...) | read by restic; known secret values are redacted from output |
+| `RESTIC_PASSWORD_FILE` / `RESTIC_PASSWORD` | one is required |
+| backend variables (`AWS_*`, `B2_*`, `AZURE_*`, `GOOGLE_*`, `RESTIC_REST_*`) | passed to restic; values are redacted from output |
+
+restic never inherits the full process environment: it gets an allow-list
+(`PATH`, `HOME`, `TMPDIR`, proxy/CA settings, `RESTIC_CACHE_DIR`, ...), the
+repository location and the repository's variables, which must be in
+`restic.BackendEnvVars`. `RESTIC_PASSWORD_COMMAND` is intentionally not
+supported (it would turn configuration into command execution).
 | `STACKVAULT_JOB_TIMEOUT` | hard job timeout, Go duration, default `6h` |
 | `STACKVAULT_LOG_LEVEL` | `debug`, `info`, `warn`, `error` |
 

@@ -58,7 +58,7 @@ func run(args []string, getenv func(string) string, stderr io.Writer) int {
 	p := &jobs.Pipeline{
 		Docker: &docker.CLI{},
 		Restic: &restic.CLI{Logger: log},
-		Repo:   restic.Repo{Location: cfg.RepoLocation, Env: cfg.RepoSecretEnv},
+		Repo:   restic.Repo{Location: cfg.RepoLocation, Env: cfg.RepoEnv},
 		Host:   cfg.Hostname,
 		Logger: log,
 	}
