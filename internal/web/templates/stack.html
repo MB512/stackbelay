@@ -12,6 +12,27 @@
   {{- end}}
 </section>
 
+{{- if and .Repo .CanBackup}}
+<section>
+  <h2>Backup</h2>
+  <form method="post" action="/stacks/{{.Stack.Name}}/backup" class="inline">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+    <button type="submit"{{if .JobsUnavailable}} disabled{{end}}>Back up now</button>
+    <label class="check"><input type="checkbox" name="pre_stop">
+      Snapshot before stopping (shorter downtime for large stacks)</label>
+  </form>
+  {{- with .JobsUnavailable}}<p class="hint">{{.}}</p>{{end}}
+  <p class="hint">The stack is stopped during the backup and started again afterwards.</p>
+</section>
+{{- end}}
+
+{{- if .Jobs}}
+<section>
+  <h2>Recent jobs</h2>
+  {{template "job-table" .Jobs}}
+</section>
+{{- end}}
+
 {{- if .Repo}}{{template "snapshots" .}}{{end}}
 {{- end}}
 {{end}}
@@ -35,7 +56,7 @@
   {{- if .RefreshInfo}}<p class="info" role="status">{{.RefreshInfo}}</p>{{end}}
   {{- if .Snapshots}}
   <table>
-    <thead><tr><th>Time</th><th>ID</th><th>Tags</th><th>Host</th></tr></thead>
+    <thead><tr><th>Time</th><th>ID</th><th>Tags</th><th>Host</th>{{if .CanRestore}}<th></th>{{end}}</tr></thead>
     <tbody>
       {{- range .Snapshots}}
       <tr{{if .Missing}} class="missing"{{end}}>
@@ -43,6 +64,9 @@
         <td><code>{{.ShortID}}</code></td>
         <td>{{range .Tags}}<span class="badge">{{.}}</span> {{end}}</td>
         <td>{{.Hostname}}{{if .Missing}} <span class="badge warn" title="No longer in the repository">removed</span>{{end}}</td>
+        {{- if $.CanRestore}}
+        <td>{{if not .Missing}}<a href="/stacks/{{$.Stack.Name}}/restore?snapshot={{.ID}}">Restore…</a>{{end}}</td>
+        {{- end}}
       </tr>
       {{- end}}
     </tbody>

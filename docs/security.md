@@ -20,7 +20,10 @@ attackers reaching the UI, a leaked database file.
    Cron expressions are parsed and validated before saving.
 3. **Docker access.** Only the manager spawns workers, from a fixed template
    (image, mounts, labels, command). Users cannot influence mounts, image,
-   entrypoint or environment. Optional hardening: put a socket proxy between
+   entrypoint or environment (see "Dispatcher" in architecture.md). Job
+   requests carry only the stack (from the database), the job type and
+   validated options; the snapshot id must be in the stack's snapshot cache.
+   Only admins may skip the pre-restore safety snapshot. Optional hardening: put a socket proxy between
    manager and Docker that allows only container create/start/inspect/logs and
    the calls the manager itself needs.
 4. **Secrets at rest.** Repo passwords and backend credentials are encrypted

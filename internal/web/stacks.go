@@ -94,6 +94,8 @@ type backupsTab struct {
 	// also rendered on its own as the answer to an HTMX refresh.
 	CSRF                      string
 	RefreshInfo, RefreshError string
+	Jobs                      []store.Job // recent jobs, newest first
+	JobsUnavailable           string      // why jobs cannot be started, or ""
 }
 
 // settingsTab is the data of the admin-only "Settings" tab.
@@ -167,10 +169,15 @@ func (s *Server) stackDetail(w http.ResponseWriter, r *http.Request) {
 func (s *Server) loadBackupsTab(r *http.Request, st store.Stack, perm store.Permission) (backupsTab, error) {
 	a := authFrom(r.Context())
 	page := backupsTab{
-		stackHeader: newStackHeader(a.User, st, tabBackups),
-		CanBackup:   auth.Allowed(a.User, perm, auth.ActionBackup),
-		CanRestore:  auth.Allowed(a.User, perm, auth.ActionRestore),
-		CSRF:        a.Session.CSRFToken,
+		stackHeader:     newStackHeader(a.User, st, tabBackups),
+		CanBackup:       auth.Allowed(a.User, perm, auth.ActionBackup),
+		CanRestore:      auth.Allowed(a.User, perm, auth.ActionRestore),
+		CSRF:            a.Session.CSRFToken,
+		JobsUnavailable: s.jobsUnavailable(),
+	}
+	var err error
+	if page.Jobs, err = s.Store.ListJobs(r.Context(), st.ID, recentJobs); err != nil {
+		return page, err
 	}
 	repo, err := s.Store.RepositoryInfoForStack(r.Context(), st.ID)
 	if errors.Is(err, store.ErrNotFound) {

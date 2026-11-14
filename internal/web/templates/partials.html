@@ -23,3 +23,29 @@
   {{- end}}
 </nav>
 {{end}}
+
+{{- /* Badge for a job state. Dot is a jobs.State. */}}
+{{define "job-state"}}
+{{- if eq (print .) "succeeded"}}<span class="badge ok">succeeded</span>
+{{- else if eq (print .) "failed"}}<span class="badge err">failed</span>
+{{- else if eq (print .) "running"}}<span class="badge run">running</span>
+{{- else}}<span class="badge">{{.}}</span>{{end}}
+{{- end}}
+
+{{- /* Table of jobs. Dot is a []store.Job. */}}
+{{define "job-table"}}
+<table>
+  <thead><tr><th>Queued</th><th>Job</th><th>State</th><th>By</th><th>Snapshot</th></tr></thead>
+  <tbody>
+    {{- range .}}
+    <tr>
+      <td><a href="/jobs/{{.ID}}">{{when .QueuedAt}}</a></td>
+      <td>{{.Type}}</td>
+      <td>{{template "job-state" .State}}</td>
+      <td>{{if .Requester}}{{.Requester}}{{else}}<span class="muted">{{.Trigger}}</span>{{end}}</td>
+      <td>{{with .Snapshot}}<code>{{printf "%.8s" .}}</code>{{end}}</td>
+    </tr>
+    {{- end}}
+  </tbody>
+</table>
+{{- end}}

@@ -33,6 +33,12 @@ type Server struct {
 	// Repos initializes new repositories (restic init). If nil, the
 	// action is reported as unavailable.
 	Repos RepoInitializer
+	// Jobs queues and cancels backups and restores. If nil, jobs are
+	// unavailable and JobsDisabledReason says why.
+	Jobs               JobQueue
+	JobsDisabledReason string
+	// JobsDir is the jobs directory (for job logs).
+	JobsDir string
 	// Now returns the current time; defaults to time.Now (tests override it).
 	Now func() time.Time
 
@@ -87,6 +93,11 @@ func (s *Server) Handler() (http.Handler, error) {
 			r.Get("/", s.stackList)
 			r.Get("/stacks/{name}", s.stackDetail)
 			r.Post("/stacks/{name}/snapshots/refresh", s.refreshStackSnapshots)
+			r.Post("/stacks/{name}/backup", s.startBackup)
+			r.Get("/stacks/{name}/restore", s.restoreForm)
+			r.Post("/stacks/{name}/restore", s.startRestore)
+			r.Get("/jobs/{id}", s.jobDetail)
+			r.Post("/jobs/{id}/cancel", s.cancelJob)
 
 			// Admin only.
 			r.Group(func(r chi.Router) {

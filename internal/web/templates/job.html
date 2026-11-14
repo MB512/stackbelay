@@ -1,0 +1,52 @@
+{{define "content"}}
+{{- with .Data}}{{template "job" .}}{{end}}
+{{end}}
+
+{{- /* The job section. While the job is not final it polls itself every
+       3 seconds and HTMX replaces it with the fresh version. */}}
+{{define "job"}}
+<div id="job"{{if not .Job.State.Final}} hx-get="/jobs/{{.Job.ID}}" hx-trigger="every 3s" hx-swap="outerHTML"{{end}}>
+  <h1>{{if eq (print .Job.Type) "restore"}}Restore{{else}}Backup{{end}} of
+    <a href="/stacks/{{.Job.StackName}}">{{.Job.StackName}}</a> {{template "job-state" .Job.State}}</h1>
+
+  <table class="details">
+    <tbody>
+      <tr><th>Job</th><td><code>{{.Job.ID}}</code></td></tr>
+      <tr><th>Started by</th><td>{{if .Job.Requester}}{{.Job.Requester}}{{else}}{{.Job.Trigger}}{{end}}</td></tr>
+      <tr><th>Queued</th><td>{{when .Job.QueuedAt}}</td></tr>
+      <tr><th>Started</th><td>{{if .Job.StartedAt.IsZero}}<span class="muted">waiting</span>{{else}}{{when .Job.StartedAt}}{{end}}</td></tr>
+      <tr><th>Finished</th><td>{{if .Job.FinishedAt.IsZero}}<span class="muted">–</span>{{else}}{{when .Job.FinishedAt}}{{end}}</td></tr>
+      {{- with .Job.Options}}
+      {{- if .SnapshotID}}<tr><th>Restoring</th><td><code>{{printf "%.8s" .SnapshotID}}</code>
+        {{- if .SkipSafetySnapshot}}, without safety snapshot{{end}}{{if .NoStart}}, stack not started afterwards{{end}}</td></tr>{{end}}
+      {{- if .PreStop}}<tr><th>Options</th><td>snapshot before stopping</td></tr>{{end}}
+      {{- end}}
+      {{- with .Job.Snapshot}}<tr><th>Snapshot</th><td><code>{{printf "%.8s" .}}</code></td></tr>{{end}}
+      {{- with .Job.Result.PreStopSnapshot}}<tr><th>Pre-stop snapshot</th><td><code>{{printf "%.8s" .}}</code></td></tr>{{end}}
+      {{- with .Job.Result.SafetySnapshot}}<tr><th>Safety snapshot</th><td><code>{{printf "%.8s" .}}</code></td></tr>{{end}}
+      {{- with .Job.Result.PreviousDir}}<tr><th>Previous directory</th><td><code>{{.}}</code> (kept for a manual rollback)</td></tr>{{end}}
+    </tbody>
+  </table>
+  {{- with .Job.Error}}<p class="error" role="alert">{{.}}</p>{{end}}
+
+  {{- if .CanCancel}}
+  <form method="post" action="/jobs/{{.Job.ID}}/cancel" class="inline">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+    <button type="submit" class="secondary">Cancel job</button>
+    <span class="hint">A running job restarts the stack before it stops.</span>
+  </form>
+  {{- end}}
+
+  <h2>Log</h2>
+  {{- if .Log}}
+  {{- if .LogCut}}<p class="hint">Only the end of the log is shown.</p>{{end}}
+  <div class="log" role="log">
+    {{- range .Log}}
+    <div class="line {{.Level}}"><span class="ts">{{.Time}}</span> <span class="lvl">{{.Level}}</span> {{.Msg}}{{with .Attrs}} <span class="attrs">{{.}}</span>{{end}}</div>
+    {{- end}}
+  </div>
+  {{- else}}
+  <p class="hint">{{if .Job.State.Final}}No log.{{else}}The log appears when the worker starts.{{end}}</p>
+  {{- end}}
+</div>
+{{end}}

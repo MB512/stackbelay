@@ -114,7 +114,19 @@ A loop in the manager (every 2 s, and immediately when a job is queued):
 
 All state is in the DB and the job directories, so a manager that was
 stopped by its own backup continues where it left off: running jobs are
-simply checked again. Cancelling a queued job marks it `cancelled`;
+simply checked again. The worker container is removed *before* the result
+is recorded, so a manager stopped in between finishes the job on the next
+check instead of leaving a container behind.
+
+The worker runs as root; files it writes into the job directory
+(`status.json`, `log.txt`) get the owner of that directory (the manager's
+user), so a manager not running as root can still read them.
+
+**Docker Desktop with WSL integration is not supported for running jobs.**
+Docker Desktop translates WSL bind-mount paths per container; a stack that
+the worker stops through the raw socket loses these mounts and cannot be
+started again (only recreated). Use Docker Engine on Linux (or inside WSL
+without Docker Desktop). Stacks without bind mounts are not affected. Cancelling a queued job marks it `cancelled`;
 cancelling a running job sends SIGTERM (never SIGKILL) to the worker, which
 restarts the stack and reports `cancelled`.
 
@@ -331,6 +343,11 @@ form with `method`/`action`, so it works without JavaScript. An HTMX request
 |---|---|---|
 | `GET /` | logged in | stacks the user may view (admins: all) |
 | `GET /stacks/{name}` | view right | "Backups" tab: repository location, cached snapshots (same for every user) |
+| `POST /stacks/{name}/backup` | backup right | queue a backup (option: pre-stop snapshot) |
+| `GET /stacks/{name}/restore?snapshot=<id>` | restore right | confirmation page with options |
+| `POST /stacks/{name}/restore` | restore right | queue a restore of a cached, not removed snapshot; only admins may skip the safety snapshot |
+| `GET /jobs/{id}` | view right on the job's stack | job details and log; polls every 3 s (HTMX) while not final |
+| `POST /jobs/{id}/cancel` | backup/restore right (by job type) | cancel a queued or running job |
 | `POST /stacks/{name}/snapshots/refresh` | view right | refresh the snapshot cache (read-only restic; at most once per 10 s per stack; HTMX: returns the snapshot section) |
 | `GET /stacks/{name}/settings` | admin | "Settings" tab: repository, enable/disable, per-user permissions |
 | `POST /stacks/{name}/repository` | admin | create/update the repository, then refresh the snapshot cache as an access check |

@@ -1,0 +1,27 @@
+{{define "content"}}
+{{- with .Data}}
+<h1>Restore {{.Stack.Name}}</h1>
+<p><a href="/stacks/{{.Stack.Name}}">Back to the stack</a></p>
+
+<div class="card wide">
+  <p>Snapshot <code>{{.Snapshot.ShortID}}</code> from <strong>{{when .Snapshot.Time}}</strong>
+    (host {{.Snapshot.Hostname}}{{range .Snapshot.Tags}}, <span class="badge">{{.}}</span>{{end}}).</p>
+  <p class="warning">The stack is stopped and its directory is replaced by the snapshot's content.
+    Changes made since the snapshot are lost from the live stack. The current directory is kept next to it
+    (<code>{{.Stack.Name}}.old-…</code>) for a manual rollback.</p>
+</div>
+
+<form method="post" action="/stacks/{{.Stack.Name}}/restore" class="card wide">
+  <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+  <input type="hidden" name="snapshot_id" value="{{.Snapshot.ID}}">
+  {{- if $.User.IsAdmin}}
+  <label class="check"><input type="checkbox" name="safety_snapshot" checked>
+    Back up the current state first (safety snapshot; recommended)</label>
+  {{- else}}
+  <p class="hint">The current state is backed up first (safety snapshot).</p>
+  {{- end}}
+  <label class="check"><input type="checkbox" name="start" checked> Start the stack after restoring</label>
+  <div><button type="submit"{{if $.Error}} disabled{{end}}>Restore this snapshot</button></div>
+</form>
+{{- end}}
+{{end}}

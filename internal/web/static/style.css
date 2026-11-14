@@ -78,3 +78,20 @@ textarea {
 button[disabled] { opacity: .6; cursor: progress; }
 form.init { border-color: var(--accent); }
 form.init p { margin: 0; }
+
+/* Jobs. */
+.badge.err { background: #f9dedc; color: var(--error); }
+.badge.run { background: #dbe5fb; color: var(--accent); }
+table.details { width: auto; }
+table.details th { width: 10rem; }
+.log {
+  background: #11151b; color: #d7dde5; border-radius: 8px; padding: .8rem 1rem; overflow-x: auto;
+  font: .82rem/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; max-height: 70vh; overflow-y: auto;
+}
+.log .line { white-space: pre-wrap; word-break: break-word; }
+.log .ts { color: #8792a2; }
+.log .lvl { display: inline-block; min-width: 3.2rem; color: #8792a2; }
+.log .WARN .lvl { color: #e8b44c; }
+.log .ERROR .lvl, .log .ERROR { color: #f28b82; }
+.log .attrs { color: #9aa5b4; }
+button[disabled] { opacity: .5; cursor: not-allowed; }
