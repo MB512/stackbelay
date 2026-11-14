@@ -111,3 +111,56 @@ func (s *Store) SetUserAdmin(ctx context.Context, userID int64, admin bool) erro
 	}
 	return expectOneRow(res, fmt.Sprintf("user %d", userID))
 }
+
+// ErrLastAdmin is returned when a change would leave no active admin.
+var ErrLastAdmin = errors.New("at least one active admin is required")
+
+// ListUsers returns all users ordered by username.
+func (s *Store) ListUsers(ctx context.Context) ([]User, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT `+userColumns+` FROM users ORDER BY username`)
+	if err != nil {
+		return nil, fmt.Errorf("listing users: %w", err)
+	}
+	defer rows.Close()
+	var out []User
+	for rows.Next() {
+		u, err := scanUser(rows)
+		if err != nil {
+			return nil, fmt.Errorf("listing users: %w", err)
+		}
+		out = append(out, u)
+	}
+	return out, rows.Err()
+}
+
+// SetUserFlags sets a user's admin and disabled flags. Disabling a user
+// also ends all of their sessions. If the change would leave no active
+// admin, nothing is changed and ErrLastAdmin is returned; the check runs in
+// the same transaction as the update, so two admins demoting each other at
+// the same time cannot both succeed.
+func (s *Store) SetUserFlags(ctx context.Context, userID int64, admin, disabled bool) error {
+	err := s.inTx(ctx, func(tx *sql.Tx) error {
+		res, err := tx.ExecContext(ctx, `UPDATE users SET is_admin = ?, disabled = ? WHERE id = ?`, admin, disabled, userID)
+		if err != nil {
+			return err
+		}
+		if err := expectOneRow(res, fmt.Sprintf("user %d", userID)); err != nil {
+			return err
+		}
+		var admins int
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE is_admin = 1 AND disabled = 0`).Scan(&admins); err != nil {
+			return err
+		}
+		if admins == 0 {
+			return ErrLastAdmin // rolls the update back
+		}
+		if disabled {
+			_, err = tx.ExecContext(ctx, `DELETE FROM sessions WHERE user_id = ?`, userID)
+		}
+		return err
+	})
+	if err != nil {
+		return fmt.Errorf("updating user %d: %w", userID, err)
+	}
+	return nil
+}

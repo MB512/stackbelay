@@ -185,3 +185,9 @@ func parseTime(s string) (time.Time, error) {
 	}
 	return t, nil
 }
+
+// isForeignKeyError reports whether err is a violated foreign key, i.e. a
+// referenced row (user, stack) does not exist.
+func isForeignKeyError(err error) bool {
+	return strings.Contains(err.Error(), "FOREIGN KEY constraint failed")
+}

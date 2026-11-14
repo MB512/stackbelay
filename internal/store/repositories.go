@@ -112,6 +112,36 @@ func (s *Store) SetRepository(ctx context.Context, stackID int64, location, pass
 	return id, nil
 }
 
+// RepositoryInfo is the non-secret part of a repository, for display.
+type RepositoryInfo struct {
+	ID                   int64
+	StackID              int64
+	Location             string
+	SnapshotsRefreshedAt time.Time // zero if never refreshed
+}
+
+// RepositoryInfoForStack loads a stack's repository without decrypting its
+// credentials, or returns ErrNotFound.
+func (s *Store) RepositoryInfoForStack(ctx context.Context, stackID int64) (RepositoryInfo, error) {
+	ri := RepositoryInfo{StackID: stackID}
+	var refreshed sql.NullString
+	err := s.db.QueryRowContext(ctx,
+		`SELECT id, location, snapshots_refreshed_at FROM repositories WHERE stack_id = ?`, stackID,
+	).Scan(&ri.ID, &ri.Location, &refreshed)
+	if errors.Is(err, sql.ErrNoRows) {
+		return RepositoryInfo{}, fmt.Errorf("repository for stack %d: %w", stackID, ErrNotFound)
+	}
+	if err != nil {
+		return RepositoryInfo{}, fmt.Errorf("loading repository for stack %d: %w", stackID, err)
+	}
+	if refreshed.Valid {
+		if ri.SnapshotsRefreshedAt, err = parseTime(refreshed.String); err != nil {
+			return RepositoryInfo{}, err
+		}
+	}
+	return ri, nil
+}
+
 // RepositoryForStack loads and decrypts the repository of a stack.
 func (s *Store) RepositoryForStack(ctx context.Context, stackID int64) (Repository, error) {
 	r := Repository{StackID: stackID}

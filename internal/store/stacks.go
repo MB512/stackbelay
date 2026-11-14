@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 )
 
 // Stack is a stack record. Names come from discovery (internal/stacks); the
@@ -52,6 +53,45 @@ func (s *Store) ListStacks(ctx context.Context) ([]Stack, error) {
 			return nil, fmt.Errorf("listing stacks: %w", err)
 		}
 		out = append(out, st)
+	}
+	return out, rows.Err()
+}
+
+// StackSummary is a stack with overview data for the stack list.
+type StackSummary struct {
+	Stack
+	HasRepository bool
+	Snapshots     int       // cached snapshots that still exist in the repository
+	LastSnapshot  time.Time // zero if there is none
+}
+
+// StackSummaries returns all stacks with repository and snapshot cache
+// information, ordered by name.
+func (s *Store) StackSummaries(ctx context.Context) ([]StackSummary, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT s.id, s.name, s.enabled, s.present, r.id IS NOT NULL, COUNT(sn.snapshot_id), MAX(sn.time)
+		 FROM stacks s
+		 LEFT JOIN repositories r ON r.stack_id = s.id
+		 LEFT JOIN snapshots sn ON sn.repo_id = r.id AND sn.missing = 0
+		 GROUP BY s.id
+		 ORDER BY s.name`)
+	if err != nil {
+		return nil, fmt.Errorf("listing stacks: %w", err)
+	}
+	defer rows.Close()
+	var out []StackSummary
+	for rows.Next() {
+		var ss StackSummary
+		var last sql.NullString
+		if err := rows.Scan(&ss.ID, &ss.Name, &ss.Enabled, &ss.Present, &ss.HasRepository, &ss.Snapshots, &last); err != nil {
+			return nil, fmt.Errorf("listing stacks: %w", err)
+		}
+		if last.Valid {
+			if ss.LastSnapshot, err = parseTime(last.String); err != nil {
+				return nil, err
+			}
+		}
+		out = append(out, ss)
 	}
 	return out, rows.Err()
 }

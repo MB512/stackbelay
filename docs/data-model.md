@@ -99,6 +99,11 @@ CREATE TABLE audit_log (
   least one of the two.
 - Checks happen server-side on every request and again when the job is created.
   The worker never decides permissions.
+- `permissions` only holds grants: setting both flags to 0 deletes the row,
+  and a missing row means no access (deny by default). Admins need no rows.
+- There is always at least one active (admin and not disabled) user: changes
+  that would leave none are refused in the same transaction. Disabling a
+  user deletes their sessions.
 
 ## Notes
 
