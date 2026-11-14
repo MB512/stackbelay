@@ -26,7 +26,11 @@ type Manager struct {
 	// WorkerImage is the image for worker containers
 	// (STACKVAULT_WORKER_IMAGE). Empty means: the manager's own image.
 	WorkerImage string
-	LogLevel    slog.Level // STACKVAULT_LOG_LEVEL, default info
+	// MaxJobs is the number of jobs that may run at the same time across
+	// all stacks (STACKVAULT_MAX_JOBS, default 1). Each job stops a stack,
+	// so parallel jobs are opt-in.
+	MaxJobs  int
+	LogLevel slog.Level // STACKVAULT_LOG_LEVEL, default info
 
 	// SecretKey encrypts repository credentials. From STACKVAULT_SECRET_KEY
 	// (base64) or STACKVAULT_SECRET_KEY_FILE (file containing the base64 key).
@@ -48,6 +52,7 @@ func LoadManager(getenv func(string) string, readFile func(string) ([]byte, erro
 		ListenAddr:  getenv("STACKVAULT_LISTEN"),
 		WorkerImage: getenv("STACKVAULT_WORKER_IMAGE"),
 		SessionTTL:  12 * time.Hour,
+		MaxJobs:     1,
 	}
 	c.StacksRoot, errs = absPath(getenv, "STACKS_ROOT", "", errs)
 	c.DataDir, errs = absPath(getenv, "STACKVAULT_DATA_DIR", "/data", errs)
@@ -65,6 +70,14 @@ func LoadManager(getenv func(string) string, readFile func(string) ([]byte, erro
 			errs = append(errs, fmt.Errorf("STACKVAULT_SESSION_TTL: invalid duration %q (minimum 1m)", v))
 		} else {
 			c.SessionTTL = d
+		}
+	}
+	if v := getenv("STACKVAULT_MAX_JOBS"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > 32 {
+			errs = append(errs, fmt.Errorf("STACKVAULT_MAX_JOBS: invalid value %q (1 to 32)", v))
+		} else {
+			c.MaxJobs = n
 		}
 	}
 	if v := getenv("STACKVAULT_ALLOW_INSECURE_HTTP"); v != "" {

@@ -21,7 +21,7 @@ func TestLoadManagerDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 	if c.DataDir != "/data" || c.ListenAddr != ":8080" || c.SessionTTL != 12*time.Hour ||
-		c.AllowInsecureHTTP || c.WorkerImage != "" || len(c.SecretKey) != 32 {
+		c.AllowInsecureHTTP || c.WorkerImage != "" || len(c.SecretKey) != 32 || c.MaxJobs != 1 {
 		t.Fatalf("unexpected config %+v", c)
 	}
 	if c.DBPath() != "/data/stackvault.db" || c.JobsDir() != "/data/jobs" {
@@ -43,11 +43,12 @@ func TestLoadManagerKeyFile(t *testing.T) {
 		"STACKVAULT_DATA_DIR":            "/srv/sv/",
 		"STACKVAULT_ALLOW_INSECURE_HTTP": "true",
 		"STACKVAULT_SESSION_TTL":         "30m",
+		"STACKVAULT_MAX_JOBS":            "3",
 	}), read)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(c.SecretKey) != 32 || c.DataDir != "/srv/sv" || !c.AllowInsecureHTTP || c.SessionTTL != 30*time.Minute {
+	if len(c.SecretKey) != 32 || c.DataDir != "/srv/sv" || !c.AllowInsecureHTTP || c.SessionTTL != 30*time.Minute || c.MaxJobs != 3 {
 		t.Fatalf("unexpected config %+v", c)
 	}
 }
@@ -65,6 +66,7 @@ func TestLoadManagerErrors(t *testing.T) {
 		{"relative data dir", map[string]string{"STACKVAULT_DATA_DIR": "data"}, []string{"STACKVAULT_DATA_DIR must be an absolute path"}},
 		{"bad bool", map[string]string{"STACKVAULT_ALLOW_INSECURE_HTTP": "maybe"}, []string{"STACKVAULT_ALLOW_INSECURE_HTTP"}},
 		{"bad ttl", map[string]string{"STACKVAULT_SESSION_TTL": "5s"}, []string{"STACKVAULT_SESSION_TTL"}},
+		{"bad max jobs", map[string]string{"STACKVAULT_MAX_JOBS": "0"}, []string{"STACKVAULT_MAX_JOBS"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
