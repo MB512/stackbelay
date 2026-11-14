@@ -240,20 +240,34 @@ func (s *Server) stackSettings(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	s.renderSettings(w, r, st, http.StatusOK, "", "", "")
+	s.renderSettings(w, r, st, settingsView{})
 }
 
-// renderSettings renders the Settings tab with optional messages. A
-// non-empty location replaces the stored one in the form (to keep the
-// user's input after an error).
-func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, st store.Stack, status int, info, errMsg, location string) {
+// settingsView holds the per-request parts of the Settings tab.
+type settingsView struct {
+	Status      int // HTTP status; 0 = 200
+	Info, Error string
+	// Location, if set, replaces the stored location in the form (to keep
+	// the user's input after an error).
+	Location string
+	// OfferInit shows the "Initialize repository" button (restic reported
+	// that no repository exists at the stored location).
+	OfferInit bool
+}
+
+// renderSettings renders the Settings tab.
+func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, st store.Stack, v settingsView) {
 	repo, err := s.loadRepoForm(r.Context(), st)
 	if err != nil {
 		s.internalError(w, r, "loading repository", err)
 		return
 	}
-	if location != "" {
-		repo.Location = location
+	if v.Location != "" {
+		repo.Location = v.Location
+	}
+	repo.OfferInit = v.OfferInit && repo.Exists
+	if v.Status == 0 {
+		v.Status = http.StatusOK
 	}
 	rows, err := s.permissionRows(r, st)
 	if err != nil {
@@ -265,8 +279,8 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, st store
 		Repo:        repo,
 		Permissions: rows,
 	}
-	s.render(w, r, status, "stack_settings.html",
-		pageData{Title: st.Name + " settings", Info: info, Error: errMsg, Data: page})
+	s.render(w, r, v.Status, "stack_settings.html",
+		pageData{Title: st.Name + " settings", Info: v.Info, Error: v.Error, Data: page})
 }
 
 // permissionRows lists all non-admin users with their permission on st.

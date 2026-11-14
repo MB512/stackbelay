@@ -76,3 +76,5 @@ textarea {
 .section-head h2 { margin: 0; }
 .section-head form { margin: 0; }
 button[disabled] { opacity: .6; cursor: progress; }
+form.init { border-color: var(--accent); }
+form.init p { margin: 0; }

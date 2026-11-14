@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os/exec"
 	"reflect"
 	"strings"
 	"sync"
@@ -272,5 +273,113 @@ func TestRefreshSnapshots(t *testing.T) {
 
 	if n := auditActions(t, e.st)["snapshots.refresh"]; n != 3 {
 		t.Fatalf("snapshots.refresh logged %d times", n)
+	}
+}
+
+// fakeInit records "restic init" calls.
+type fakeInit struct {
+	mu    sync.Mutex
+	repos []restic.Repo
+	err   error
+}
+
+func (f *fakeInit) Init(_ context.Context, repo restic.Repo) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.repos = append(f.repos, repo)
+	return f.err
+}
+
+// resticExitError returns a *restic.Error with the given exit code, as the
+// CLI produces it. The exit code needs a real *exec.ExitError; the command
+// is a fixed string (no input).
+func resticExitError(t *testing.T, code int, message string) error {
+	t.Helper()
+	err := exec.CommandContext(t.Context(), "sh", "-c", fmt.Sprintf("exit %d", code)).Run()
+	if err == nil {
+		t.Fatal("expected an exit error")
+	}
+	return &restic.Error{Op: "snapshots", Err: err,
+		Stderr: fmt.Sprintf(`{"message_type":"exit_error","code":%d,"message":%q}`, code, message)}
+}
+
+func TestInitRepository(t *testing.T) {
+	e := newEnv(t, true, true)
+	e.setupStacks()
+	init := &fakeInit{}
+	e.server.Repos = init
+	e.loginAdmin()
+	token := e.csrf("/stacks/web/settings")
+	post := func(path string, v url.Values) response {
+		v.Set("csrf_token", token)
+		return e.post(path, v)
+	}
+
+	// No repository at the location: the init button is offered.
+	e.snaps.err = fmt.Errorf("listing snapshots: %w", resticExitError(t, 10, "Fatal: repository does not exist: unable to open config file"))
+	r := post("/stacks/web/repository", url.Values{"location": {"rest:https://u:rest-pw@backup.example/web-2027"}, "password": {"repo-pw"}})
+	expect(t, r, http.StatusOK, "")
+	if !strings.Contains(r.body, "There is no restic repository at this location yet") ||
+		!strings.Contains(r.body, `action="/stacks/web/repository/init"`) {
+		t.Fatalf("init not offered:\n%s", r.body)
+	}
+
+	// Initialize: restic init gets the stored credentials, then the new
+	// repository is checked.
+	e.snaps.err = nil
+	r = post("/stacks/web/repository/init", url.Values{})
+	expect(t, r, http.StatusOK, "")
+	if !strings.Contains(r.body, "Repository initialized. restic found 0 snapshots.") || strings.Contains(r.body, "repository/init") {
+		t.Fatalf("after init:\n%s", r.body)
+	}
+	want := []restic.Repo{{Location: "rest:https://backup.example/web-2027", Env: []string{
+		"RESTIC_PASSWORD=repo-pw", "RESTIC_REST_PASSWORD=rest-pw", "RESTIC_REST_USERNAME=u"}}}
+	if !reflect.DeepEqual(init.repos, want) {
+		t.Fatalf("init calls: %+v", init.repos)
+	}
+
+	// Other errors (wrong password, network) do not offer init.
+	e.snaps.err = resticExitError(t, 12, "Fatal: wrong password or no key found")
+	r = post("/stacks/web/repository", url.Values{"location": {"/srv/restic/web"}})
+	if strings.Contains(r.body, "repository/init") || !strings.Contains(r.body, "wrong password") {
+		t.Fatalf("init offered for a wrong password:\n%s", r.body)
+	}
+
+	// restic refuses (e.g. a repository appeared meanwhile).
+	init.err = &restic.Error{Op: "init", Err: errors.New("exit status 1"),
+		Stderr: `{"message_type":"exit_error","code":1,"message":"Fatal: config file already exists"}`}
+	r = post("/stacks/web/repository/init", url.Values{})
+	if !strings.Contains(r.body, "restic could not initialize the repository: Fatal: config file already exists") {
+		t.Fatalf("init failure:\n%s", r.body)
+	}
+
+	if n := auditActions(t, e.st)["repository.init"]; n != 2 {
+		t.Fatalf("repository.init logged %d times", n)
+	}
+
+	// A stack without repository is refused.
+	expect(t, post("/stacks/db/repository/init", url.Values{}), http.StatusBadRequest, "")
+	if len(init.repos) != 2 {
+		t.Fatalf("init calls: %d", len(init.repos))
+	}
+}
+
+func TestInitRepositoryAdminOnly(t *testing.T) {
+	e := newEnv(t, true, true)
+	webID, _ := e.setupStacks()
+	init := &fakeInit{}
+	e.server.Repos = init
+	if _, err := e.st.SetRepository(context.Background(), webID, "/srv/restic/web", "pw", nil); err != nil {
+		t.Fatal(err)
+	}
+	e.loginAdmin()
+	alice, aliceID := e.createUser("alice")
+	if err := e.st.SetPermission(context.Background(), store.Permission{UserID: aliceID, StackID: webID, CanBackup: true, CanRestore: true}); err != nil {
+		t.Fatal(err)
+	}
+	r := e.do(alice, http.MethodPost, "/stacks/web/repository/init", url.Values{"csrf_token": {csrfOf(e, alice, "/stacks/web")}}, nil)
+	expect(t, r, http.StatusForbidden, "")
+	if len(init.repos) != 0 {
+		t.Fatal("init ran for a non-admin")
 	}
 }

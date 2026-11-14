@@ -28,6 +28,7 @@ type testEnv struct {
 	client  *http.Client
 	adminPW string
 	snaps   *fakeRefresher
+	server  *Server
 
 	mu  sync.Mutex
 	now time.Time
@@ -76,6 +77,7 @@ func newEnv(t *testing.T, tls, secureCookies bool) *testEnv {
 		Store: st, Logger: discard, SessionTTL: time.Hour, SecureCookies: secureCookies,
 		Limiter: &auth.LoginLimiter{Now: e.clock}, Now: e.clock, Snapshots: e.snaps,
 	}
+	e.server = s
 	h, err := s.Handler()
 	if err != nil {
 		t.Fatal(err)

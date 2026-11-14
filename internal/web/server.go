@@ -30,6 +30,9 @@ type Server struct {
 	// Snapshots refreshes snapshot caches (read-only restic). If nil,
 	// refreshing is reported as unavailable.
 	Snapshots SnapshotRefresher
+	// Repos initializes new repositories (restic init). If nil, the
+	// action is reported as unavailable.
+	Repos RepoInitializer
 	// Now returns the current time; defaults to time.Now (tests override it).
 	Now func() time.Time
 
@@ -90,6 +93,7 @@ func (s *Server) Handler() (http.Handler, error) {
 				r.Use(s.requireAdmin)
 				r.Get("/stacks/{name}/settings", s.stackSettings)
 				r.Post("/stacks/{name}/repository", s.saveRepository)
+				r.Post("/stacks/{name}/repository/init", s.initRepository)
 				r.Post("/stacks/{name}/permissions", s.setPermission)
 				r.Post("/stacks/{name}/enabled", s.setStackEnabled)
 				r.Get("/admin/users", s.userList)

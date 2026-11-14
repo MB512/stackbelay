@@ -31,6 +31,8 @@ type repoForm struct {
 	Location string   // current location, or the submitted one after an error
 	EnvKeys  []string // names of the stored backend variables
 	Allowed  []string // variable names that may be entered
+	// OfferInit shows the "Initialize repository" button.
+	OfferInit bool
 }
 
 // allowedRepoEnv are the backend variables the form accepts. The
@@ -90,7 +92,7 @@ func (s *Server) saveRepository(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fail := func(msg, location string) {
-		s.renderSettings(w, r, st, http.StatusBadRequest, "", msg, location)
+		s.renderSettings(w, r, st, settingsView{Status: http.StatusBadRequest, Error: msg, Location: location})
 	}
 
 	location, urlEnv, err := restic.SplitRESTCredentials(strings.TrimSpace(r.PostFormValue("location")))
@@ -131,20 +133,40 @@ func (s *Server) saveRepository(w http.ResponseWriter, r *http.Request) {
 	if len(urlEnv) > 0 {
 		info += " The user name and password from the URL are stored encrypted as RESTIC_REST_USERNAME/RESTIC_REST_PASSWORD."
 	}
-	n, err := s.refreshSnapshots(ctx, st)
-	if err != nil {
-		s.renderSettings(w, r, st, http.StatusOK, info, "restic could not open the repository: "+err.Error(), "")
-		return
-	}
-	s.renderSettings(w, r, st, http.StatusOK, fmt.Sprintf("%s restic found %s.", info, plural(n, "snapshot")), "", "")
+	s.renderSettings(w, r, st, s.checkRepository(ctx, st, info))
 }
 
+// checkRepository refreshes the snapshot cache as an access check and
+// describes the result for the Settings tab. If there is no repository at
+// the location, it offers to initialize one.
+func (s *Server) checkRepository(ctx context.Context, st store.Stack, info string) settingsView {
+	n, err := s.refreshSnapshots(ctx, st)
+	var re *refreshError
+	switch {
+	case errors.As(err, &re) && re.noRepo:
+		return settingsView{Info: info, OfferInit: true,
+			Error: "There is no restic repository at this location yet: " + re.msg}
+	case err != nil:
+		return settingsView{Info: info, Error: "restic could not open the repository: " + err.Error()}
+	}
+	return settingsView{Info: fmt.Sprintf("%s restic found %s.", info, plural(n, "snapshot"))}
+}
+
+// refreshError is a refresh failure prepared for display.
+type refreshError struct {
+	msg    string // shortened restic message, safe to show
+	noRepo bool   // restic: no repository at the location
+}
+
+func (e *refreshError) Error() string { return e.msg }
+
 // refreshSnapshots runs a snapshot cache refresh and returns the number of
-// snapshots that exist in the repository. The error is shortened for
-// display; restic output never contains the credentials (see restic.CLI).
+// snapshots that exist in the repository. Errors are *refreshError, with a
+// shortened message for display; restic output never contains the
+// credentials (see restic.CLI).
 func (s *Server) refreshSnapshots(ctx context.Context, st store.Stack) (int, error) {
 	if s.Snapshots == nil {
-		return 0, errors.New("snapshot refresh is not available")
+		return 0, &refreshError{msg: "snapshot refresh is not available"}
 	}
 	ctx, cancel := context.WithTimeout(ctx, refreshTimeout)
 	defer cancel()
@@ -160,7 +182,7 @@ func (s *Server) refreshSnapshots(ctx context.Context, st store.Stack) (int, err
 		} else if errors.Is(err, context.DeadlineExceeded) {
 			msg = "no answer within " + refreshTimeout.String()
 		}
-		return 0, errors.New(truncate(msg, 300))
+		return 0, &refreshError{msg: truncate(msg, 300), noRepo: restic.IsNoRepository(err)}
 	}
 	n := 0
 	for _, sn := range snaps {
@@ -192,4 +214,51 @@ func plural(n int, word string) string {
 		return "1 " + word
 	}
 	return fmt.Sprintf("%d %ss", n, word)
+}
+
+// RepoInitializer creates a new restic repository. *restic.CLI implements
+// it; tests use a fake.
+type RepoInitializer interface {
+	Init(ctx context.Context, repo restic.Repo) error
+}
+
+// initRepository runs "restic init" at the stack's stored location (admin
+// only), then checks the new repository. The button is only offered after
+// restic reported that no repository exists there, and restic itself
+// refuses to init over an existing repository.
+func (s *Server) initRepository(w http.ResponseWriter, r *http.Request) {
+	st, _, ok := s.loadStack(w, r, auth.ActionView)
+	if !ok {
+		return
+	}
+	ctx := r.Context()
+	repo, err := s.Store.RepositoryForStack(ctx, st.ID)
+	if errors.Is(err, store.ErrNotFound) {
+		s.renderError(w, r, http.StatusBadRequest, "This stack has no repository.")
+		return
+	}
+	if err != nil {
+		s.internalError(w, r, "loading repository", err)
+		return
+	}
+	if s.Repos == nil {
+		s.renderSettings(w, r, st, settingsView{Status: http.StatusServiceUnavailable, Error: "Initializing repositories is not available."})
+		return
+	}
+
+	s.audit(r, store.AuditEntry{UserID: authFrom(ctx).User.ID, Action: "repository.init", StackID: st.ID,
+		Detail: fmt.Sprintf("location %q", truncate(repo.Location, 200))})
+	initCtx, cancel := context.WithTimeout(ctx, refreshTimeout)
+	defer cancel()
+	if err := s.Repos.Init(initCtx, repo.Restic()); err != nil {
+		s.Logger.Warn("initializing repository", "stack", st.Name, "error", err)
+		msg := err.Error()
+		var re *restic.Error
+		if errors.As(err, &re) {
+			msg = re.Message()
+		}
+		s.renderSettings(w, r, st, settingsView{Error: "restic could not initialize the repository: " + truncate(msg, 300)})
+		return
+	}
+	s.renderSettings(w, r, st, s.checkRepository(ctx, st, "Repository initialized."))
 }

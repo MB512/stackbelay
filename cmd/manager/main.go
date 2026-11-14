@@ -66,10 +66,13 @@ func run(ctx context.Context, getenv func(string) string, readFile func(string) 
 		return 1
 	}
 
+	resticCLI := &restic.CLI{Logger: log}
 	handler, err := (&web.Server{
 		Store: st, Logger: log, SessionTTL: cfg.SessionTTL, SecureCookies: !cfg.AllowInsecureHTTP,
-		// The manager runs only read-only restic commands itself.
-		Snapshots: &snapshots.Cache{Store: st, Restic: &restic.CLI{Logger: log}},
+		// The manager runs only read-only restic commands itself, plus
+		// "restic init" on an explicit admin action.
+		Snapshots: &snapshots.Cache{Store: st, Restic: resticCLI},
+		Repos:     resticCLI,
 	}).Handler()
 	if err != nil {
 		log.Error("starting manager", "error", err)
