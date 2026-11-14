@@ -56,7 +56,11 @@ attackers reaching the UI, a leaked database file.
    (form field `csrf_token` or header `X-CSRF-Token`). Pages are served
    with `Cache-Control: no-store` and a strict CSP (`default-src 'self'`).
 8. **Authorization.** Checked per request and per stack (see data-model.md);
-   deny by default.
+   deny by default. The rule is one function (`auth.Allowed`); handlers
+   load the stack via `loadStack`, which validates the name and answers
+   404 for stacks the user may not view. Admin-only routes are grouped
+   behind `requireAdmin`. Admins cannot change their own flags in the UI,
+   and the store refuses changes that leave no active admin.
 9. **Audit log.** Login, failed login, job creation, restore, permission and
    repository changes. No secrets in entries.
 10. **TLS.** The app speaks plain HTTP and is meant to run behind a reverse

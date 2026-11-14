@@ -275,6 +275,36 @@ Use case: move a single stack from host A to host B (or rebuild a host).
   only bind mounts inside the stack directory are covered.
 - Importing/creating stacks is admin-only.
 
+## Web UI
+
+Server-rendered `html/template` pages (`internal/web/templates`), one file
+per page plus `base.html` (layout) and `partials.html` (shared snippets).
+HTMX is used for small in-page updates; every HTMX form is also a normal
+form with `method`/`action`, so it works without JavaScript. An HTMX request
+(header `HX-Request: true`) gets an HTML fragment instead of a redirect.
+
+| Route | Who | |
+|---|---|---|
+| `GET /` | logged in | stacks the user may view (admins: all) |
+| `GET /stacks/{name}` | view right | repository location, cached snapshots; admins also settings and permissions |
+| `POST /stacks/{name}/permissions` | admin | set one user's backup/restore right (HTMX: returns the table row) |
+| `POST /stacks/{name}/enabled` | admin | enable/disable the stack for scheduled backups |
+| `GET/POST /admin/users` | admin | list users, create a user with a generated one-time password |
+| `POST /admin/users/{id}` | admin | set admin/disabled flags (not on one's own account) |
+| `POST /admin/users/{id}/password` | admin | generate a new password (must be changed, sessions end) |
+
+Stacks a user may not view answer 404 (not 403), so stack names are not
+revealed. `{name}` must pass `stacks.ValidName` and exist in the database
+(i.e. was discovered).
+
+Static assets are vendored into `internal/web/static` and embedded:
+`htmx-2.0.11.min.js` (0BSD, `htmx-LICENSE.txt`; from the npm package
+`htmx.org@2.0.11`, tarball integrity checked against the registry). To
+update, replace the file, keep the version in the file name (cache busting)
+and update `base.html`. HTMX is configured in `base.html` (`htmx-config`
+meta) to work with the strict CSP: no injected indicator styles, no
+`eval`, no scripts from responses, requests to the own origin only.
+
 ## Live logs
 
 The worker appends to `/job/log.txt` as JSON lines

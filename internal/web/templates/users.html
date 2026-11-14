@@ -1,0 +1,53 @@
+{{define "content"}}
+<h1>Users</h1>
+{{- with .Data}}
+{{- if .NewPassword}}
+<div class="card wide" role="status">
+  <p>Password for <strong>{{.NewPasswordFor}}</strong> (shown only once; the user must change it at the first login):</p>
+  <p><code class="secret">{{.NewPassword}}</code></p>
+</div>
+{{- end}}
+
+<table>
+  <thead><tr><th>User</th><th>Created</th><th>Admin</th><th>Disabled</th><th></th><th></th></tr></thead>
+  <tbody>
+    {{- range .Users}}
+    <tr>
+      <td>{{.Username}}{{if .MustChangePassword}} <span class="badge" title="Has a generated password">new password</span>{{end}}</td>
+      <td>{{when .CreatedAt}}</td>
+      {{- if eq .ID $.User.ID}}
+      <td>{{if .IsAdmin}}yes{{else}}no{{end}}</td>
+      <td>no</td>
+      <td colspan="2" class="hint">this is you</td>
+      {{- else}}
+      <td><input type="checkbox" name="is_admin" form="user-{{.ID}}" aria-label="Admin"{{if .IsAdmin}} checked{{end}}></td>
+      <td><input type="checkbox" name="disabled" form="user-{{.ID}}" aria-label="Disabled"{{if .Disabled}} checked{{end}}></td>
+      <td>
+        <form id="user-{{.ID}}" method="post" action="/admin/users/{{.ID}}">
+          <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+          <button type="submit" class="secondary">Save</button>
+        </form>
+      </td>
+      <td>
+        <form method="post" action="/admin/users/{{.ID}}/password">
+          <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+          <button type="submit" class="secondary">Reset password</button>
+        </form>
+      </td>
+      {{- end}}
+    </tr>
+    {{- end}}
+  </tbody>
+</table>
+
+<h2>New user</h2>
+<form method="post" action="/admin/users" class="card">
+  <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+  <label>Username <input name="username" required maxlength="64" pattern="[a-z0-9][a-z0-9._\-]*" value="{{.Username}}"
+    autocomplete="off"></label>
+  <label class="check"><input type="checkbox" name="is_admin"> Administrator</label>
+  <p class="hint">A password is generated and shown once. Grant stack permissions on each stack's page.</p>
+  <button type="submit">Create user</button>
+</form>
+{{- end}}
+{{end}}

@@ -208,7 +208,7 @@ func TestLoginPasswordChangeLogout(t *testing.T) {
 
 	r = e.get("/")
 	expect(t, r, http.StatusOK, "")
-	if !strings.Contains(r.body, "Signed in as <strong>admin</strong>") {
+	if !strings.Contains(r.body, "<h1>Stacks</h1>") || !strings.Contains(r.body, "admin (admin)") {
 		t.Fatalf("home page:\n%s", r.body)
 	}
 
@@ -318,6 +318,10 @@ func TestHealthzStaticAndHeaders(t *testing.T) {
 	r = e.get("/static/style.css")
 	if r.status != http.StatusOK || !strings.Contains(r.header.Get("Content-Type"), "text/css") {
 		t.Fatalf("style.css: %d %s", r.status, r.header.Get("Content-Type"))
+	}
+	r = e.get("/static/htmx-2.0.11.min.js")
+	if r.status != http.StatusOK || !strings.Contains(r.header.Get("Content-Type"), "javascript") {
+		t.Fatalf("htmx: %d %s", r.status, r.header.Get("Content-Type"))
 	}
 	if r := e.get("/login"); r.header.Get("Cache-Control") != "no-store" {
 		t.Error("pages must not be cached")

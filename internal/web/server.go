@@ -77,7 +77,20 @@ func (s *Server) Handler() (http.Handler, error) {
 			r.Post("/logout", s.logout)
 			r.Get("/account/password", s.passwordForm)
 			r.Post("/account/password", s.changePassword)
-			r.Get("/", s.home)
+
+			r.Get("/", s.stackList)
+			r.Get("/stacks/{name}", s.stackDetail)
+
+			// Admin only.
+			r.Group(func(r chi.Router) {
+				r.Use(s.requireAdmin)
+				r.Post("/stacks/{name}/permissions", s.setPermission)
+				r.Post("/stacks/{name}/enabled", s.setStackEnabled)
+				r.Get("/admin/users", s.userList)
+				r.Post("/admin/users", s.createUser)
+				r.Post("/admin/users/{id}", s.updateUser)
+				r.Post("/admin/users/{id}/password", s.resetPassword)
+			})
 		})
 	})
 
@@ -85,10 +98,6 @@ func (s *Server) Handler() (http.Handler, error) {
 		s.renderError(w, r, http.StatusNotFound, "Page not found.")
 	})
 	return r, nil
-}
-
-func (s *Server) home(w http.ResponseWriter, r *http.Request) {
-	s.render(w, r, http.StatusOK, "home.html", pageData{Title: "Stacks"})
 }
 
 // healthz reports whether the manager and its database are usable.

@@ -30,3 +30,30 @@ header button { background: transparent; color: var(--accent); padding: 0; }
 .warning { color: var(--warn); font-weight: 600; }
 .info { color: var(--accent); }
 .hint { color: var(--muted); font-size: .9rem; }
+
+/* Tables, badges, sections (stack and user pages). */
+h2 { font-size: 1.15rem; margin-top: 1.8rem; }
+table {
+  width: 100%; border-collapse: collapse; background: var(--card);
+  border: 1px solid var(--border); border-radius: 8px;
+}
+th, td { padding: .5rem .7rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
+th { font-size: .85rem; color: var(--muted); font-weight: 600; }
+tbody tr:last-child td { border-bottom: 0; }
+td form { margin: 0; }
+tr.missing td { color: var(--muted); }
+.badge {
+  display: inline-block; padding: .05rem .45rem; border-radius: 999px; font-size: .75rem;
+  font-weight: 600; background: var(--border); color: var(--fg); vertical-align: middle;
+}
+.badge.ok { background: #dcefe0; color: #1d6b2f; }
+.badge.warn { background: #fbecc8; color: var(--warn); }
+.muted { color: var(--muted); }
+button.secondary { background: transparent; color: var(--accent); border: 1px solid var(--border); }
+form.inline { display: flex; gap: .8rem; align-items: center; }
+label.check { display: flex; gap: .5rem; align-items: center; }
+.card.wide { max-width: none; margin-bottom: 1.2rem; }
+code.secret { font-size: 1.1rem; user-select: all; }
+@media (max-width: 40rem) {
+  table { display: block; overflow-x: auto; }
+}

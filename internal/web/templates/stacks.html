@@ -1,0 +1,29 @@
+{{define "content"}}
+<h1>Stacks</h1>
+{{- with .Data}}
+<table>
+  <thead>
+    <tr><th>Stack</th><th>Status</th><th>Repository</th><th>Snapshots</th><th>Last snapshot</th><th>You may</th></tr>
+  </thead>
+  <tbody>
+    {{- range .}}
+    <tr>
+      <td><a href="/stacks/{{.Name}}">{{.Name}}</a></td>
+      <td>{{template "stack-status" .Stack}}</td>
+      <td>{{if .HasRepository}}configured{{else}}<span class="muted">none</span>{{end}}</td>
+      <td>{{.Snapshots}}</td>
+      <td>{{when .LastSnapshot}}</td>
+      <td>{{template "rights" .}}</td>
+    </tr>
+    {{- end}}
+  </tbody>
+</table>
+{{- else}}
+{{- if $.User.IsAdmin}}
+<p class="hint">No stacks found. Stacks are the directories with a compose file under <code>STACKS_ROOT</code>;
+they are discovered when the manager starts.</p>
+{{- else}}
+<p class="hint">You have no access to any stack yet. Ask an administrator to grant you permissions.</p>
+{{- end}}
+{{- end}}
+{{end}}

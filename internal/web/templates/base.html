@@ -4,14 +4,22 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  {{- /* HTMX must not inject inline styles (blocked by the CSP), evaluate
+         code from attributes, or run scripts from responses. */}}
+  <meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false,"allowScriptTags":false,"selfRequestsOnly":true}'>
   <title>{{.Title}} · StackVault</title>
   <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/htmx-2.0.11.min.js" defer></script>
 </head>
 <body>
   <header>
     <a class="brand" href="/">StackVault</a>
     {{- with .User}}
     <nav>
+      <a href="/">Stacks</a>
+      {{- if .IsAdmin}}
+      <a href="/admin/users">Users</a>
+      {{- end}}
       <a href="/account/password">{{.Username}}{{if .IsAdmin}} (admin){{end}}</a>
       <form method="post" action="/logout">
         <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
