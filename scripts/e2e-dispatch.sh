@@ -132,6 +132,13 @@ JOB2="${JOB2#"$B"}"
 read -r CODE _ <<<"$(submit_backup)"
 [[ "$CODE" == 409 ]] || fail "third backup while one is queued: HTTP $CODE, want 409"
 pass "second backup queued, third refused"
+# Follow the first backup through its live stream (SSE) until "done".
+c -N --max-time 180 "$B$JOB/events?offset=0" >"$WORK/events.txt" || true
+grep -q '^event: done$' "$WORK/events.txt" || fail "live stream did not end with done"
+LINES="$(grep -c '^event: line$' "$WORK/events.txt")"
+[[ "$LINES" -gt 5 ]] || fail "live stream sent only $LINES log lines"
+grep -q 'final snapshot done' "$WORK/events.txt" || fail "live stream lacks the final snapshot line"
+pass "live stream: $LINES log lines, details, done"
 S="$(wait_job "$JOB")"
 [[ "$S" == succeeded ]] || fail "backup $S: $(job_error "$JOB")"
 pass "first backup succeeded ($JOB)"
