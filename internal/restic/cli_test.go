@@ -48,9 +48,10 @@ func TestParseSnapshots(t *testing.T) {
 }
 
 func TestRedact(t *testing.T) {
-	repo := Repo{Env: []string{"RESTIC_PASSWORD=s3cret-pw", "SHORT=ab", "EMPTY="}}
-	got := redact("wrong password s3cret-pw for ab", repo)
-	want := "wrong password [REDACTED] for ab"
+	repo := Repo{Env: []string{"RESTIC_PASSWORD=s3cret-pw", "RESTIC_REST_PASSWORD=ab", "EMPTY=",
+		"RESTIC_REST_USERNAME=demo", "AWS_SECRET_ACCESS_KEY=aws-secret-key", "AWS_ACCESS_KEY_ID=AKIDEXAMPLE"}}
+	got := redact("wrong password s3cret-pw for ab: user demo, stack demo-web, key AKIDEXAMPLE/aws-secret-key", repo)
+	want := "wrong password [REDACTED] for ab: user demo, stack demo-web, key AKIDEXAMPLE/[REDACTED]"
 	if got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}

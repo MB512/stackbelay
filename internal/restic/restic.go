@@ -11,6 +11,7 @@ import (
 	"os"
 	"regexp"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -59,6 +60,31 @@ var BackendEnvVars = []string{
 	"B2_ACCOUNT_ID", "B2_ACCOUNT_KEY",
 	"AZURE_ACCOUNT_NAME", "AZURE_ACCOUNT_KEY", "AZURE_ACCOUNT_SAS",
 	"GOOGLE_PROJECT_ID", "GOOGLE_APPLICATION_CREDENTIALS", "GOOGLE_ACCESS_TOKEN",
+}
+
+// secretEnvVars are the BackendEnvVars whose values are secrets and are
+// redacted from logs and error messages. The others (user names, access key
+// ids, regions, project ids, file paths) are not: redacting them would also
+// hide every other occurrence of e.g. a user name "demo" in a stack name.
+var secretEnvVars = []string{
+	"RESTIC_PASSWORD", "RESTIC_REST_PASSWORD",
+	"AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN",
+	"B2_ACCOUNT_KEY",
+	"AZURE_ACCOUNT_KEY", "AZURE_ACCOUNT_SAS",
+	"GOOGLE_ACCESS_TOKEN",
+}
+
+// SecretValues returns the values of the secret variables in env
+// ("KEY=value" entries) that are long enough to be redacted (>= 4 bytes).
+func SecretValues(env []string) []string {
+	var out []string
+	for _, kv := range env {
+		k, v, ok := strings.Cut(kv, "=")
+		if ok && len(v) >= 4 && slices.Contains(secretEnvVars, k) {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 // ValidEnvKey reports whether key may be set in Repo.Env.

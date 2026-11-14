@@ -55,7 +55,7 @@ func run(args []string, getenv func(string) string, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "configuration error:\n%v\n", err)
 		return 2
 	}
-	secrets := secretValues(cfg.RepoEnv)
+	secrets := restic.SecretValues(cfg.RepoEnv)
 
 	spec, jobDir, err := parseArgs(args)
 	if err != nil {
@@ -247,17 +247,6 @@ func finishCarriedOver(jobDir, carried string, status jobs.Status) error {
 		return err
 	}
 	return jobs.WriteStatus(carried, status)
-}
-
-// secretValues extracts the values of "KEY=value" entries.
-func secretValues(env []string) []string {
-	var out []string
-	for _, kv := range env {
-		if _, v, ok := strings.Cut(kv, "="); ok {
-			out = append(out, v)
-		}
-	}
-	return out
 }
 
 func redact(s string, secrets []string) string {

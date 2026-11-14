@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/MB512/stackvault/internal/jobs"
+	"github.com/MB512/stackvault/internal/restic"
 )
 
 const testJobID = "01JCZ8G3T4S5V6W7X8Y9Z0ABCD"
@@ -115,7 +116,7 @@ func TestRunJobDirFailedJob(t *testing.T) {
 }
 
 func TestRedact(t *testing.T) {
-	got := redact("pw=super-secret-repo-pw", secretValues([]string{"RESTIC_PASSWORD=super-secret-repo-pw", "X=ab"}))
+	got := redact("pw=super-secret-repo-pw", restic.SecretValues([]string{"RESTIC_PASSWORD=super-secret-repo-pw", "X=ab"}))
 	if got != "pw=[REDACTED]" {
 		t.Fatalf("got %q", got)
 	}

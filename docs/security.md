@@ -35,8 +35,13 @@ attackers reaching the UI, a leaked database file.
    key never reaches a child process.
 5. **Secrets in transit to worker.** Delivered via a tmpfs-mounted file or env
    of the worker container, removed after the job. Never CLI arguments (visible
-   in `ps`), never logged. Log output from restic is filtered for known secret
-   values.
+   in `ps`), never logged. Log output from restic and the job logs are
+   filtered for the secret values (`restic.SecretValues`: repository
+   password, `RESTIC_REST_PASSWORD`, `AWS_SECRET_ACCESS_KEY`,
+   `AWS_SESSION_TOKEN`, `B2_ACCOUNT_KEY`, `AZURE_ACCOUNT_KEY`,
+   `AZURE_ACCOUNT_SAS`, `GOOGLE_ACCESS_TOKEN`). User names, key ids, regions
+   and paths are not secret and not redacted (redacting a user name "demo"
+   would also hide the stack name "demo-web").
 6. **Authentication.** argon2id password hashes (m=64 MiB, t=3, p=2, PHC
    format); random 256-bit session tokens, stored as SHA-256 only; cookie
    `__Host-stackvault_session` with `HttpOnly`, `Secure`, `SameSite=Lax`

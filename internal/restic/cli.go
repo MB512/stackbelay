@@ -311,11 +311,8 @@ func parseNodeLine(line []byte) (Node, bool) {
 
 // redact replaces secret values from repo.Env in s.
 func redact(s string, repo Repo) string {
-	for _, kv := range repo.Env {
-		_, val, ok := strings.Cut(kv, "=")
-		if ok && len(val) >= 4 {
-			s = strings.ReplaceAll(s, val, "[REDACTED]")
-		}
+	for _, val := range SecretValues(repo.Env) {
+		s = strings.ReplaceAll(s, val, "[REDACTED]")
 	}
 	return s
 }
