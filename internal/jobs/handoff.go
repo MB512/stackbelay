@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/MB512/stackvault/internal/restic"
@@ -177,9 +178,33 @@ func writeJSONAtomic(path string, v any) error {
 	if err := os.WriteFile(tmp, append(data, '\n'), 0o600); err != nil {
 		return err
 	}
+	if err := MatchDirOwner(tmp); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
 	if err := os.Rename(tmp, path); err != nil {
 		_ = os.Remove(tmp)
 		return err
+	}
+	return nil
+}
+
+// MatchDirOwner gives path the owner and group of its directory. The
+// worker runs as root, the manager possibly not; the manager created the
+// job directory, so files the worker writes there must belong to the
+// manager's user to be readable (they are mode 0600). Without permission
+// to change the owner (worker not root) it does nothing.
+func MatchDirOwner(path string) error {
+	dir, err := os.Stat(filepath.Dir(path))
+	if err != nil {
+		return err
+	}
+	st, ok := dir.Sys().(*syscall.Stat_t)
+	if !ok || os.Geteuid() != 0 {
+		return nil
+	}
+	if err := os.Lchown(path, int(st.Uid), int(st.Gid)); err != nil {
+		return fmt.Errorf("changing owner of %s: %w", filepath.Base(path), err)
 	}
 	return nil
 }

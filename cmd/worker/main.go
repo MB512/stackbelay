@@ -78,6 +78,10 @@ func run(args []string, getenv func(string) string, stderr io.Writer) int {
 			return 2
 		}
 		defer f.Close()
+		if err := jobs.MatchDirOwner(f.Name()); err != nil {
+			fmt.Fprintf(stderr, "job log: %v\n", err)
+			return 2
+		}
 		out = io.MultiWriter(stderr, f)
 	}
 	log := slog.New(slog.NewJSONHandler(jobs.NewRedactingWriter(out, secrets), &slog.HandlerOptions{Level: cfg.LogLevel}))
