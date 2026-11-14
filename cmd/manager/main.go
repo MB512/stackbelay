@@ -64,8 +64,15 @@ func run(ctx context.Context, getenv func(string) string, readFile func(string) 
 		return 1
 	}
 
+	handler, err := (&web.Server{
+		Store: st, Logger: log, SessionTTL: cfg.SessionTTL, SecureCookies: !cfg.AllowInsecureHTTP,
+	}).Handler()
+	if err != nil {
+		log.Error("starting manager", "error", err)
+		return 1
+	}
 	srv := &http.Server{
-		Handler:           (&web.Server{DB: st, Logger: log}).Handler(),
+		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
 		// No WriteTimeout: live log streams (SSE) stay open for long.
@@ -90,6 +97,8 @@ func run(ctx context.Context, getenv func(string) string, readFile func(string) 
 	if ready != nil {
 		ready(ln.Addr().String())
 	}
+
+	go cleanupSessions(ctx, st, log)
 
 	select {
 	case err := <-serveErr:
@@ -142,4 +151,23 @@ func syncStacks(ctx context.Context, root string, st *store.Store, log *slog.Log
 	}
 	log.Info("stacks discovered", "count", len(names), "stacks", names)
 	return nil
+}
+
+// cleanupSessions deletes expired sessions once an hour until ctx is done.
+func cleanupSessions(ctx context.Context, st *store.Store, log *slog.Logger) {
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			n, err := st.DeleteExpiredSessions(ctx, time.Now())
+			if err != nil && ctx.Err() == nil {
+				log.Warn("deleting expired sessions", "error", err)
+			} else if n > 0 {
+				log.Info("deleted expired sessions", "count", n)
+			}
+		}
+	}
 }

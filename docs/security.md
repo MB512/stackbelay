@@ -34,10 +34,27 @@ attackers reaching the UI, a leaked database file.
    of the worker container, removed after the job. Never CLI arguments (visible
    in `ps`), never logged. Log output from restic is filtered for known secret
    values.
-6. **Authentication.** argon2id password hashes; random 256-bit session ids
-   (stored hashed); cookies `HttpOnly`, `Secure`, `SameSite=Lax`; login rate
-   limiting with backoff; session expiry and logout invalidation.
-7. **CSRF.** Per-session token required on every state-changing request.
+6. **Authentication.** argon2id password hashes (m=64 MiB, t=3, p=2, PHC
+   format); random 256-bit session tokens, stored as SHA-256 only; cookie
+   `__Host-stackvault_session` with `HttpOnly`, `Secure`, `SameSite=Lax`
+   (browser-session cookie, sliding server-side expiry
+   `STACKVAULT_SESSION_TTL`); a new session id on every login; logout and
+   password change end sessions (password change: all other sessions).
+   Login rate limiting per username: 5 free failures, then exponential
+   lockout up to 15 minutes (in memory). Unknown usernames cost the same
+   time as wrong passwords. Login is refused over plain HTTP (no TLS and no
+   `X-Forwarded-Proto: https`) unless `STACKVAULT_ALLOW_INSECURE_HTTP=true`.
+   Passwords: 12 to 256 characters.
+   **Initial admin:** without an active admin, user `admin` is created with
+   a random password (100 bits), printed as a banner in the container log.
+   It must be changed at the first login (all other pages redirect to the
+   change form). Until it is changed, every start generates a new one, so
+   the plaintext is never stored; afterwards nothing is printed.
+7. **CSRF.** Two layers: Go's `http.CrossOriginProtection` rejects
+   cross-site browser requests (Sec-Fetch-Site/Origin), and every
+   state-changing request of a logged-in user needs the per-session token
+   (form field `csrf_token` or header `X-CSRF-Token`). Pages are served
+   with `Cache-Control: no-store` and a strict CSP (`default-src 'self'`).
 8. **Authorization.** Checked per request and per stack (see data-model.md);
    deny by default.
 9. **Audit log.** Login, failed login, job creation, restore, permission and

@@ -1,0 +1,30 @@
+{{define "base" -}}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Title}} · StackVault</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <a class="brand" href="/">StackVault</a>
+    {{- with .User}}
+    <nav>
+      <a href="/account/password">{{.Username}}{{if .IsAdmin}} (admin){{end}}</a>
+      <form method="post" action="/logout">
+        <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+        <button type="submit">Log out</button>
+      </form>
+    </nav>
+    {{- end}}
+  </header>
+  <main>
+    {{- if .Error}}<p class="error" role="alert">{{.Error}}</p>{{end}}
+    {{- if .Info}}<p class="info" role="status">{{.Info}}</p>{{end}}
+    {{template "content" .}}
+  </main>
+</body>
+</html>
+{{- end}}
