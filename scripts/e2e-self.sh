@@ -9,7 +9,7 @@
 #
 # Requirements: docker (with compose plugin) usable without sudo, go, curl,
 # openssl. Needs Docker Engine (not Docker Desktop's WSL integration, see
-# docs/architecture.md). Pulls docker:29-cli and busybox:1.36.
+# docs/architecture.md). Pulls golang:1.26-alpine, docker:29-cli and busybox:1.36.
 # Usage: scripts/e2e-self.sh     (KEEP=1 keeps everything, PORT=18100 sets the port)
 set -euo pipefail
 
@@ -75,10 +75,7 @@ wait_healthy() {
 csrf() { c "$B$1" | grep -o 'csrf_token" value="[^"]*' | head -1 | cut -d'"' -f3; }
 
 step "build image"
-mkdir -p "$WORK/img"
-CGO_ENABLED=0 go build -o "$WORK/img/worker" ./cmd/worker
-CGO_ENABLED=0 go build -o "$WORK/img/manager" ./cmd/manager
-docker build --quiet -f scripts/e2e.Dockerfile -t "$IMAGE" "$WORK/img" >/dev/null
+docker build --quiet -f deploy/Dockerfile --build-arg VERSION=e2e -t "$IMAGE" . >/dev/null
 pass "$IMAGE"
 
 step "manager as its own stack"

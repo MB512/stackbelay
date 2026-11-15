@@ -1,0 +1,6 @@
+# Only go.mod, go.sum, cmd/ and internal/ are needed by deploy/Dockerfile.
+*
+!go.mod
+!go.sum
+!cmd/
+!internal/

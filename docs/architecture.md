@@ -588,8 +588,8 @@ End-to-end smoke test against the local Docker daemon and a temporary local
 repository: `scripts/e2e-local.sh` (`KEEP=1` keeps the temp directory and
 containers for inspection). `scripts/e2e-dispatch.sh` tests the manager
 with real worker containers through the web UI (repository init, backup,
-queueing, restore); it builds a throwaway worker image from
-`scripts/e2e.Dockerfile`.
+queueing, scheduled backup, restore, pinned restore); it builds the release
+image from `deploy/Dockerfile`, as does `scripts/e2e-self.sh`.
 
 Not yet implemented: restore into a not-yet-existing stack (import), see
 "Restore from another host" and "Planned features".

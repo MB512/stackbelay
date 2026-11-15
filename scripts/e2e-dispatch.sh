@@ -5,7 +5,7 @@
 # web UI (curl): initialize a repository, back up, restore, check the stack.
 #
 # Requirements: docker (with compose plugin) usable without sudo, restic,
-# go, curl. Pulls docker:29-cli and busybox:1.36.
+# go, curl. Pulls golang:1.26-alpine, docker:29-cli and busybox:1.36.
 # Usage: scripts/e2e-dispatch.sh        (KEEP=1 keeps the temp directory,
 #                                        PORT=18090 sets the manager port)
 #
@@ -70,10 +70,8 @@ DESKTOP=0
 docker info --format '{{.OperatingSystem}}' | grep -q 'Docker Desktop' && DESKTOP=1
 
 step "build"
-mkdir -p "$WORK/img" bin
-CGO_ENABLED=0 go build -o "$WORK/img/worker" ./cmd/worker
-CGO_ENABLED=0 go build -o "$WORK/img/manager" ./cmd/manager
-docker build --quiet -f scripts/e2e.Dockerfile -t "$IMAGE" "$WORK/img" >/dev/null
+mkdir -p bin
+docker build --quiet -f deploy/Dockerfile --build-arg VERSION=e2e -t "$IMAGE" . >/dev/null
 go build -o bin/manager ./cmd/manager
 pass "worker image $IMAGE, bin/manager"
 
