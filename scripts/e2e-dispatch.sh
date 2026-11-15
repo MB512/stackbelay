@@ -151,6 +151,34 @@ pass "second backup succeeded after the first ($JOB2)"
 [[ "$(state app)" == running ]] || fail "app not restarted after backup"
 pass "app restarted"
 
+step "scheduled backup (every minute, waits up to 90 s)"
+c -o /dev/null --data-urlencode "csrf_token=$T" --data-urlencode "cron_expr=* * * * *" "$B/stacks/$STACK/schedules"
+SETTINGS="$(c "$B/stacks/$STACK/settings")"
+SCHED="$(grep -o "/stacks/$STACK/schedules/[0-9]*/delete" <<<"$SETTINGS" | head -1 | cut -d/ -f5)"
+[[ -n "$SCHED" ]] || fail "schedule not listed"
+grep -q '<code>\* \* \* \* \*</code>' <<<"$SETTINGS" || fail "schedule expression not shown"
+pass "schedule $SCHED added"
+# scheduled_job: path of the newest job started by a schedule ("" if none).
+scheduled_job() {
+	c "$B/stacks/$STACK" | tr -d '\n' | sed 's#</tr>#</tr>\n#g' | grep 'muted">schedule<' |
+		grep -o 'href="/jobs/[^"]*' | head -1 | cut -d'"' -f2 || true
+}
+JOB=""
+for _ in $(seq 1 30); do
+	JOB="$(scheduled_job)"
+	[[ -n "$JOB" ]] && break
+	sleep 3
+done
+[[ -n "$JOB" ]] || fail "no scheduled job within 90 s"
+c -o /dev/null --data-urlencode "csrf_token=$T" "$B/stacks/$STACK/schedules/$SCHED/delete"
+c "$B/stacks/$STACK/settings" | grep -q 'No schedules' || fail "schedule not deleted"
+pass "scheduled job queued ($JOB), schedule deleted"
+S="$(wait_job "$JOB")"
+[[ "$S" == succeeded ]] || fail "scheduled backup $S: $(job_error "$JOB")"
+c "$B$JOB" | grep -q '<td>schedule</td>' || fail "job page does not show the schedule trigger"
+[[ "$(state app)" == running ]] || fail "app not restarted after the scheduled backup"
+pass "scheduled backup succeeded, app restarted"
+
 step "change data, then restore"
 # Test only: the root worker wrote the local repository; let the non-root
 # manager read it, then refresh the snapshot list through the UI.
