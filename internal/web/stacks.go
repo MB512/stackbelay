@@ -98,6 +98,8 @@ type backupsTab struct {
 	JobsUnavailable           string      // why jobs cannot be started, or ""
 	Host                      string      // snapshots are shown for this host ("" = all)
 	OtherSnapshots            int         // snapshots in the repository of other stacks or hosts
+	// NextScheduled is the next scheduled backup; zero if none.
+	NextScheduled time.Time
 }
 
 // settingsTab is the data of the admin-only "Settings" tab.
@@ -105,6 +107,13 @@ type settingsTab struct {
 	stackHeader
 	Repo        repoForm
 	Permissions []permRow
+	Schedules   []scheduleRow
+	// NewSchedule holds the input of the "add schedule" form after an error.
+	NewSchedule struct {
+		CronExpr string
+		PreStop  bool
+	}
+	TimeZone string // the manager's time zone, in which schedules run
 }
 
 // permRow is one user in the permission table of a stack (admin view). It
@@ -181,6 +190,11 @@ func (s *Server) loadBackupsTab(r *http.Request, st store.Stack, perm store.Perm
 	if page.Jobs, err = s.Store.ListJobs(r.Context(), st.ID, recentJobs); err != nil {
 		return page, err
 	}
+	scheds, err := s.scheduleRows(r.Context(), st)
+	if err != nil {
+		return page, err
+	}
+	page.NextScheduled = nextScheduled(scheds)
 	repo, err := s.Store.RepositoryInfoForStack(r.Context(), st.ID)
 	if errors.Is(err, store.ErrNotFound) {
 		return page, nil
@@ -247,7 +261,7 @@ func (s *Server) refreshStackSnapshots(w http.ResponseWriter, r *http.Request) {
 }
 
 // stackSettings shows the admin-only settings of a stack: repository,
-// enable/disable and the per-user permissions.
+// schedules, enable/disable and the per-user permissions.
 func (s *Server) stackSettings(w http.ResponseWriter, r *http.Request) {
 	st, _, ok := s.loadStack(w, r, auth.ActionView)
 	if !ok {
@@ -266,6 +280,10 @@ type settingsView struct {
 	// OfferInit shows the "Initialize repository" button (restic reported
 	// that no repository exists at the stored location).
 	OfferInit bool
+	// CronExpr and PreStop keep the input of the "add schedule" form after
+	// an error.
+	CronExpr string
+	PreStop  bool
 }
 
 // renderSettings renders the Settings tab.
@@ -287,11 +305,19 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, st store
 		s.internalError(w, r, "listing permissions", err)
 		return
 	}
+	scheds, err := s.scheduleRows(r.Context(), st)
+	if err != nil {
+		s.internalError(w, r, "listing schedules", err)
+		return
+	}
 	page := settingsTab{
 		stackHeader: newStackHeader(authFrom(r.Context()).User, st, tabSettings),
 		Repo:        repo,
 		Permissions: rows,
+		Schedules:   scheds,
+		TimeZone:    s.now().Local().Format("MST (-07:00)"),
 	}
+	page.NewSchedule.CronExpr, page.NewSchedule.PreStop = v.CronExpr, v.PreStop
 	s.render(w, r, v.Status, "stack_settings.html",
 		pageData{Title: st.Name + " settings", Info: v.Info, Error: v.Error, Data: page})
 }

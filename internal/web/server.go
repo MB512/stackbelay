@@ -37,6 +37,9 @@ type Server struct {
 	// unavailable and JobsDisabledReason says why.
 	Jobs               JobQueue
 	JobsDisabledReason string
+	// Schedules is told when schedules change. nil: schedules can still be
+	// edited, they take effect when the manager starts.
+	Schedules ScheduleReloader
 	// JobsDir is the jobs directory (for job logs).
 	JobsDir string
 	// Stopping is closed when the manager shuts down; open live streams
@@ -118,6 +121,9 @@ func (s *Server) Handler() (http.Handler, error) {
 				r.Post("/stacks/{name}/repository/init", s.initRepository)
 				r.Post("/stacks/{name}/permissions", s.setPermission)
 				r.Post("/stacks/{name}/enabled", s.setStackEnabled)
+				r.Post("/stacks/{name}/schedules", s.createSchedule)
+				r.Post("/stacks/{name}/schedules/{id}/enabled", s.setScheduleEnabled)
+				r.Post("/stacks/{name}/schedules/{id}/delete", s.deleteSchedule)
 				r.Get("/admin/users", s.userList)
 				r.Post("/admin/users", s.createUser)
 				r.Post("/admin/users/{id}", s.updateUser)

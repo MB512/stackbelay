@@ -6,6 +6,9 @@
   <h2>Repository</h2>
   {{- with .Repo}}
   <p><code>{{.Location}}</code></p>
+  {{- if not $.Data.NextScheduled.IsZero}}
+  <p class="hint">Next scheduled backup: {{when $.Data.NextScheduled}}.</p>
+  {{- end}}
   {{- else}}
   <p class="hint">No repository configured.
     {{- if $.User.IsAdmin}} <a href="/stacks/{{$.Data.Stack.Name}}/settings">Configure it in the settings.</a>{{end}}</p>
