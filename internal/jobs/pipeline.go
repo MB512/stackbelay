@@ -66,15 +66,16 @@ func orDefault(d, def time.Duration) time.Duration {
 // parent's cancellation (context.WithoutCancel) and only applies its own
 // timeout. up=false uses "compose start" (existing containers), up=true uses
 // "compose up -d" (after a restore). A nil services slice with up=true means
-// all services. Health problems are logged, not returned.
-func (p *Pipeline) bringUp(ctx context.Context, log *slog.Logger, dir string, services []string, up bool) error {
+// all services; composeFiles (up=true only) replace compose's file lookup
+// if not empty. Health problems are logged, not returned.
+func (p *Pipeline) bringUp(ctx context.Context, log *slog.Logger, dir string, composeFiles, services []string, up bool) error {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), orDefault(p.StartTimeout, DefaultStartTimeout))
 	defer cancel()
 
 	var err error
 	if up {
-		log.Info("starting stack (compose up)", "services", services)
-		err = p.Docker.Up(ctx, dir, services)
+		log.Info("starting stack (compose up)", "services", services, "compose_files", composeFiles)
+		err = p.Docker.Up(ctx, dir, composeFiles, services)
 	} else {
 		if len(services) == 0 {
 			log.Info("no services were running before the job; leaving stack stopped")

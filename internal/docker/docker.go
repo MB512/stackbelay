@@ -39,8 +39,14 @@ type Client interface {
 	// containers use the restored directory and configuration. Docker
 	// Desktop (WSL) caches bind mounts per container, so a plain restart
 	// would keep showing the renamed previous directory. Named and anonymous
-	// volumes are kept. An empty list means all services.
-	Up(ctx context.Context, projectDir string, services []string) error
+	// volumes are kept. An empty list means all services. composeFiles
+	// (absolute paths) replace compose's own file lookup when not empty;
+	// used to add an override file that pins image versions.
+	Up(ctx context.Context, projectDir string, composeFiles, services []string) error
+	// EnsureImage makes an image available locally: nothing happens if it
+	// is present, otherwise it is pulled. ref is a validated
+	// "name@sha256:..." reference. pulled reports whether it was pulled.
+	EnsureImage(ctx context.Context, ref string) (pulled bool, err error)
 	// WaitHealthy blocks until all given services are running and, if they
 	// have a healthcheck, healthy. It gives up when ctx is done.
 	WaitHealthy(ctx context.Context, projectDir string, services []string) error

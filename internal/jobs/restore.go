@@ -24,6 +24,10 @@ type RestoreOptions struct {
 	SkipSafetySnapshot bool
 	// NoStart leaves the stack stopped after a successful restore.
 	NoStart bool
+	// PinImages starts the stack with the image versions recorded in the
+	// snapshot's metadata.txt (by repo digest) instead of the tags in
+	// compose.yml. See "Pinning image versions on restore".
+	PinImages bool
 	// CarryOver is a directory inside the stack (relative path) that is
 	// copied from the previous version into the restored stack right after
 	// the swap, before the stack starts. Used when the manager restores its
@@ -100,7 +104,7 @@ func (p *Pipeline) Restore(ctx context.Context, stack stacks.Stack, opts Restore
 			log.Error("could not remove staging directory", "dir", staging, "error", rmErr)
 		}
 		log.Warn("restore did not complete; restarting previous state")
-		if startErr := p.bringUp(ctx, log, stack.Dir, running, false); startErr != nil {
+		if startErr := p.bringUp(ctx, log, stack.Dir, nil, running, false); startErr != nil {
 			err = errors.Join(err, fmt.Errorf("restarting stack: %w", startErr))
 		}
 	}()
@@ -134,6 +138,20 @@ func (p *Pipeline) Restore(ctx context.Context, stack stacks.Stack, opts Restore
 	}
 	if err := p.applyDirMetadata(ctx, log, snap.ID, srcPath, staging); err != nil {
 		return res, err
+	}
+	// Pinning prepares everything (metadata, images) before the swap, so a
+	// missing image aborts with the old stack still in place.
+	var composeFiles []string
+	switch {
+	case opts.PinImages && opts.NoStart:
+		log.Info("image pinning skipped: the stack is not started")
+	case opts.PinImages:
+		files, cleanup, err := p.preparePinning(ctx, log, stack.Name, staging, stack.Dir)
+		if err != nil {
+			return res, err
+		}
+		defer cleanup()
+		composeFiles = files
 	}
 	if err := ctx.Err(); err != nil {
 		return res, err
@@ -175,7 +193,7 @@ func (p *Pipeline) Restore(ctx context.Context, stack stacks.Stack, opts Restore
 		log.Info("no services were running at snapshot time; leaving stack stopped")
 		return res, nil
 	}
-	if err := p.bringUp(ctx, log, stack.Dir, toStart, true); err != nil {
+	if err := p.bringUp(ctx, log, stack.Dir, composeFiles, toStart, true); err != nil {
 		return res, fmt.Errorf("starting restored stack (previous version kept at %s): %w", oldDir, err)
 	}
 	return res, nil

@@ -80,7 +80,7 @@ func (p *Pipeline) Backup(ctx context.Context, stack stacks.Stack, opts BackupOp
 
 	// 6. (registered before 4) Start again, always.
 	defer func() {
-		if startErr := p.bringUp(ctx, log, stack.Dir, running, false); startErr != nil {
+		if startErr := p.bringUp(ctx, log, stack.Dir, nil, running, false); startErr != nil {
 			err = errors.Join(err, fmt.Errorf("restarting stack: %w", startErr))
 		}
 	}()

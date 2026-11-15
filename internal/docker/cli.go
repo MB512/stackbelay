@@ -227,10 +227,30 @@ func (c *CLI) Start(ctx context.Context, dir string, services []string) error {
 }
 
 // Up implements Client.
-func (c *CLI) Up(ctx context.Context, dir string, services []string) error {
-	args := []string{"up", "--detach", "--force-recreate", "--"}
+func (c *CLI) Up(ctx context.Context, dir string, composeFiles, services []string) error {
+	var args []string
+	for _, f := range composeFiles {
+		args = append(args, "--file", f)
+	}
+	args = append(args, "up", "--detach", "--force-recreate", "--")
 	_, err := c.compose(ctx, dir, append(args, services...)...)
 	return err
+}
+
+// EnsureImage implements Client.
+func (c *CLI) EnsureImage(ctx context.Context, ref string) (bool, error) {
+	if strings.HasPrefix(ref, "-") { // never let a reference become a flag
+		return false, fmt.Errorf("invalid image reference %q", ref)
+	}
+	// "image inspect" fails for missing images; any failure is answered by
+	// pulling, which reports the real problem if there is one.
+	if _, err := c.run(ctx, "", "image", "inspect", "--format", "{{.Id}}", "--", ref); err == nil {
+		return false, nil
+	}
+	if _, err := c.run(ctx, "", "pull", "--quiet", "--", ref); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // WaitHealthy implements Client.

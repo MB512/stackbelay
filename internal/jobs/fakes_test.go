@@ -42,6 +42,11 @@ type fakeDocker struct {
 	// restart is not affected by job cancellation.
 	startCtxErr error
 	onUp        func() // called by Up, to inspect the stack directory at start
+	// upFiles and upOverride record the compose files of the last Up and
+	// the content of its last file (the generated override is removed
+	// after the job).
+	upFiles    []string
+	upOverride string
 }
 
 func (f *fakeDocker) fail(m string) error { return f.failOn[m] }
@@ -62,7 +67,12 @@ func (f *fakeDocker) Start(ctx context.Context, dir string, services []string) e
 	return f.fail("Start")
 }
 
-func (f *fakeDocker) Up(ctx context.Context, dir string, services []string) error {
+func (f *fakeDocker) Up(ctx context.Context, dir string, composeFiles, services []string) error {
+	f.upFiles = composeFiles
+	if len(composeFiles) > 0 {
+		b, _ := os.ReadFile(composeFiles[len(composeFiles)-1])
+		f.upOverride = string(b)
+	}
 	if services == nil {
 		f.calls.add("docker.Up <all>")
 	} else {
@@ -73,6 +83,11 @@ func (f *fakeDocker) Up(ctx context.Context, dir string, services []string) erro
 		f.onUp()
 	}
 	return f.fail("Up")
+}
+
+func (f *fakeDocker) EnsureImage(ctx context.Context, ref string) (bool, error) {
+	f.calls.add("docker.EnsureImage %s", ref)
+	return true, f.fail("EnsureImage")
 }
 
 func (f *fakeDocker) WaitHealthy(ctx context.Context, dir string, services []string) error {
