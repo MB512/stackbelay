@@ -29,6 +29,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/MB512/stackvault/internal/buildinfo"
 	"github.com/MB512/stackvault/internal/config"
 	"github.com/MB512/stackvault/internal/docker"
 	"github.com/MB512/stackvault/internal/jobs"
@@ -88,6 +89,7 @@ func run(args []string, getenv func(string) string, stderr io.Writer) int {
 	if spec.ID != "" {
 		log = log.With("job_id", spec.ID)
 	}
+	log.Debug("worker started", "version", buildinfo.Version)
 
 	// SIGTERM/SIGINT cancel the context (like a CancellationToken in .NET);
 	// the pipelines still restart the stack before returning.

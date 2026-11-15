@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/MB512/stackvault/internal/buildinfo"
 	"github.com/MB512/stackvault/internal/store"
 )
 
@@ -24,6 +25,8 @@ var pages = []string{"login.html", "password.html", "error.html", "stacks.html",
 
 // templateFuncs are available in all templates.
 var templateFuncs = template.FuncMap{
+	// version is the build version, shown in the page footer.
+	"version": func() string { return buildinfo.Version },
 	// when formats a timestamp for display; the zero time is shown as "never".
 	"when": func(t time.Time) string {
 		if t.IsZero() {

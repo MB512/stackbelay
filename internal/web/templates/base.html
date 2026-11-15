@@ -33,6 +33,7 @@
     {{- if .Info}}<p class="info" role="status">{{.Info}}</p>{{end}}
     {{template "content" .}}
   </main>
+  {{- if .User}}<footer class="hint">StackVault {{version}}</footer>{{end}}
 </body>
 </html>
 {{- end}}

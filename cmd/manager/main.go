@@ -19,6 +19,7 @@ import (
 	_ "time/tzdata" // embeds the time zone database: TZ (schedules) works without /usr/share/zoneinfo
 
 	"github.com/MB512/stackvault/internal/auth"
+	"github.com/MB512/stackvault/internal/buildinfo"
 	"github.com/MB512/stackvault/internal/config"
 	"github.com/MB512/stackvault/internal/dispatch"
 	"github.com/MB512/stackvault/internal/docker"
@@ -115,7 +116,7 @@ func run(ctx context.Context, getenv func(string) string, readFile func(string) 
 		log.Error("starting manager", "error", err)
 		return 1
 	}
-	log.Info("manager listening", "addr", ln.Addr().String(), "stacks_root", cfg.StacksRoot, "data_dir", cfg.DataDir)
+	log.Info("manager listening", "version", buildinfo.Version, "addr", ln.Addr().String(), "stacks_root", cfg.StacksRoot, "data_dir", cfg.DataDir)
 	if cfg.AllowInsecureHTTP {
 		log.Warn("STACKVAULT_ALLOW_INSECURE_HTTP is set: logins over plain HTTP are accepted; use a TLS reverse proxy in production")
 	}
