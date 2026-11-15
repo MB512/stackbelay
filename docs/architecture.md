@@ -272,29 +272,48 @@ Restore option **image versions**:
   images (may pull newer ones).
 - `pinned`: use the repo digests from `metadata.txt`.
 
-How `pinned` works (the stack's own `compose.yml` is never modified):
+How `pinned` works (`jobs.Pipeline.preparePinning`; the stack's own
+`compose.yml` is never modified). Steps 1–3 run after the restore into the
+staging directory and **before the swap**, so any failure (no or invalid
+`metadata.txt`, an image that cannot be pulled, `COMPOSE_FILE` in `.env`)
+aborts the restore with the normal rollback: staging removed, the old stack
+started again.
 
-1. Parse `metadata.txt` from the restored directory.
-2. For each service with a repo digest: ensure the image is available
-   (already present locally, else `docker pull name@sha256:...`).
-3. Generate an override file `<job dir>/compose.pinned.yml`:
+1. Parse `metadata.txt` from the staging directory (`ParseMetadata`, every
+   field validated; repo digests must match the digest syntax).
+2. For each service with a repo digest: `docker.Client.EnsureImage` — keep
+   it if `docker image inspect` finds it, else `docker pull name@sha256:...`.
+   Services without a digest (built locally, never created) are logged as
+   not pinnable and use `compose.yml`.
+3. Generate an override file in the worker's temp directory (written as
+   JSON, which is valid YAML; removed after the job):
    ```yaml
    services:
      app:
        image: nextcloud@sha256:ab12...
        pull_policy: never   # already pulled in step 2
    ```
-4. Start with `docker compose -f compose.yml -f <job>/compose.pinned.yml up -d`
-   (the override file is passed by absolute path; the project directory stays
-   the stack directory).
+4. Start with `docker compose --project-directory <stack> --file <main>
+   [--file <override>] --file <pinned override> up -d --force-recreate`.
+   Passing `--file` disables compose's own file lookup, so the worker
+   repeats it: the main file is the first of `compose.yaml`, `compose.yml`;
+   the override the first of `compose.override.yml`, `compose.override.yaml`,
+   `docker-compose.override.yml`, `docker-compose.override.yaml`. A stack
+   whose `.env` sets `COMPOSE_FILE` cannot be pinned (the files are then
+   unknown).
+
+With "do not start" the option has no effect (nothing is pulled).
+UI: radio buttons "Image versions" on the restore page (default: tags);
+job option `pin_images`, worker flag `--pin-images`.
 
 Notes and limits (show them in the UI):
 
 - Services with `build:` and no repo digest cannot be pinned. They are rebuilt
   from the restored sources; base images may have changed. Warn per service.
 - The registry must still serve that digest. Registries can delete old
-  manifests. If a pull fails, offer: abort, or continue with `tags` for that
-  service.
+  manifests. If a pull fails the restore is aborted (rolled back); the user
+  can retry with `tags`. A per-service "continue with tags" is a possible
+  later refinement.
 - Private registries: the worker needs registry credentials (mount a Docker
   `config.json` read-only into the worker if required). Document this.
 - Compose `up -d` later, run manually with only `compose.yml`, will detect an
@@ -304,7 +323,7 @@ Notes and limits (show them in the UI):
 - Multi-arch: the repo digest recorded from `docker image inspect` identifies
   the manifest that was pulled; pulling by it yields the same platform content.
 - Also applies to cross-host migration: pinned is the recommended mode there.
-- Without `metadata.txt` (very old snapshots) the option is disabled.
+- Without `metadata.txt` (very old snapshots) a pinned restore fails before the swap (the UI cannot know in advance without reading the snapshot).
 
 ## Snapshot cache
 
@@ -530,7 +549,7 @@ requires restic >= 0.17.
 ```
 worker run <job-dir>
 worker backup  [--pre-stop] <stack>
-worker restore [--no-safety-snapshot] [--no-start] <stack> <snapshot-id>
+worker restore [--no-safety-snapshot] [--no-start] [--pin-images] <stack> <snapshot-id>
 ```
 
 `run` is the manager's interface (see "Job handoff"); `backup` and `restore`

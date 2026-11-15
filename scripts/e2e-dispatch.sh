@@ -210,6 +210,23 @@ fi
 c "$B$JOB" | grep -q 'Safety snapshot' || fail "no safety snapshot recorded"
 pass "safety snapshot recorded"
 
+step "restore with pinned image versions"
+DIGEST="$(awk -F'\t' '$1 == "app" { print $4 }' "$DIR/metadata.txt")"
+[[ "$DIGEST" == busybox@sha256:* ]] || fail "no repo digest for app in metadata.txt: '$DIGEST'"
+JOB="$(c -o /dev/null -w '%{redirect_url}' --data-urlencode "csrf_token=$T" -d "snapshot_id=$SNAP" \
+	-d safety_snapshot=on -d start=on -d images=pinned "$B/stacks/$STACK/restore")"
+JOB="${JOB#"$B"}"
+S="$(wait_job "$JOB")"
+[[ "$S" == succeeded ]] || fail "pinned restore $S: $(job_error "$JOB")"
+c "$B$JOB" | grep -q 'image versions pinned' || fail "job page does not show pinning"
+c "$B$JOB" | grep -q 'image pinned' || fail "job log lacks the pinned image"
+pass "pinned restore succeeded ($JOB)"
+CID="$(docker compose --project-directory "$DIR" ps -q app)"
+RUNNING="$(docker inspect --format '{{.Config.Image}}' "$CID")"
+[[ "$RUNNING" == "$DIGEST" ]] || fail "app runs '$RUNNING', want '$DIGEST'"
+grep -q 'image: busybox:1.36' "$DIR/compose.yml" || fail "compose.yml was changed"
+pass "app runs $DIGEST, compose.yml unchanged"
+
 step "cleanup and secrets"
 sleep 3
 LEFT=0
