@@ -16,12 +16,14 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	_ "time/tzdata" // embeds the time zone database: TZ (schedules) works without /usr/share/zoneinfo
 
 	"github.com/MB512/stackvault/internal/auth"
 	"github.com/MB512/stackvault/internal/config"
 	"github.com/MB512/stackvault/internal/dispatch"
 	"github.com/MB512/stackvault/internal/docker"
 	"github.com/MB512/stackvault/internal/restic"
+	"github.com/MB512/stackvault/internal/scheduler"
 	"github.com/MB512/stackvault/internal/secrets"
 	"github.com/MB512/stackvault/internal/snapshots"
 	"github.com/MB512/stackvault/internal/stacks"
@@ -88,8 +90,11 @@ func run(ctx context.Context, getenv func(string) string, readFile func(string) 
 		// instead of holding up the graceful shutdown.
 		Stopping: ctx.Done(),
 	}
+	var sched *scheduler.Scheduler
 	if disp != nil {
 		srv.Jobs = disp
+		sched = &scheduler.Scheduler{Store: st, Queue: disp, Logger: log}
+		srv.Schedules = sched
 	} else {
 		srv.JobsDisabledReason = "Backups and restores are unavailable: " + jobsErr.Error()
 	}
@@ -128,6 +133,10 @@ func run(ctx context.Context, getenv func(string) string, readFile func(string) 
 	go cleanupSessions(ctx, st, log)
 	if disp != nil {
 		go disp.Run(ctx)
+	}
+	if sched != nil {
+		log.Info("scheduler started", "time_zone", time.Now().Format("MST -07:00"))
+		go sched.Run(ctx)
 	}
 
 	select {
