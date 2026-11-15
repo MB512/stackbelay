@@ -1,9 +1,21 @@
 /* StackVault – minimal, dependency-free styles. */
+/* Colors are variables only. Light is the default; dark follows the
+   browser/OS setting (prefers-color-scheme). color-scheme makes the
+   browser draw form controls and scrollbars to match. */
 :root {
-  --fg: #1d2127; --muted: #5d6673; --bg: #f6f7f9; --card: #fff;
-  --accent: #2357d9; --error: #b3261e; --warn: #8a5a00; --border: #d9dde3;
+  color-scheme: light dark;
+  --fg: #1d2127; --muted: #5d6673; --bg: #f6f7f9; --card: #fff; --input: #fff;
+  --accent: #2357d9; --on-accent: #fff; --error: #b3261e; --warn: #8a5a00; --border: #d9dde3;
+  --ok-bg: #dcefe0; --ok-fg: #1d6b2f; --warn-bg: #fbecc8; --err-bg: #f9dedc; --run-bg: #dbe5fb;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color: var(--fg); background: var(--bg);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fg: #e3e7ed; --muted: #9aa4b2; --bg: #14171c; --card: #1c2027; --input: #12151a;
+    --accent: #7ea4ff; --on-accent: #0d1424; --error: #f28b82; --warn: #e8b44c; --border: #343a44;
+    --ok-bg: #1f3a27; --ok-fg: #8fd6a2; --warn-bg: #3d3216; --err-bg: #47201d; --run-bg: #1d2b4a;
+  }
 }
 body { margin: 0; }
 header {
@@ -21,10 +33,11 @@ a { color: var(--accent); }
   background: var(--card); border: 1px solid var(--border); border-radius: 8px;
 }
 label { display: grid; gap: .3rem; font-size: .95rem; }
+input, textarea { background: var(--input); color: var(--fg); }
 input { padding: .45rem .55rem; border: 1px solid var(--border); border-radius: 5px; font: inherit; }
 button {
   padding: .45rem .9rem; border: 0; border-radius: 5px; background: var(--accent);
-  color: #fff; font: inherit; cursor: pointer;
+  color: var(--on-accent); font: inherit; cursor: pointer;
 }
 header button { background: transparent; color: var(--accent); padding: 0; }
 .error { color: var(--error); font-weight: 600; }
@@ -47,8 +60,8 @@ tr.missing td { color: var(--muted); }
   display: inline-block; padding: .05rem .45rem; border-radius: 999px; font-size: .75rem;
   font-weight: 600; background: var(--border); color: var(--fg); vertical-align: middle;
 }
-.badge.ok { background: #dcefe0; color: #1d6b2f; }
-.badge.warn { background: #fbecc8; color: var(--warn); }
+.badge.ok { background: var(--ok-bg); color: var(--ok-fg); }
+.badge.warn { background: var(--warn-bg); color: var(--warn); }
 .muted { color: var(--muted); }
 button.secondary { background: transparent; color: var(--accent); border: 1px solid var(--border); }
 form.inline { display: flex; gap: .8rem; align-items: center; }
@@ -85,13 +98,15 @@ form.init { border-color: var(--accent); }
 form.init p { margin: 0; }
 
 /* Jobs. */
-.badge.err { background: #f9dedc; color: var(--error); }
-.badge.run { background: #dbe5fb; color: var(--accent); }
+.badge.err { background: var(--err-bg); color: var(--error); }
+.badge.run { background: var(--run-bg); color: var(--accent); }
 table.details { width: auto; }
 table.details th { width: 10rem; }
+/* The job log is a dark terminal in both modes; its colors are fixed. */
 .log {
   background: #11151b; color: #d7dde5; border-radius: 8px; padding: .8rem 1rem; overflow-x: auto;
   font: .82rem/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; max-height: 70vh; overflow-y: auto;
+  border: 1px solid var(--border);
 }
 .log .line { white-space: pre-wrap; word-break: break-word; }
 .log .ts { color: #8792a2; }

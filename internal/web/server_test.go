@@ -337,3 +337,18 @@ func TestHealthzStaticAndHeaders(t *testing.T) {
 	_ = e.st.Close()
 	expect(t, e.get("/healthz"), http.StatusServiceUnavailable, "")
 }
+
+// Dark mode follows the browser setting: the page announces both schemes
+// and the stylesheet has a dark color set.
+func TestDarkModeFollowsBrowser(t *testing.T) {
+	e := newEnv(t, true, true)
+	if r := e.get("/login"); !strings.Contains(r.body, `<meta name="color-scheme" content="light dark">`) {
+		t.Errorf("login page lacks the color-scheme meta tag:\n%s", r.body)
+	}
+	css := e.get("/static/style.css").body
+	for _, want := range []string{"color-scheme: light dark", "@media (prefers-color-scheme: dark)"} {
+		if !strings.Contains(css, want) {
+			t.Errorf("style.css lacks %q", want)
+		}
+	}
+}

@@ -395,6 +395,10 @@ stable layout and users see what exists. Only what a user has no
 permission for (admin tabs, backup/restore controls without the right) is
 hidden.
 
+Light and dark mode follow the browser/OS setting (`prefers-color-scheme`,
+no switch in the UI). All colors in `static/style.css` are CSS variables
+with a light and a dark set; the job log is a dark panel in both modes.
+
 | Route | Who | |
 |---|---|---|
 | `GET /` | logged in | stacks the user may view (admins: all) |
