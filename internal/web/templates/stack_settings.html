@@ -37,15 +37,18 @@
     <div><button type="submit">{{if .Exists}}Save repository{{else}}Add repository{{end}}</button>
       <span class="hint">Saving checks access by listing the snapshots.</span></div>
   </form>
-  {{- if .OfferInit}}
-  <form method="post" action="/stacks/{{$.Data.Stack.Name}}/repository/init" class="card wide init">
+  <form method="post" action="/stacks/{{$.Data.Stack.Name}}/repository/init" class="card wide{{if .OfferInit}} init{{end}}">
     <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+    {{- if .OfferInit}}
     <p>Create a new, empty restic repository at <code>{{.Location}}</code> with the stored password?
       This also works with an append-only rest-server. restic refuses if a repository already exists there.</p>
     <p class="hint">Keep the repository password safe: without it the backups cannot be read.</p>
-    <div><button type="submit">Initialize repository</button></div>
+    {{- else}}
+    <p class="hint">Initialize repository: creates a new, empty restic repository at the stored location.
+      Available when saving the repository reports that no repository exists there.</p>
+    {{- end}}
+    <div><button type="submit"{{if not .OfferInit}} disabled{{end}}>Initialize repository</button></div>
   </form>
-  {{- end}}
   {{- end}}
 </section>
 

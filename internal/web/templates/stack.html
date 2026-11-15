@@ -15,16 +15,17 @@
   {{- end}}
 </section>
 
-{{- if and .Repo .CanBackup}}
+{{- if .CanBackup}}
 <section>
   <h2>Backup</h2>
   <form method="post" action="/stacks/{{.Stack.Name}}/backup" class="inline">
     <input type="hidden" name="csrf_token" value="{{.CSRF}}">
-    <button type="submit"{{if .JobsUnavailable}} disabled{{end}}>Back up now</button>
+    <button type="submit"{{if or .JobsUnavailable (not .Repo)}} disabled{{end}}>Back up now</button>
     <label class="check"><input type="checkbox" name="pre_stop">
       Snapshot before stopping (shorter downtime for large stacks)</label>
   </form>
-  {{- with .JobsUnavailable}}<p class="hint">{{.}}</p>{{end}}
+  {{- if not .Repo}}<p class="hint">Not possible yet: the stack has no repository.</p>
+  {{- else}}{{with .JobsUnavailable}}<p class="hint">{{.}}</p>{{end}}{{end}}
   <p class="hint">The stack is stopped during the backup and started again afterwards.</p>
 </section>
 {{- end}}
@@ -36,7 +37,7 @@
 </section>
 {{- end}}
 
-{{- if .Repo}}{{template "snapshots" .}}{{end}}
+{{template "snapshots" .}}
 {{- end}}
 {{end}}
 
@@ -51,9 +52,9 @@
           hx-post="/stacks/{{.Stack.Name}}/snapshots/refresh" hx-target="#snapshots" hx-swap="outerHTML"
           hx-disabled-elt="find button">
       <input type="hidden" name="csrf_token" value="{{.CSRF}}">
-      <button type="submit" class="secondary">Refresh</button>
+      <button type="submit" class="secondary"{{if not .Repo}} disabled{{end}}>Refresh</button>
     </form>
-    <span class="hint">Last refreshed: {{when .Repo.SnapshotsRefreshedAt}}</span>
+    {{- with .Repo}}<span class="hint">Last refreshed: {{when .SnapshotsRefreshedAt}}</span>{{end}}
   </div>
   {{- if .RefreshError}}<p class="error" role="alert">{{.RefreshError}}</p>{{end}}
   {{- if .OtherSnapshots}}
@@ -72,14 +73,16 @@
         <td>{{range .Tags}}<span class="badge">{{.}}</span> {{end}}</td>
         <td>{{.Hostname}}{{if .Missing}} <span class="badge warn" title="No longer in the repository">removed</span>{{end}}</td>
         {{- if $.CanRestore}}
-        <td>{{if not .Missing}}<a href="/stacks/{{$.Stack.Name}}/restore?snapshot={{.ID}}">Restore…</a>{{end}}</td>
+        <td>{{if .Missing}}<span class="muted" title="No longer in the repository">Restore…</span>
+          {{- else}}<a href="/stacks/{{$.Stack.Name}}/restore?snapshot={{.ID}}">Restore…</a>{{end}}</td>
         {{- end}}
       </tr>
       {{- end}}
     </tbody>
   </table>
   {{- else}}
-  <p class="hint">No snapshots{{if .Repo.SnapshotsRefreshedAt.IsZero}} cached yet. Use Refresh to load the list{{end}}.</p>
+  <p class="hint">{{if not .Repo}}No snapshots: the stack has no repository.
+    {{- else}}No snapshots{{if .Repo.SnapshotsRefreshedAt.IsZero}} cached yet. Use Refresh to load the list{{end}}.{{end}}</p>
   {{- end}}
 </section>
 {{end}}

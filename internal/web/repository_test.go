@@ -319,8 +319,7 @@ func TestInitRepository(t *testing.T) {
 	e.snaps.err = fmt.Errorf("listing snapshots: %w", resticExitError(t, 10, "Fatal: repository does not exist: unable to open config file"))
 	r := post("/stacks/web/repository", url.Values{"location": {"rest:https://u:rest-pw@backup.example/web-2027"}, "password": {"repo-pw"}})
 	expect(t, r, http.StatusOK, "")
-	if !strings.Contains(r.body, "There is no restic repository at this location yet") ||
-		!strings.Contains(r.body, `action="/stacks/web/repository/init"`) {
+	if !strings.Contains(r.body, "There is no restic repository at this location yet") || !initEnabled(r.body) {
 		t.Fatalf("init not offered:\n%s", r.body)
 	}
 
@@ -329,7 +328,8 @@ func TestInitRepository(t *testing.T) {
 	e.snaps.err = nil
 	r = post("/stacks/web/repository/init", url.Values{})
 	expect(t, r, http.StatusOK, "")
-	if !strings.Contains(r.body, "Repository initialized. restic found 0 snapshots.") || strings.Contains(r.body, "repository/init") {
+	if !strings.Contains(r.body, "Repository initialized. restic found 0 snapshots.") || initEnabled(r.body) ||
+		!strings.Contains(r.body, "disabled>Initialize repository") {
 		t.Fatalf("after init:\n%s", r.body)
 	}
 	want := []restic.Repo{{Location: "rest:https://backup.example/web-2027", Env: []string{
@@ -341,7 +341,7 @@ func TestInitRepository(t *testing.T) {
 	// Other errors (wrong password, network) do not offer init.
 	e.snaps.err = resticExitError(t, 12, "Fatal: wrong password or no key found")
 	r = post("/stacks/web/repository", url.Values{"location": {"/srv/restic/web"}})
-	if strings.Contains(r.body, "repository/init") || !strings.Contains(r.body, "wrong password") {
+	if initEnabled(r.body) || !strings.Contains(r.body, "wrong password") {
 		t.Fatalf("init offered for a wrong password:\n%s", r.body)
 	}
 
@@ -382,4 +382,11 @@ func TestInitRepositoryAdminOnly(t *testing.T) {
 	if len(init.repos) != 0 {
 		t.Fatal("init ran for a non-admin")
 	}
+}
+
+// initEnabled reports whether the page has an enabled "Initialize
+// repository" button (it is always shown, but disabled unless restic
+// reported that no repository exists at the location).
+func initEnabled(body string) bool {
+	return strings.Contains(body, `<button type="submit">Initialize repository</button>`)
 }

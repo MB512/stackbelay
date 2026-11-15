@@ -386,6 +386,13 @@ HTMX is used for small in-page updates; every HTMX form is also a normal
 form with `method`/`action`, so it works without JavaScript. An HTMX request
 (header `HX-Request: true`) gets an HTML fragment instead of a redirect.
 
+Actions that are not possible in the current state (no repository yet, jobs
+unavailable, nothing to initialize, a snapshot removed from the repository)
+are shown **disabled** with a short reason, not hidden, so pages keep a
+stable layout and users see what exists. Only what a user has no
+permission for (admin tabs, backup/restore controls without the right) is
+hidden.
+
 | Route | Who | |
 |---|---|---|
 | `GET /` | logged in | stacks the user may view (admins: all) |

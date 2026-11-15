@@ -283,3 +283,35 @@ func auditActions(t *testing.T, st *store.Store) map[string]int {
 }
 
 func itoa(n int64) string { return strconv.FormatInt(n, 10) }
+
+// Unavailable actions are shown disabled, not hidden (only missing
+// permissions hide them).
+func TestBackupsTabWithoutRepositoryShowsDisabledActions(t *testing.T) {
+	e := newEnv(t, true, true)
+	if err := e.st.SyncStacks(context.Background(), []string{"web"}); err != nil {
+		t.Fatal(err)
+	}
+	e.loginAdmin()
+	r := e.get("/stacks/web")
+	expect(t, r, http.StatusOK, "")
+	for _, want := range []string{
+		`disabled>Back up now</button>`,
+		`disabled>Refresh</button>`,
+		"the stack has no repository",
+	} {
+		if !strings.Contains(r.body, want) {
+			t.Errorf("Backups tab lacks %q:\n%s", want, r.body)
+		}
+	}
+	// Without the backup right, the Backup section stays hidden.
+	alice, aliceID := e.createUser("alice")
+	web, _ := e.st.StackByName(context.Background(), "web")
+	if err := e.st.SetPermission(context.Background(), store.Permission{UserID: aliceID, StackID: web.ID, CanRestore: true}); err != nil {
+		t.Fatal(err)
+	}
+	r = e.do(alice, http.MethodGet, "/stacks/web", nil, nil)
+	expect(t, r, http.StatusOK, "")
+	if strings.Contains(r.body, "Back up now") || !strings.Contains(r.body, `disabled>Refresh</button>`) {
+		t.Errorf("view of a user without backup right:\n%s", r.body)
+	}
+}
