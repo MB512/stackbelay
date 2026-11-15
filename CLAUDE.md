@@ -120,10 +120,15 @@ Run `go vet` and `go test ./... -race` before every commit.
 3. **M3 Manager**: auth, RBAC, spawn worker container, job status, live logs
    (SSE, tail of job log files).
 4. **M4 Scheduler**: cron per stack, queue/locking per stack.
-5. **M5 UI polish + migration**: dashboards, snapshot browser, import of
-   stacks from other hosts (restore into a not-yet-existing stack, stack name
-   must stay identical), image pinning on restore via `metadata.txt` digests.
-6. **M6 Release**: Dockerfile, GHCR publish via GitHub Actions, README, LICENSE.
+5. **M5 UI polish**: image pinning on restore via `metadata.txt` digests
+   (done), unavailable actions shown disabled (done). Dashboards and a
+   snapshot browser are not part of 0.1.
+6. **M6 Release 0.1**: Dockerfile, GHCR publish via GitHub Actions, README, LICENSE.
+
+After 0.1, the first planned feature is **restore from a different host**
+(stack migration: import of stacks from other hosts, restore into a
+not-yet-existing stack, stack name must stay identical, source host
+selection). See "Planned features" in `docs/architecture.md`.
 
 ## Out of scope (for now)
 

@@ -354,6 +354,8 @@ summary if available).
 
 ## Restore from another host (stack migration)
 
+**Not implemented; planned as the first feature after release 0.1.**
+
 Use case: move a single stack from host A to host B (or rebuild a host).
 
 - Host B is configured with the same repository (location + credentials).
@@ -573,14 +575,14 @@ The repository always comes from the environment:
 | `RESTIC_REPOSITORY` | repository (required) |
 | `RESTIC_PASSWORD_FILE` / `RESTIC_PASSWORD` | one is required |
 | backend variables (`AWS_*`, `B2_*`, `AZURE_*`, `GOOGLE_*`, `RESTIC_REST_*`) | passed to restic; values are redacted from output |
+| `STACKVAULT_JOB_TIMEOUT` | hard job timeout, Go duration, default `6h` |
+| `STACKVAULT_LOG_LEVEL` | `debug`, `info`, `warn`, `error` |
 
 restic never inherits the full process environment: it gets an allow-list
 (`PATH`, `HOME`, `TMPDIR`, proxy/CA settings, `RESTIC_CACHE_DIR`, ...), the
 repository location and the repository's variables, which must be in
 `restic.BackendEnvVars`. `RESTIC_PASSWORD_COMMAND` is intentionally not
 supported (it would turn configuration into command execution).
-| `STACKVAULT_JOB_TIMEOUT` | hard job timeout, Go duration, default `6h` |
-| `STACKVAULT_LOG_LEVEL` | `debug`, `info`, `warn`, `error` |
 
 End-to-end smoke test against the local Docker daemon and a temporary local
 repository: `scripts/e2e-local.sh` (`KEEP=1` keeps the temp directory and
@@ -589,13 +591,21 @@ with real worker containers through the web UI (repository init, backup,
 queueing, restore); it builds a throwaway worker image from
 `scripts/e2e.Dockerfile`.
 
-Not yet implemented (M4/M5): restore into a not-yet-existing stack
-(import), image pinning.
+Not yet implemented: restore into a not-yet-existing stack (import), see
+"Restore from another host" and "Planned features".
 
 ## Planned features (not implemented)
 
 Ideas agreed on for later releases. Design notes are a starting point, not
 a commitment.
+
+### First after 0.1: restore from a different host
+
+Stack migration as described in "Restore from another host (stack
+migration)" together with "Source host for migration" below: import a
+stack that does not exist on this host yet, list another host's snapshots
+of the same stack name, restore into a new stack directory. Deliberately
+not part of release 0.1.
 
 ### Time placeholders in the repository location + auto-init
 
