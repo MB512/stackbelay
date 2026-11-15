@@ -45,6 +45,10 @@ func TestSchedules(t *testing.T) {
 		t.Errorf("schedule = %+v, want %+v", got, want)
 	}
 
+	if byID, err := s.ScheduleByID(ctx, w1); err != nil || byID != want {
+		t.Errorf("ScheduleByID = %+v, %v; want %+v", byID, err, want)
+	}
+
 	// A schedule can only be changed through its own stack.
 	if err := s.SetScheduleEnabled(ctx, db.ID, w1, false); !errors.Is(err, ErrNotFound) {
 		t.Errorf("enable via other stack: err = %v, want ErrNotFound", err)
@@ -69,5 +73,8 @@ func TestSchedules(t *testing.T) {
 	}
 	if list, err = s.ListSchedules(ctx, web.ID); err != nil || len(list) != 0 {
 		t.Errorf("web schedules after delete = %+v, %v", list, err)
+	}
+	if _, err := s.ScheduleByID(ctx, w1); !errors.Is(err, ErrNotFound) {
+		t.Errorf("ScheduleByID after delete: err = %v, want ErrNotFound", err)
 	}
 }

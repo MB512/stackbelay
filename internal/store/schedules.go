@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 )
 
@@ -51,6 +53,20 @@ func (s *Store) ListSchedules(ctx context.Context, stackID int64) ([]Schedule, e
 		out = append(out, sc)
 	}
 	return out, rows.Err()
+}
+
+// ScheduleByID returns a schedule or ErrNotFound.
+func (s *Store) ScheduleByID(ctx context.Context, id int64) (Schedule, error) {
+	var sc Schedule
+	err := s.db.QueryRowContext(ctx, scheduleSelect+`WHERE sc.id = ?`, id).
+		Scan(&sc.ID, &sc.StackID, &sc.StackName, &sc.CronExpr, &sc.PreStop, &sc.Enabled)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Schedule{}, fmt.Errorf("schedule %d: %w", id, ErrNotFound)
+	}
+	if err != nil {
+		return Schedule{}, fmt.Errorf("loading schedule %d: %w", id, err)
+	}
+	return sc, nil
 }
 
 // SetScheduleEnabled enables or disables a schedule of a stack. It returns
