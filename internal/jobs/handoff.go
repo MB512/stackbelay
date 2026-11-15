@@ -80,6 +80,7 @@ type Spec struct {
 	SnapshotID         string `json:"snapshot_id,omitempty"`
 	SkipSafetySnapshot bool   `json:"skip_safety_snapshot,omitempty"`
 	NoStart            bool   `json:"no_start,omitempty"`
+	PinImages          bool   `json:"pin_images,omitempty"` // see RestoreOptions.PinImages
 	// CarryOverJobs is set when the manager restores its own stack: the
 	// manager's jobs directory, relative to the stack directory (e.g.
 	// "data/jobs"). See RestoreOptions.CarryOver.
@@ -110,7 +111,7 @@ func (s Spec) Validate() error {
 	}
 	switch s.Type {
 	case TypeBackup:
-		if s.SnapshotID != "" || s.SkipSafetySnapshot || s.NoStart || s.CarryOverJobs != "" {
+		if s.SnapshotID != "" || s.SkipSafetySnapshot || s.NoStart || s.PinImages || s.CarryOverJobs != "" {
 			return errors.New("restore options set on a backup job")
 		}
 	case TypeRestore:

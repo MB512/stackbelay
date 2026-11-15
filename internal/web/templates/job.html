@@ -34,7 +34,7 @@
       <tr><th>Finished</th><td>{{if .Job.FinishedAt.IsZero}}<span class="muted">–</span>{{else}}{{when .Job.FinishedAt}}{{end}}</td></tr>
       {{- with .Job.Options}}
       {{- if .SnapshotID}}<tr><th>Restoring</th><td><code>{{printf "%.8s" .SnapshotID}}</code>
-        {{- if .SkipSafetySnapshot}}, without safety snapshot{{end}}{{if .NoStart}}, stack not started afterwards{{end}}</td></tr>{{end}}
+        {{- if .SkipSafetySnapshot}}, without safety snapshot{{end}}{{if .NoStart}}, stack not started afterwards{{end}}{{if .PinImages}}, image versions pinned{{end}}</td></tr>{{end}}
       {{- if .PreStop}}<tr><th>Options</th><td>snapshot before stopping</td></tr>{{end}}
       {{- end}}
       {{- with .Job.Snapshot}}<tr><th>Snapshot</th><td><code>{{printf "%.8s" .}}</code></td></tr>{{end}}

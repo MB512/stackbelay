@@ -73,6 +73,8 @@ textarea {
   padding: .45rem .55rem; border: 1px solid var(--border); border-radius: 5px;
   font: .9rem ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; resize: vertical;
 }
+fieldset { display: grid; gap: .4rem; margin: 0; padding: .6rem .8rem; border: 1px solid var(--border); border-radius: 5px; }
+legend { font-size: .95rem; padding: 0 .3rem; }
 .card.wide p.hint { margin: -.5rem 0 0; }
 .section-head { display: flex; align-items: center; gap: .9rem; flex-wrap: wrap; margin-top: 1.8rem; }
 .section-head h2 { margin: 0; }

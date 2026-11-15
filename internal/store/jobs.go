@@ -24,6 +24,7 @@ type JobOptions struct {
 	SnapshotID         string `json:"snapshot_id,omitempty"`          // restore: snapshot to restore
 	SkipSafetySnapshot bool   `json:"skip_safety_snapshot,omitempty"` // restore
 	NoStart            bool   `json:"no_start,omitempty"`             // restore
+	PinImages          bool   `json:"pin_images,omitempty"`           // restore: image versions from metadata.txt
 }
 
 // JobResult holds results besides the main snapshot, stored as JSON.

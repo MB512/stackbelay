@@ -210,7 +210,7 @@ func (d *Dispatcher) reconcileDir(ctx context.Context, id string, importing bool
 	j := store.Job{
 		ID: id, StackID: st.ID, StackName: st.Name, Type: spec.Type, Trigger: spec.Trigger, QueuedAt: queued,
 		Options: store.JobOptions{PreStop: spec.PreStop, SnapshotID: spec.SnapshotID,
-			SkipSafetySnapshot: spec.SkipSafetySnapshot, NoStart: spec.NoStart},
+			SkipSafetySnapshot: spec.SkipSafetySnapshot, NoStart: spec.NoStart, PinImages: spec.PinImages},
 	}
 	if j.Trigger == "" {
 		j.Trigger = store.TriggerManual
@@ -306,7 +306,7 @@ func (d *Dispatcher) start(ctx context.Context, j store.Job) {
 	spec := jobs.Spec{
 		ID: j.ID, Type: j.Type, Stack: j.StackName,
 		PreStop: j.Options.PreStop, SnapshotID: j.Options.SnapshotID,
-		SkipSafetySnapshot: j.Options.SkipSafetySnapshot, NoStart: j.Options.NoStart,
+		SkipSafetySnapshot: j.Options.SkipSafetySnapshot, NoStart: j.Options.NoStart, PinImages: j.Options.PinImages,
 		Trigger: j.Trigger, Requester: j.Requester,
 	}
 	if j.Type == jobs.TypeRestore {

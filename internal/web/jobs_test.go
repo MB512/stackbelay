@@ -187,12 +187,13 @@ func TestRestoreJob(t *testing.T) {
 	// Bob tries to skip the safety snapshot: ignored.
 	token := csrfOf(e, bob, "/stacks/web")
 	r = e.do(bob, http.MethodPost, "/stacks/web/restore",
-		url.Values{"csrf_token": {token}, "snapshot_id": {"aaaaaaaa11111111"}, "start": {"on"}}, nil)
+		url.Values{"csrf_token": {token}, "snapshot_id": {"aaaaaaaa11111111"}, "start": {"on"}, "images": {"pinned"}}, nil)
 	if r.status != http.StatusSeeOther {
 		t.Fatalf("restore: %d\n%s", r.status, r.body)
 	}
 	j, _ := e.st.JobByID(context.Background(), strings.TrimPrefix(r.location, jobLocation))
-	if j.Type != jobs.TypeRestore || j.Options.SnapshotID != "aaaaaaaa11111111" || j.Options.SkipSafetySnapshot || j.Options.NoStart {
+	if j.Type != jobs.TypeRestore || j.Options.SnapshotID != "aaaaaaaa11111111" || j.Options.SkipSafetySnapshot || j.Options.NoStart ||
+		!j.Options.PinImages {
 		t.Fatalf("restore job: %+v", j.Options)
 	}
 	expect(t, e.do(bob, http.MethodPost, "/stacks/web/restore",
@@ -204,7 +205,7 @@ func TestRestoreJob(t *testing.T) {
 	}
 	r = e.post("/stacks/web/restore", url.Values{"csrf_token": {e.csrf("/stacks/web")}, "snapshot_id": {"aaaaaaaa11111111"}})
 	j, _ = e.st.JobByID(context.Background(), strings.TrimPrefix(r.location, jobLocation))
-	if !j.Options.SkipSafetySnapshot || !j.Options.NoStart {
+	if !j.Options.SkipSafetySnapshot || !j.Options.NoStart || j.Options.PinImages {
 		t.Fatalf("admin restore options: %+v", j.Options)
 	}
 }

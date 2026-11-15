@@ -151,11 +151,12 @@ func (s *Server) startRestore(w http.ResponseWriter, r *http.Request) {
 	opts := store.JobOptions{
 		SnapshotID: sn.ID,
 		NoStart:    r.PostFormValue("start") != "on",
+		PinImages:  r.PostFormValue("images") == "pinned",
 		// The safety snapshot is the way back if the restore was a mistake.
 		SkipSafetySnapshot: authFrom(r.Context()).User.IsAdmin && r.PostFormValue("safety_snapshot") != "on",
 	}
-	s.submitJob(w, r, st, jobs.TypeRestore, opts, fmt.Sprintf("restore of snapshot %s, safety snapshot: %t, start: %t",
-		sn.ShortID, !opts.SkipSafetySnapshot, !opts.NoStart))
+	s.submitJob(w, r, st, jobs.TypeRestore, opts, fmt.Sprintf("restore of snapshot %s, safety snapshot: %t, start: %t, pinned images: %t",
+		sn.ShortID, !opts.SkipSafetySnapshot, !opts.NoStart, opts.PinImages))
 }
 
 // loadJob resolves the job in the URL and checks that the user may view

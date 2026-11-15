@@ -21,6 +21,17 @@
   <p class="hint">The current state is backed up first (safety snapshot).</p>
   {{- end}}
   <label class="check"><input type="checkbox" name="start" checked> Start the stack after restoring</label>
+  <fieldset>
+    <legend>Image versions</legend>
+    <label class="check"><input type="radio" name="images" value="tags" checked>
+      As in <code>compose.yml</code> (tags such as <code>:latest</code> may now point to newer images)</label>
+    <label class="check"><input type="radio" name="images" value="pinned">
+      As at backup time (pinned by digest; pulled if missing)</label>
+    <p class="hint">Pinning uses the image digests recorded in the snapshot's <code>metadata.txt</code>. Services built locally
+      cannot be pinned and use <code>compose.yml</code>. If a pinned image can no longer be pulled, the restore is aborted and
+      the current stack is started again. <code>compose.yml</code> is not changed: a later <code>docker compose up</code>
+      uses the tags again.</p>
+  </fieldset>
   <div><button type="submit"{{if $.Error}} disabled{{end}}>Restore this snapshot</button></div>
 </form>
 {{- end}}
