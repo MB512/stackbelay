@@ -17,7 +17,8 @@ attackers reaching the UI, a leaked database file.
    commands use `exec.CommandContext` with argument lists, never a shell.
 2. **Input validation.** Stack names must match the discovered set. Snapshot IDs
    must match `^[0-9a-f]{8,64}$` and are verified against `restic snapshots`.
-   Cron expressions are parsed and validated before saving.
+   Cron expressions are parsed and validated before saving (see
+   "Scheduler" in architecture.md); the parser runs with a recover guard.
 3. **Docker access.** Only the manager spawns workers, from a fixed template
    (image, mounts, labels, command). Users cannot influence mounts, image,
    entrypoint or environment (see "Dispatcher" in architecture.md). Job
@@ -69,8 +70,8 @@ attackers reaching the UI, a leaked database file.
    404 for stacks the user may not view. Admin-only routes are grouped
    behind `requireAdmin`. Admins cannot change their own flags in the UI,
    and the store refuses changes that leave no active admin.
-9. **Audit log.** Login, failed login, job creation, restore, permission and
-   repository changes. No secrets in entries.
+9. **Audit log.** Login, failed login, job creation (manual and scheduled),
+   restore, permission, schedule and repository changes. No secrets in entries.
 10. **TLS.** The app speaks plain HTTP and is meant to run behind a reverse
     proxy that terminates TLS. Document this prominently. Offer an option to
     refuse login over non-HTTPS unless explicitly allowed.

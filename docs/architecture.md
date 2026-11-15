@@ -70,6 +70,7 @@ compose, so they are never affected by stopping a stack.
 | `STACKVAULT_WORKER_IMAGE` | image for worker containers, default: the manager's own image |
 | `STACKVAULT_MAX_JOBS` | jobs running at the same time across all stacks, default `1` |
 | `STACKVAULT_LOG_LEVEL` | `debug`, `info`, `warn`, `error` |
+| `TZ` | time zone of the cron schedules (e.g. `Europe/Berlin`), default UTC in most images; the zone database is built into the binary |
 
 The database file is created with mode 0600. `/healthz` checks the database
 and is meant for the container health check. Stacks are discovered at
@@ -377,11 +378,14 @@ form with `method`/`action`, so it works without JavaScript. An HTMX request
 | `GET /jobs/{id}/events` | view right on the job's stack | live stream of the job (SSE), see "Live logs" |
 | `POST /jobs/{id}/cancel` | backup/restore right (by job type) | cancel a queued or running job |
 | `POST /stacks/{name}/snapshots/refresh` | view right | refresh the snapshot cache (read-only restic; at most once per 10 s per stack; HTMX: returns the snapshot section) |
-| `GET /stacks/{name}/settings` | admin | "Settings" tab: repository, enable/disable, per-user permissions |
+| `GET /stacks/{name}/settings` | admin | "Settings" tab: repository, schedules with next run, enable/disable, per-user permissions |
 | `POST /stacks/{name}/repository` | admin | create/update the repository, then refresh the snapshot cache as an access check |
 | `POST /stacks/{name}/repository/init` | admin | `restic init` at the stored location (offered only when no repository exists there) |
 | `POST /stacks/{name}/permissions` | admin | set one user's backup/restore right (HTMX: returns the table row) |
 | `POST /stacks/{name}/enabled` | admin | enable/disable the stack for scheduled backups |
+| `POST /stacks/{name}/schedules` | admin | add a schedule (cron expression, pre-stop option); at most 20 per stack |
+| `POST /stacks/{name}/schedules/{id}/enabled` | admin | enable/disable one schedule |
+| `POST /stacks/{name}/schedules/{id}/delete` | admin | delete one schedule |
 | `GET/POST /admin/users` | admin | list users, create a user with a generated one-time password |
 | `POST /admin/users/{id}` | admin | set admin/disabled flags (not on one's own account) |
 | `POST /admin/users/{id}/password` | admin | generate a new password (must be changed, sessions end) |
@@ -448,9 +452,32 @@ redacted before writing).
 
 ## Scheduler
 
-`robfig/cron` in the manager. A schedule only creates a `queued` job; execution
-always goes through the same queue and worker path as manual runs. Missed runs
-(manager down) are not replayed by default; configurable later.
+`internal/scheduler`, using `robfig/cron/v3` in the manager. A schedule only
+creates a `queued` backup job (trigger `schedule`, no requesting user);
+execution always goes through the same queue, per-stack lock and worker path
+as manual runs.
+
+- Expressions: the standard 5 fields (minute hour day-of-month month
+  day-of-week) or descriptors (`@daily`, `@weekly`, `@every 6h`, ...).
+  `scheduler.Parse` validates them before saving: no seconds field, no
+  per-schedule `CRON_TZ=`/`TZ=` prefix, `@every` at least 1 minute, at most
+  100 characters, and the expression must match some date. Expressions are
+  stored normalized (single spaces).
+- Time zone: the manager's local zone (`TZ`). The UI shows times in UTC and
+  names the manager's zone next to the schedule form.
+- Loading: `Scheduler.Run` loads all enabled schedules at start; the web
+  handlers call `Reload` after every change, which replaces all cron entries.
+- Firing (`Scheduler.Fire`): re-reads the schedule and its stack, skips it if
+  either was disabled (or the schedule deleted) since the last reload, then
+  submits the backup. If a backup of the stack is already queued, the run is
+  skipped (logged); a running backup does not block queueing the next one.
+  Audit entry `job.create` without user. A stack without repository or
+  directory is not special-cased: the job is queued and fails visibly
+  (the Settings tab warns about schedules without a repository).
+- Missed runs (manager down, e.g. during its own backup) are not replayed.
+- Disabling a stack skips all its schedules; manual jobs stay possible.
+- The scheduler runs only if the dispatcher could be created; otherwise
+  schedules can still be edited and take effect after a restart.
 
 ## Stack discovery
 
