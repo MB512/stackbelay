@@ -83,5 +83,5 @@ attackers reaching the UI, a leaked database file.
 
 ## Reporting vulnerabilities
 
-Provide `SECURITY.md` in the repository with a private contact (GitHub private
-vulnerability reporting) before the first release.
+See `SECURITY.md`: reports go through GitHub private vulnerability
+reporting (must be enabled in the repository settings).

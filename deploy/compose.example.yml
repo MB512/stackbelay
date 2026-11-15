@@ -1,0 +1,54 @@
+# Example: StackVault as a stack of its own, so it can back up (and restore)
+# itself like any other stack.
+#
+# Layout on the host (STACKS_ROOT = /home/docker in this example):
+#
+#   /home/docker/stackvault/compose.yml   <- this file
+#   /home/docker/stackvault/data/         <- database and job files (part of
+#                                            the stackvault stack's backups)
+#   /home/docker/<other stacks>/compose.yml
+#   /etc/stackvault/secret.key            <- outside STACKS_ROOT, NOT backed up
+#
+# Create the key once and keep a copy somewhere safe (without it the stored
+# repository passwords cannot be decrypted):
+#
+#   sudo install -d -m 700 /etc/stackvault
+#   openssl rand -base64 32 | sudo tee /etc/stackvault/secret.key >/dev/null
+#   sudo chmod 600 /etc/stackvault/secret.key
+#
+# The initial admin password is printed to the log on the first start:
+#
+#   docker compose logs stackvault | grep "INITIAL ADMIN PASSWORD"
+#
+# StackVault speaks plain HTTP. Put a TLS reverse proxy in front of it; the
+# port is therefore published on 127.0.0.1 only.
+
+services:
+  stackvault:
+    image: ghcr.io/mb512/stackvault:0.1
+    restart: unless-stopped
+    environment:
+      # Must be the same absolute path as on the host (see the volume below).
+      STACKS_ROOT: /home/docker
+      # Name of this Docker host, recorded as restic --host in every snapshot.
+      STACKVAULT_HOSTNAME: myhost
+      STACKVAULT_SECRET_KEY_FILE: /run/secrets/stackvault.key
+      # Time zone of the backup schedules.
+      TZ: Europe/Berlin
+      # Only for a first test without a TLS proxy:
+      # STACKVAULT_ALLOW_INSECURE_HTTP: "true"
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      # Same path inside and outside: the workers and "docker compose" must
+      # see the stacks where the Docker daemon sees them.
+      - /home/docker:/home/docker
+      # Equivalent to root on the host; see docs/security.md.
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data:/data
+      - /etc/stackvault/secret.key:/run/secrets/stackvault.key:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
