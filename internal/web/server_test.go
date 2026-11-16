@@ -329,6 +329,19 @@ func TestHealthzStaticAndHeaders(t *testing.T) {
 	if r.status != http.StatusOK || !strings.Contains(r.header.Get("Content-Type"), "javascript") {
 		t.Fatalf("htmx: %d %s", r.status, r.header.Get("Content-Type"))
 	}
+	// Icons are served without login (the login page shows them too).
+	for path, ct := range map[string]string{
+		"/static/favicon.svg":          "image/svg+xml",
+		"/static/favicon.ico":          "image/",
+		"/static/apple-touch-icon.png": "image/png",
+	} {
+		if r := e.get(path); r.status != http.StatusOK || !strings.Contains(r.header.Get("Content-Type"), ct) {
+			t.Errorf("%s: %d %s", path, r.status, r.header.Get("Content-Type"))
+		}
+	}
+	if !strings.Contains(e.get("/login").body, `rel="icon"`) {
+		t.Error("pages must link the favicon")
+	}
 	if r := e.get("/login"); r.header.Get("Cache-Control") != "no-store" {
 		t.Error("pages must not be cached")
 	}
