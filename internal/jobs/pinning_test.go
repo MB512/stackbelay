@@ -140,7 +140,15 @@ func TestComposeFiles(t *testing.T) {
 		{".env without COMPOSE_FILE", map[string]string{"compose.yml": "", ".env": "COMPOSE_PROJECT_NAME=x\nCOMPOSE_FILES_NOTE=1\n"},
 			[]string{"compose.yml"}, ""},
 		{".env with COMPOSE_FILE", map[string]string{"compose.yml": "", ".env": " COMPOSE_FILE = a.yml\n"}, nil, "COMPOSE_FILE"},
-		{"no compose file", map[string]string{"docker-compose.yml": ""}, nil, "no compose"},
+		{"docker-compose.yml", map[string]string{"docker-compose.yml": ""}, []string{"docker-compose.yml"}, ""},
+		{"docker-compose.yaml", map[string]string{"docker-compose.yaml": ""}, []string{"docker-compose.yaml"}, ""},
+		{"compose.yml preferred over docker-compose.yml", map[string]string{"docker-compose.yml": "", "compose.yml": ""},
+			[]string{"compose.yml"}, ""},
+		{"docker-compose.yml with its override", map[string]string{"docker-compose.yml": "", "docker-compose.override.yml": ""},
+			[]string{"docker-compose.yml", "docker-compose.override.yml"}, ""},
+		{"docker-compose.yaml with compose.override.yml", map[string]string{"docker-compose.yaml": "", "compose.override.yml": "", "docker-compose.override.yaml": ""},
+			[]string{"docker-compose.yaml", "compose.override.yml"}, ""},
+		{"no compose file", map[string]string{"stack.yml": ""}, nil, "no compose file"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

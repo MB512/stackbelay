@@ -214,7 +214,7 @@ separated, so the restore can rely on it:
 # stackvault-metadata v1
 created_at     2026-11-12T20:15:00Z
 stack          nextcloud
-compose_sha256 <hash of compose.yml>
+compose_sha256 <hash of the main compose file>
 # service  state    image_ref            repo_digest                      image_id        container_id
 app        running  nextcloud:29         nextcloud@sha256:ab12...         sha256:cd34...  9f8e...
 db         running  postgres:16          postgres@sha256:ef56...          sha256:7890...  1a2b...
@@ -296,8 +296,9 @@ started again.
 4. Start with `docker compose --project-directory <stack> --file <main>
    [--file <override>] --file <pinned override> up -d --force-recreate`.
    Passing `--file` disables compose's own file lookup, so the worker
-   repeats it: the main file is the first of `compose.yaml`, `compose.yml`;
-   the override the first of `compose.override.yml`, `compose.override.yaml`,
+   repeats it: the main file is the first of `compose.yaml`, `compose.yml`,
+   `docker-compose.yml`, `docker-compose.yaml` (`stacks.MainFileNames()`,
+   the same file stack discovery picks); the override the first of `compose.override.yml`, `compose.override.yaml`,
    `docker-compose.override.yml`, `docker-compose.override.yaml`. A stack
    whose `.env` sets `COMPOSE_FILE` cannot be pinned (the files are then
    unknown).
@@ -513,8 +514,11 @@ as manual runs.
 
 ## Stack discovery
 
-Every direct subdirectory of `STACKS_ROOT` containing `compose.yml` or
-`compose.yaml` is a stack. The directory name is the stack ID. Names ending
+Every direct subdirectory of `STACKS_ROOT` containing a compose file is a
+stack. Accepted names are those `docker compose` looks for, in its order:
+`compose.yaml`, `compose.yml`, `docker-compose.yml`, `docker-compose.yaml`;
+the first one that exists as a regular file (not a symlink) is the stack's
+main file (`stacks.MainFileNames()`). The directory name is the stack ID. Names ending
 in `.restore-tmp` or containing `.old-` are reserved for the restore
 pipeline's staging and previous-version directories and are never
 discovered, so a restore does not create new stacks. Stacks can be

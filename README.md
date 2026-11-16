@@ -3,8 +3,9 @@
 Self-hosted web app that backs up Docker Compose stacks to
 [restic](https://restic.net) repositories, and restores them.
 
-A *stack* is a directory with a `compose.yml` under one stacks root (e.g.
-`/home/docker/<stack>/compose.yml`). StackVault backs up the whole
+A *stack* is a directory with a compose file (`compose.yaml`,
+`compose.yml`, `docker-compose.yml` or `docker-compose.yaml`) under one
+stacks root (e.g. `/home/docker/<stack>/compose.yml`). StackVault backs up the whole
 directory, including bind-mounted data inside it, with the stack stopped,
 so the backup is consistent without database-specific dumps.
 
@@ -42,8 +43,9 @@ after 0.1.
 
 - Linux host with Docker Engine and the Compose plugin. Docker Desktop is
   not supported for jobs (see `docs/architecture.md`).
-- All stacks below one directory (`STACKS_ROOT`), each with
-  `compose.yml` or `compose.yaml`; only data inside the stack directory is
+- All stacks below one directory (`STACKS_ROOT`), each with a compose
+  file named `compose.yaml`, `compose.yml`, `docker-compose.yml` or
+  `docker-compose.yaml` (the names `docker compose` looks for); only data inside the stack directory is
   backed up (bind mounts outside it and named volumes are not).
 - A restic repository per stack (or shared), e.g. on a rest-server
   started with `--append-only`.

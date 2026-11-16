@@ -27,7 +27,9 @@ func TestDiscover(t *testing.T) {
 	mkStack(t, root, "nextcloud", "compose.yml")
 	mkStack(t, root, "app", "compose.yaml")
 	mkStack(t, root, "nocompose", "")
-	mkStack(t, root, "legacy", "docker-compose.yml") // not supported
+	mkStack(t, root, "legacy", "docker-compose.yml")
+	mkStack(t, root, "legacy2", "docker-compose.yaml")
+	mkStack(t, root, "other", "stack.yml") // not a compose file name
 	mkStack(t, root, ".hidden", "compose.yml")
 	// Leftovers of a restore must not show up as stacks.
 	mkStack(t, root, "app.old-20261113T202615Z", "compose.yml")
@@ -45,7 +47,7 @@ func TestDiscover(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"app", "nextcloud"}
+	want := []string{"app", "legacy", "legacy2", "nextcloud"}
 	if len(got) != len(want) {
 		t.Fatalf("got %v, want names %v", got, want)
 	}
@@ -59,6 +61,44 @@ func TestDiscover(t *testing.T) {
 	}
 	if got[0].ComposeFile != filepath.Join(root, "app", "compose.yaml") {
 		t.Errorf("unexpected compose file %q", got[0].ComposeFile)
+	}
+}
+
+func TestDiscoverMainFilePreference(t *testing.T) {
+	tests := []struct {
+		name  string
+		files []string
+		want  string
+	}{
+		{"compose.yaml first", []string{"docker-compose.yaml", "docker-compose.yml", "compose.yml", "compose.yaml"}, "compose.yaml"},
+		{"compose.yml before docker-compose.*", []string{"docker-compose.yaml", "docker-compose.yml", "compose.yml"}, "compose.yml"},
+		{"docker-compose.yml before .yaml", []string{"docker-compose.yaml", "docker-compose.yml"}, "docker-compose.yml"},
+		{"docker-compose.yaml only", []string{"docker-compose.yaml"}, "docker-compose.yaml"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			for _, f := range tt.files {
+				mkStack(t, root, "web", f)
+			}
+			got, err := Discover(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(got) != 1 {
+				t.Fatalf("got %v, want one stack", got)
+			}
+			if want := filepath.Join(root, "web", tt.want); got[0].ComposeFile != want {
+				t.Errorf("ComposeFile = %q, want %q", got[0].ComposeFile, want)
+			}
+		})
+	}
+}
+
+func TestMainFileNamesReturnsCopy(t *testing.T) {
+	MainFileNames()[0] = "changed"
+	if MainFileNames()[0] != "compose.yaml" {
+		t.Fatal("MainFileNames exposes its internal slice")
 	}
 }
 

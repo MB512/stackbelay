@@ -1,8 +1,8 @@
 // Package stacks discovers Docker Compose stacks under STACKS_ROOT.
 //
 // Discovery is the only source of stack names and paths: every direct
-// subdirectory of the root that contains compose.yml or compose.yaml is a
-// stack, and the directory name is the stack name.
+// subdirectory of the root that contains a compose file (see MainFileNames)
+// is a stack, and the directory name is the stack name.
 package stacks
 
 import (
@@ -16,9 +16,15 @@ import (
 	"time"
 )
 
-// ComposeFiles are the file names that mark a directory as a stack, in
-// order of preference.
-var composeFiles = []string{"compose.yml", "compose.yaml"}
+// mainFileNames are the file names that mark a directory as a stack, in the
+// order "docker compose" looks for them: the first one found is the main file.
+var mainFileNames = []string{"compose.yaml", "compose.yml", "docker-compose.yml", "docker-compose.yaml"}
+
+// MainFileNames returns the accepted compose main file names in order of
+// preference. The result is a copy and may be modified by the caller.
+func MainFileNames() []string {
+	return append([]string(nil), mainFileNames...)
+}
 
 // namePattern restricts stack names to safe directory names. It excludes
 // path separators, "." and ".." and leading dots/dashes.
@@ -51,7 +57,7 @@ var ErrNotFound = errors.New("stack not found")
 type Stack struct {
 	Name        string // directory name, e.g. "nextcloud"
 	Dir         string // absolute path, e.g. "/home/docker/nextcloud"
-	ComposeFile string // absolute path of compose.yml / compose.yaml
+	ComposeFile string // absolute path of the main compose file, e.g. compose.yaml
 }
 
 // ValidName reports whether name is an acceptable stack name. Names reserved
@@ -119,7 +125,7 @@ func HasComposeFile(dir string) (bool, error) {
 }
 
 func findComposeFile(dir string) (string, error) {
-	for _, name := range composeFiles {
+	for _, name := range mainFileNames {
 		p := filepath.Join(dir, name)
 		fi, err := os.Lstat(p)
 		if errors.Is(err, fs.ErrNotExist) {

@@ -134,7 +134,7 @@ func (p *Pipeline) Restore(ctx context.Context, stack stacks.Stack, opts Restore
 	if ok, err := stacks.HasComposeFile(staging); err != nil {
 		return res, fmt.Errorf("checking restored compose file: %w", err)
 	} else if !ok {
-		return res, errors.New("restored snapshot does not contain compose.yml/compose.yaml")
+		return res, fmt.Errorf("restored snapshot does not contain a compose file (%s)", strings.Join(stacks.MainFileNames(), ", "))
 	}
 	if err := p.applyDirMetadata(ctx, log, snap.ID, srcPath, staging); err != nil {
 		return res, err

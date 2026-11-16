@@ -11,12 +11,14 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/MB512/stackvault/internal/stacks"
 )
 
-// Compose file names in the order "docker compose" looks for them. Stack
-// discovery only accepts the first two as main file.
+// Compose override file names in the order "docker compose" looks for them.
+// The main file names come from stacks.MainFileNames, so pinning picks the
+// same main file as stack discovery.
 var (
-	composeMainFiles     = []string{"compose.yaml", "compose.yml"}
 	composeOverrideFiles = []string{"compose.override.yml", "compose.override.yaml",
 		"docker-compose.override.yml", "docker-compose.override.yaml"}
 )
@@ -34,7 +36,7 @@ func composeFiles(srcDir, finalDir string) ([]string, error) {
 		return nil, errors.New("the stack's .env sets COMPOSE_FILE; image pinning supports only the default compose file names")
 	}
 	var files []string
-	for _, group := range [][]string{composeMainFiles, composeOverrideFiles} {
+	for _, group := range [][]string{stacks.MainFileNames(), composeOverrideFiles} {
 		for _, name := range group {
 			info, err := os.Stat(filepath.Join(srcDir, name))
 			if errors.Is(err, fs.ErrNotExist) {
@@ -50,7 +52,7 @@ func composeFiles(srcDir, finalDir string) ([]string, error) {
 		}
 	}
 	if len(files) == 0 {
-		return nil, errors.New("no compose.yaml/compose.yml in the restored stack")
+		return nil, fmt.Errorf("no compose file (%s) in the restored stack", strings.Join(stacks.MainFileNames(), ", "))
 	}
 	return files, nil
 }
