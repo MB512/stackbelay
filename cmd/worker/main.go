@@ -7,7 +7,7 @@
 //	worker run <job-dir>
 //	worker backup  [--pre-stop] <stack>
 //	worker restore [--no-safety-snapshot] [--no-start] [--pin-images] [--in-place] <stack> <snapshot-id>
-//	worker update  [--no-backup] [--only-if-new] [--rollback-in-place] <stack>
+//	worker update  [--no-backup] [--only-if-new] [--rollback-in-place] [--no-pre-stop] <stack>
 //
 // "run" is how the manager starts a job: the job is described by
 // <job-dir>/spec.json, and the worker writes status.json and log.txt there.
@@ -44,7 +44,7 @@ const usage = `usage:
   worker run <job-dir>
   worker backup  [--pre-stop] <stack>
   worker restore [--no-safety-snapshot] [--no-start] [--pin-images] [--in-place] <stack> <snapshot-id>
-  worker update  [--no-backup] [--only-if-new] [--rollback-in-place] <stack>
+  worker update  [--no-backup] [--only-if-new] [--rollback-in-place] [--no-pre-stop] <stack>
 `
 
 func main() {
@@ -199,14 +199,15 @@ func parseArgs(args []string) (jobs.Spec, string, error) {
 		noBackup := fs.Bool("no-backup", false, "update without snapshots and without rollback (no repository)")
 		onlyIfNew := fs.Bool("only-if-new", false, "stop after the pull if no running service gets a new image")
 		rollbackInPlace := fs.Bool("rollback-in-place", false, "on a rollback, restore the final snapshot in place")
+		noPreStop := fs.Bool("no-pre-stop", false, "no snapshot while the stack still runs")
 		if err := fs.Parse(args[1:]); err != nil || fs.NArg() != 1 {
-			return jobs.Spec{}, "", fmt.Errorf("%w: update expects [--no-backup] [--only-if-new] [--rollback-in-place] <stack>", errUsage)
+			return jobs.Spec{}, "", fmt.Errorf("%w: update expects [--no-backup] [--only-if-new] [--rollback-in-place] [--no-pre-stop] <stack>", errUsage)
 		}
 		if *noBackup && *rollbackInPlace {
 			return jobs.Spec{}, "", fmt.Errorf("%w: --rollback-in-place needs a backup (not with --no-backup)", errUsage)
 		}
 		return jobs.Spec{Type: jobs.TypeUpdate, Stack: fs.Arg(0), NoBackup: *noBackup, OnlyIfNew: *onlyIfNew,
-			RollbackInPlace: *rollbackInPlace}, "", nil
+			RollbackInPlace: *rollbackInPlace, NoPreStop: *noPreStop}, "", nil
 
 	default:
 		return jobs.Spec{}, "", fmt.Errorf("%w: unknown command %q", errUsage, args[0])
@@ -242,7 +243,7 @@ func execute(ctx context.Context, p *jobs.Pipeline, cfg config.Worker, spec jobs
 		return err
 	case jobs.TypeUpdate:
 		res, err := p.Update(ctx, stack, jobs.UpdateOptions{Backup: !spec.NoBackup, CarryOver: spec.CarryOverJobs,
-			OnlyIfNew: spec.OnlyIfNew, RollbackInPlace: spec.RollbackInPlace})
+			OnlyIfNew: spec.OnlyIfNew, RollbackInPlace: spec.RollbackInPlace, NoPreStop: spec.NoPreStop})
 		recordChange(status, res)
 		return err
 	case jobs.TypeComposeApply:

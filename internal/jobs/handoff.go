@@ -103,8 +103,9 @@ type Spec struct {
 	// explicit choice of the manager, so missing repository settings in
 	// the worker can never silently turn off the backup of an update.
 	NoBackup bool `json:"no_backup,omitempty"`
-	// OnlyIfNew (update): see UpdateOptions.OnlyIfNew.
+	// OnlyIfNew and NoPreStop (update): see UpdateOptions.
 	OnlyIfNew bool `json:"only_if_new,omitempty"`
+	NoPreStop bool `json:"no_pre_stop,omitempty"`
 	// RollbackInPlace (update, compose-apply): see UpdateOptions.RollbackInPlace.
 	RollbackInPlace bool `json:"rollback_in_place,omitempty"`
 
@@ -139,8 +140,8 @@ func (s Spec) Validate() error {
 	if s.Type != TypeComposeApply && (s.ComposeSHA256 != "" || s.ComposeBaseSHA256 != "") {
 		return errors.New("compose options set on a job that does not apply a compose file")
 	}
-	if s.OnlyIfNew && s.Type != TypeUpdate {
-		return fmt.Errorf("only_if_new set on a job of type %s", s.Type)
+	if (s.OnlyIfNew || s.NoPreStop) && s.Type != TypeUpdate {
+		return fmt.Errorf("update options set on a job of type %s", s.Type)
 	}
 	if s.RollbackInPlace && (s.Type != TypeUpdate && s.Type != TypeComposeApply || s.NoBackup) {
 		return errors.New("rollback_in_place set on a job without rollback")

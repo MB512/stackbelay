@@ -25,6 +25,9 @@ type UpdateOptions struct {
 	// RollbackInPlace restores the final snapshot in place on a rollback
 	// (see RestoreOptions.InPlace).
 	RollbackInPlace bool
+	// NoPreStop skips the snapshot taken while the stack still runs; the
+	// final snapshot then copies everything with the stack stopped.
+	NoPreStop bool
 }
 
 // Update runs the update pipeline for a running stack (see "Update
@@ -35,7 +38,7 @@ func (p *Pipeline) Update(ctx context.Context, stack stacks.Stack, opts UpdateOp
 	log := p.logger().With("stack", stack.Name, "job", "update")
 	return p.runChange(ctx, stack, change{
 		name: "update", backup: opts.Backup, carryOver: opts.CarryOver, requireRunning: true,
-		rollbackInPlace: opts.RollbackInPlace,
+		rollbackInPlace: opts.RollbackInPlace, noPreStop: opts.NoPreStop,
 		prepare: func(ctx context.Context, services []docker.ServiceState, running []string) error {
 			log.Info("pulling images", "services", running)
 			if err := p.Docker.Pull(ctx, stack.Dir, running); err != nil {

@@ -35,6 +35,8 @@ type JobOptions struct {
 	// snapshot in place on a rollback.
 	OnlyIfNew       bool `json:"only_if_new,omitempty"`
 	RollbackInPlace bool `json:"rollback_in_place,omitempty"`
+	// NoPreStop (update): no snapshot while the stack still runs.
+	NoPreStop bool `json:"no_pre_stop,omitempty"`
 	// Compose editor (compose-apply): the stack's main compose file (base
 	// name), the SHA-256 (hex) of the content the editor started from and
 	// of the new content (stored in job_compose, see Job.ComposeContent).

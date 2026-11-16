@@ -212,7 +212,8 @@ func (d *Dispatcher) reconcileDir(ctx context.Context, id string, importing bool
 		ID: id, StackID: st.ID, StackName: st.Name, Type: spec.Type, Trigger: spec.Trigger, QueuedAt: queued,
 		Options: store.JobOptions{PreStop: spec.PreStop, SnapshotID: spec.SnapshotID,
 			SkipSafetySnapshot: spec.SkipSafetySnapshot, NoStart: spec.NoStart, PinImages: spec.PinImages,
-			InPlace: spec.InPlace, NoBackup: spec.NoBackup, OnlyIfNew: spec.OnlyIfNew, RollbackInPlace: spec.RollbackInPlace},
+			InPlace: spec.InPlace, NoBackup: spec.NoBackup, OnlyIfNew: spec.OnlyIfNew, RollbackInPlace: spec.RollbackInPlace,
+			NoPreStop: spec.NoPreStop},
 	}
 	if j.Trigger == "" {
 		j.Trigger = store.TriggerManual
@@ -320,7 +321,7 @@ func (d *Dispatcher) start(ctx context.Context, j store.Job) {
 		ID: j.ID, Type: j.Type, Stack: j.StackName,
 		PreStop: j.Options.PreStop, SnapshotID: j.Options.SnapshotID,
 		SkipSafetySnapshot: j.Options.SkipSafetySnapshot, NoStart: j.Options.NoStart, PinImages: j.Options.PinImages,
-		InPlace: j.Options.InPlace, OnlyIfNew: j.Options.OnlyIfNew, Trigger: j.Trigger, Requester: j.Requester, NoBackup: noBackup,
+		InPlace: j.Options.InPlace, OnlyIfNew: j.Options.OnlyIfNew, NoPreStop: j.Options.NoPreStop, Trigger: j.Trigger, Requester: j.Requester, NoBackup: noBackup,
 		// Without backup there is no rollback, in place or not.
 		RollbackInPlace: j.Options.RollbackInPlace && !noBackup,
 	}

@@ -32,7 +32,7 @@ func TestSpecRoundTrip(t *testing.T) {
 
 func TestUpdateSpecRoundTrip(t *testing.T) {
 	dir := t.TempDir()
-	want := Spec{ID: testJobID, Type: TypeUpdate, Stack: "web", OnlyIfNew: true, RollbackInPlace: true, CarryOverJobs: "data/jobs", Trigger: "manual"}
+	want := Spec{ID: testJobID, Type: TypeUpdate, Stack: "web", OnlyIfNew: true, RollbackInPlace: true, NoPreStop: true, CarryOverJobs: "data/jobs", Trigger: "manual"}
 	if err := WriteSpec(dir, want); err != nil {
 		t.Fatal(err)
 	}
@@ -81,6 +81,7 @@ func TestReadSpecRejects(t *testing.T) {
 		{"backup with pinned images", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"web","pin_images":true}`},
 		{"backup in place", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"web","in_place":true}`},
 		{"only-if-new on a compose apply", `{"version":1,"id":"` + testJobID + `","type":"compose-apply","stack":"web","only_if_new":true,"compose_sha256":"` + strings.Repeat("a", 64) + `","compose_base_sha256":"` + strings.Repeat("b", 64) + `"}`},
+		{"no-pre-stop on a backup", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"web","no_pre_stop":true}`},
 		{"rollback in place on a restore", `{"version":1,"id":"` + testJobID + `","type":"restore","stack":"web","snapshot_id":"0123abcd","rollback_in_place":true}`},
 		{"rollback in place without backup", `{"version":1,"id":"` + testJobID + `","type":"update","stack":"web","no_backup":true,"rollback_in_place":true}`},
 		{"update in place", `{"version":1,"id":"` + testJobID + `","type":"update","stack":"web","in_place":true}`},

@@ -173,11 +173,11 @@ func TestParseRestoreArgs(t *testing.T) {
 }
 
 func TestParseUpdateArgs(t *testing.T) {
-	spec, _, err := parseArgs([]string{"update", "--only-if-new", "--rollback-in-place", "web"})
+	spec, _, err := parseArgs([]string{"update", "--only-if-new", "--rollback-in-place", "--no-pre-stop", "web"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := jobs.Spec{Type: jobs.TypeUpdate, Stack: "web", OnlyIfNew: true, RollbackInPlace: true}
+	want := jobs.Spec{Type: jobs.TypeUpdate, Stack: "web", OnlyIfNew: true, RollbackInPlace: true, NoPreStop: true}
 	if spec != want {
 		t.Fatalf("got %+v, want %+v", spec, want)
 	}

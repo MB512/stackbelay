@@ -52,6 +52,9 @@ type change struct {
 	// rollbackInPlace restores the final snapshot in place instead of
 	// swapping directories (see RestoreOptions.InPlace).
 	rollbackInPlace bool
+	// noPreStop skips the pre-stop snapshot (the final snapshot then has no
+	// parent and takes longer, during which the stack is stopped).
+	noPreStop bool
 	// requireRunning refuses a stack without running services.
 	requireRunning bool
 	// prepare (optional) runs while the stack still runs, before any
@@ -123,7 +126,10 @@ func (p *Pipeline) runChange(ctx context.Context, stack stacks.Stack, c change) 
 	}
 
 	// 3. Pre-stop snapshot (parent of the final one). Failure is not fatal.
-	if c.backup && len(running) > 0 {
+	if c.backup && len(running) > 0 && c.noPreStop {
+		log.Info("pre-stop snapshot disabled")
+	}
+	if c.backup && len(running) > 0 && !c.noPreStop {
 		log.Info("taking pre-stop snapshot")
 		id, err := p.Restic.Backup(ctx, p.Repo, stack.Dir, restic.BackupOptions{Host: p.Host, Tags: []string{TagPreStop}})
 		if err != nil {
