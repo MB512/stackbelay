@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -33,29 +32,14 @@ type LogLine struct {
 // the compose project belongs to dir, so the logs of another project with
 // the same name are never shown.
 func (c *CLI) Containers(ctx context.Context, dir string) ([]string, error) {
-	if err := c.checkProjectOwner(ctx, dir); err != nil {
-		return nil, err
-	}
-	out, err := c.compose(ctx, dir, "ps", "--all", "--format", "json")
+	list, err := c.StackContainers(ctx, dir)
 	if err != nil {
 		return nil, err
 	}
-	entries, err := parsePS(out)
-	if err != nil {
-		return nil, err
+	names := make([]string, 0, len(list))
+	for _, ct := range list {
+		names = append(names, ct.Name)
 	}
-	names := make([]string, 0, len(entries))
-	for _, e := range entries {
-		if e.Name == "" {
-			continue
-		}
-		name := e.Name
-		if e.Project != "" {
-			name = strings.TrimPrefix(name, e.Project+"-")
-		}
-		names = append(names, name)
-	}
-	sort.Strings(names)
 	return names, nil
 }
 

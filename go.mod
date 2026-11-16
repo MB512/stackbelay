@@ -3,6 +3,7 @@ module github.com/MB512/stackvault
 go 1.26.0
 
 require (
+	github.com/creack/pty v1.1.24
 	github.com/go-chi/chi/v5 v5.5.0
 	github.com/robfig/cron/v3 v3.0.1
 	golang.org/x/crypto v0.59.0

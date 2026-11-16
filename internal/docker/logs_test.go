@@ -82,7 +82,7 @@ func fakeDocker(t *testing.T, stackDir, workingDir string) (bin, argsFile string
 case "$*" in
   *" config --format json") echo '{"name":"web"}' ;;
   "ps --all --filter"*) printf 'web-app-1\t` + workingDir + `\n' ;;
-  *" ps --all --format json") echo '{"Name":"web-db-1","Project":"web","Service":"db"}'; echo '{"Name":"web-app-1","Project":"web","Service":"app"}'; echo '{"Name":"custom","Project":"web","Service":"x"}' ;;
+  *" ps --all --format json") echo '{"ID":"0000000000d1","Name":"web-db-1","Project":"web","Service":"db","State":"exited"}'; echo '{"ID":"0000000000a1","Name":"web-app-1","Project":"web","Service":"app","State":"running"}'; echo '{"ID":"0000000000c1","Name":"custom","Project":"web","Service":"x","State":"running"}' ;;
   *" logs "*)
     echo "$*" > ` + argsFile + `
     echo 'web-app-1  | 2026-11-16T16:00:01.000000001Z first'
@@ -148,5 +148,41 @@ func TestFollowLogsRefusesForeignProject(t *testing.T) {
 	}
 	if _, err := c.Containers(context.Background(), stack); err == nil {
 		t.Fatal("Containers accepted a foreign project")
+	}
+}
+
+func TestStackContainers(t *testing.T) {
+	stack := t.TempDir()
+	bin, _ := fakeDocker(t, stack, stack)
+	list, err := (&CLI{Binary: bin}).StackContainers(context.Background(), stack)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Container{
+		{ID: "0000000000a1", Name: "app-1", Service: "app", State: "running"},
+		{ID: "0000000000c1", Name: "custom", Service: "x", State: "running"},
+		{ID: "0000000000d1", Name: "db-1", Service: "db", State: "exited"},
+	}
+	if len(list) != len(want) {
+		t.Fatalf("got %+v", list)
+	}
+	for i := range want {
+		if list[i] != want[i] {
+			t.Errorf("container %d: got %+v, want %+v", i, list[i], want[i])
+		}
+	}
+	if list[2].Running() || !list[0].Running() {
+		t.Error("Running")
+	}
+}
+
+func TestValidContainerID(t *testing.T) {
+	for id, ok := range map[string]bool{
+		"0123456789ab": true, strings.Repeat("a", 64): true, "0123456789a": false,
+		"--privileged": false, "0123456789AB": false, strings.Repeat("a", 65): false,
+	} {
+		if ValidContainerID(id) != ok {
+			t.Errorf("ValidContainerID(%q) != %v", id, ok)
+		}
 	}
 }
