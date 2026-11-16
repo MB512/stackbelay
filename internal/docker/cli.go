@@ -322,6 +322,7 @@ func healthStatus(containers []psEntry, services []string) (pending []string, er
 type psEntry struct {
 	ID      string `json:"ID"`
 	Name    string `json:"Name"`
+	Project string `json:"Project"`
 	Service string `json:"Service"`
 	State   string `json:"State"`
 	Health  string `json:"Health"`

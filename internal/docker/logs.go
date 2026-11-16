@@ -20,16 +20,18 @@ const MaxLogLineBytes = 16 << 10
 
 // LogLine is one line of "docker compose logs".
 type LogLine struct {
-	Container string    // container name, e.g. "web-app-1"; "" for compose's own messages
+	Container string    // as compose prints it, e.g. "app-1" (see Containers); "" for compose's own messages
 	Time      time.Time // from --timestamps; zero if the line has none
 	Text      string
 	Cut       bool // the line was longer than MaxLogLineBytes
 }
 
 // Containers returns the names of all containers of the stack in dir
-// (running or not), sorted. Like Services it first checks that the compose
-// project belongs to dir, so the logs of another project with the same name
-// are never shown.
+// (running or not), sorted, as "docker compose logs" prefixes their lines:
+// without the "<project>-" part ("app-1" for container "web-app-1"); a
+// custom container_name stays as it is. Like Services it first checks that
+// the compose project belongs to dir, so the logs of another project with
+// the same name are never shown.
 func (c *CLI) Containers(ctx context.Context, dir string) ([]string, error) {
 	if err := c.checkProjectOwner(ctx, dir); err != nil {
 		return nil, err
@@ -44,9 +46,14 @@ func (c *CLI) Containers(ctx context.Context, dir string) ([]string, error) {
 	}
 	names := make([]string, 0, len(entries))
 	for _, e := range entries {
-		if e.Name != "" {
-			names = append(names, e.Name)
+		if e.Name == "" {
+			continue
 		}
+		name := e.Name
+		if e.Project != "" {
+			name = strings.TrimPrefix(name, e.Project+"-")
+		}
+		names = append(names, name)
 	}
 	sort.Strings(names)
 	return names, nil
@@ -58,9 +65,10 @@ func (c *CLI) Containers(ctx context.Context, dir string) ([]string, error) {
 // container (tailLines); with since it starts at that time (used to resume a stream).
 //
 // It returns when ctx is done (the process is killed), when fn returns an
-// error (that error is returned), or when compose ends on its own, which
-// it does once no container of the project runs any more. It checks the
-// project owner first (see Containers).
+// error (that error is returned), or when compose ends on its own. Current
+// Compose versions keep following a stopped stack and pick up its
+// containers again when they start; older ones end once no container
+// runs. It checks the project owner first (see Containers).
 func (c *CLI) FollowLogs(ctx context.Context, dir string, tailLines int, since time.Time, fn func(LogLine) error) error {
 	if err := c.checkProjectOwner(ctx, dir); err != nil {
 		return err
@@ -111,7 +119,7 @@ func (c *CLI) FollowLogs(ctx context.Context, dir string, tailLines int, since t
 }
 
 // ParseLogLine splits a line of "docker compose logs --timestamps
-// --no-color", e.g. "web-app-1  | 2026-11-16T16:00:00.123456789Z text".
+// --no-color", e.g. "app-1  | 2026-11-16T16:00:00.123456789Z text".
 // Lines without the "name | " prefix (compose's own messages such as
 // "web-app-1 exited with code 0") have no container.
 func ParseLogLine(line string) LogLine {

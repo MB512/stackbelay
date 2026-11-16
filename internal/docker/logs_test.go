@@ -82,7 +82,7 @@ func fakeDocker(t *testing.T, stackDir, workingDir string) (bin, argsFile string
 case "$*" in
   *" config --format json") echo '{"name":"web"}' ;;
   "ps --all --filter"*) printf 'web-app-1\t` + workingDir + `\n' ;;
-  *" ps --all --format json") echo '{"Name":"web-db-1","Service":"db"}'; echo '{"Name":"web-app-1","Service":"app"}' ;;
+  *" ps --all --format json") echo '{"Name":"web-db-1","Project":"web","Service":"db"}'; echo '{"Name":"web-app-1","Project":"web","Service":"app"}'; echo '{"Name":"custom","Project":"web","Service":"x"}' ;;
   *" logs "*)
     echo "$*" > ` + argsFile + `
     echo 'web-app-1  | 2026-11-16T16:00:01.000000001Z first'
@@ -106,7 +106,7 @@ func TestFollowLogs(t *testing.T) {
 	ctx := context.Background()
 
 	names, err := c.Containers(ctx, stack)
-	if err != nil || strings.Join(names, ",") != "web-app-1,web-db-1" {
+	if err != nil || strings.Join(names, ",") != "app-1,custom,db-1" {
 		t.Fatalf("Containers: %v, %v", names, err)
 	}
 
