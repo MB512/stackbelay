@@ -129,7 +129,16 @@ fieldset.containers .actions { margin-left: auto; display: flex; gap: .5rem; }
   gap: .4rem; padding: .4rem; background: #11151b;
 }
 .log-frame.fullscreen .log { flex: 1; max-height: none; margin: 0; border-radius: 4px; }
-.log-frame.fullscreen .log-exit { align-self: flex-end; color: #d7dde5; border-color: #3a4350; }
+.log-bar { display: flex; align-items: center; gap: .4rem 1rem; }
+.log-bar[hidden] { display: none; }
+.log-bar .log-exit { margin-left: auto; flex: none; color: #d7dde5; border-color: #3a4350; }
+/* The container filter in the full-screen bar: one compact row on the dark
+   background; the legend stays for screen readers only. */
+.log-bar fieldset.containers { flex: 1; border: none; padding: 0; color: #d7dde5; }
+.log-bar fieldset.containers legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.log-bar fieldset.containers .actions { margin-left: 0; }
+.log-bar fieldset.containers button.secondary { color: #d7dde5; border-color: #3a4350; }
+.log-bar fieldset.containers .hint { color: #9aa4b1; }
 body.log-fullscreen { overflow: hidden; }
 /* Container shell (xterm.js draws inside). */
 .terminal { height: 70vh; padding: .4rem; background: #11151b; border-radius: 8px; border: 1px solid var(--border); }

@@ -27,9 +27,12 @@
     <button type="button" class="secondary" id="log-fullscreen">Full screen</button>
   </div>
   {{- /* In full screen the frame covers the whole browser window and shows
-         only the log and the exit button (Esc also exits). */}}
+         only the log and a bar with the container filter (moved there by
+         stacklog.js) and the exit button (Esc also exits). */}}
   <div class="log-frame" id="stack-log-frame">
-    <button type="button" class="secondary log-exit" id="log-exit-fullscreen" hidden>Exit full screen</button>
+    <div class="log-bar" id="log-bar" hidden>
+      <button type="button" class="secondary log-exit" id="log-exit-fullscreen">Exit full screen</button>
+    </div>
     <div class="log" id="stack-log" role="log"></div>
   </div>
   <noscript><p class="hint">The live log view needs JavaScript.</p></noscript>

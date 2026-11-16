@@ -97,7 +97,7 @@ func TestStackLogsAccess(t *testing.T) {
 	expect(t, r, http.StatusOK, "")
 	for _, want := range []string{`value="web-app-1" checked`, `value="web-db-1" checked`,
 		`data-events="/stacks/web/logs/events"`, `/static/stacklog.js`, `aria-current="page">Logs`,
-		`id="log-wrap" checked`, `id="log-fullscreen"`, `id="log-exit-fullscreen" hidden`} {
+		`id="log-wrap" checked`, `id="log-fullscreen"`, `id="log-bar" hidden`, `id="log-exit-fullscreen"`} {
 		if !strings.Contains(r.body, want) {
 			t.Errorf("logs page lacks %s", want)
 		}

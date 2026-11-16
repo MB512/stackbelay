@@ -94,15 +94,24 @@
 	wrap.addEventListener("change", function () { setWrap(wrap.checked); });
 
 	// Full screen inside the browser window (not the browser's own full
-	// screen mode): the frame covers the page, only the exit button shows.
+	// screen mode): the frame covers the page and shows only the log and a
+	// bar with the container filter and the exit button. The filter element
+	// itself is moved into the bar and back, so its state and handlers stay.
 	var frame = document.getElementById("stack-log-frame");
+	var bar = document.getElementById("log-bar");
 	var enter = document.getElementById("log-fullscreen");
 	var exit = document.getElementById("log-exit-fullscreen");
+	var boxesHome = boxes.nextElementSibling; // the filter goes back before it
 	function setFullscreen(on) {
 		keepBottom(function () {
+			if (on) {
+				bar.insertBefore(boxes, exit);
+			} else {
+				boxesHome.parentNode.insertBefore(boxes, boxesHome);
+			}
 			frame.classList.toggle("fullscreen", on);
 			document.body.classList.toggle("log-fullscreen", on);
-			exit.hidden = !on;
+			bar.hidden = !on;
 		});
 		(on ? exit : enter).focus();
 	}
