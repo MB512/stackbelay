@@ -1112,3 +1112,35 @@ Points to settle when it is picked up:
   and `start`, or `restart`, only. No `--remove-orphans`.
 - Audit entry and job log like the other jobs; "restart" is also the place
   to show the health wait after the start.
+
+### Docker host cleanup (jobs without a stack)
+
+Idea (noted 2026-11-16, not designed yet): host-wide cleanup jobs that can
+run on demand and on a schedule, like the other jobs but not tied to a stack:
+
+- remove orphaned containers (`--remove-orphans` semantics) and
+- delete unused images.
+
+Points to settle when it is picked up:
+
+- **Jobs and schedules without a stack.** `jobs.stack_id` and
+  `schedules.stack_id` are `NOT NULL` today (migrations 0001/0003); they
+  become nullable (`NULL` = the host). The unique index
+  `jobs_one_running_per_stack` then does not serialize host jobs against each
+  other; they need their own lock, and should not run while any stack job is
+  running (an update or rollback needs the old images).
+- **Permissions.** No per-stack flag fits; admin only (or a dedicated
+  host-level flag). Audit entries without `stack_id`.
+- **Rollbacks need old images.** A rollback and the pinned restore
+  (`pull_policy: never`) rely on images that are still on the host. "Unused
+  images" must therefore be conservative: an age threshold (for example
+  older than N days, configurable), and never an image that the last
+  `pre-update` snapshot's `metadata.txt` pins for a discovered stack. Show a
+  dry run (what would be removed, how much space) before the first real run.
+- **Orphans.** Only containers of discovered stacks' compose projects that no
+  longer belong to the compose file; never containers of other projects.
+- **No `system prune`.** Volumes are never removed (stack data), and no
+  blanket `docker system prune`: fixed commands with fixed argument lists,
+  run in a worker job, as for every change to the host.
+- Compose editor and update pipeline currently never remove orphans or prune
+  images on purpose; this feature is the explicit, scheduled opt-in for it.
