@@ -7,10 +7,7 @@
 {{- end}}
 
 {{define "rights"}}
-{{- if and .CanBackup .CanRestore}}backup, restore
-{{- else if .CanBackup}}backup
-{{- else if .CanRestore}}restore
-{{- else}}<span class="muted">view</span>{{end}}
+{{- with .Rights}}{{.}}{{else}}<span class="muted">view</span>{{end}}
 {{- end}}
 
 {{- /* Top of every stack page: name, status and the tabs the user may open.

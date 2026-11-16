@@ -53,6 +53,7 @@ CREATE TABLE permissions (
   stack_id    INTEGER NOT NULL REFERENCES stacks(id) ON DELETE CASCADE,
   can_backup  INTEGER NOT NULL DEFAULT 0,
   can_restore INTEGER NOT NULL DEFAULT 0,
+  can_logs    INTEGER NOT NULL DEFAULT 0,   -- live container logs; migration 0005
   PRIMARY KEY (user_id, stack_id)
 );
 
@@ -103,11 +104,12 @@ CREATE TABLE audit_log (
 - Admin: may manage users, stacks, repositories, schedules, and may do
   everything on every stack.
 - Non-admin: may start a backup only if `can_backup`, a restore only if
-  `can_restore` for that stack. Viewing a stack's status/snapshots requires at
-  least one of the two.
+  `can_restore` for that stack, and may view its live container logs only
+  if `can_logs` (logs are not redacted). Viewing a stack's status/snapshots
+  requires at least one of the flags.
 - Checks happen server-side on every request and again when the job is created.
   The worker never decides permissions.
-- `permissions` only holds grants: setting both flags to 0 deletes the row,
+- `permissions` only holds grants: setting all flags to 0 deletes the row,
   and a missing row means no access (deny by default). Admins need no rows.
 - There is always at least one active (admin and not disabled) user: changes
   that would leave none are refused in the same transaction. Disabling a

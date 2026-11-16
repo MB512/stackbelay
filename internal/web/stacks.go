@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -18,7 +19,18 @@ import (
 // stackRow is one line of the stack list.
 type stackRow struct {
 	store.StackSummary
-	CanBackup, CanRestore bool
+	Rights string // what the user may do besides viewing, e.g. "backup, logs"
+}
+
+// rightsText lists the actions besides viewing that user may perform with perm.
+func rightsText(user store.User, perm store.Permission) string {
+	var names []string
+	for _, act := range []auth.Action{auth.ActionBackup, auth.ActionRestore, auth.ActionLogs} {
+		if auth.Allowed(user, perm, act) {
+			names = append(names, act.String())
+		}
+	}
+	return strings.Join(names, ", ")
 }
 
 // stackList shows the stacks the user may see.
@@ -42,11 +54,7 @@ func (s *Server) stackList(w http.ResponseWriter, r *http.Request) {
 		if !auth.Allowed(a.User, p, auth.ActionView) {
 			continue
 		}
-		rows = append(rows, stackRow{
-			StackSummary: sum,
-			CanBackup:    auth.Allowed(a.User, p, auth.ActionBackup),
-			CanRestore:   auth.Allowed(a.User, p, auth.ActionRestore),
-		})
+		rows = append(rows, stackRow{StackSummary: sum, Rights: rightsText(a.User, p)})
 	}
 	s.render(w, r, http.StatusOK, "stacks.html", pageData{Title: "Stacks", Data: rows})
 }
@@ -375,13 +383,14 @@ func (s *Server) setPermission(w http.ResponseWriter, r *http.Request) {
 		UserID: user.ID, StackID: st.ID,
 		CanBackup:  r.PostFormValue("can_backup") == "on",
 		CanRestore: r.PostFormValue("can_restore") == "on",
+		CanLogs:    r.PostFormValue("can_logs") == "on",
 	}
 	if err := s.Store.SetPermission(r.Context(), p); err != nil {
 		s.internalError(w, r, "saving permission", err)
 		return
 	}
 	s.audit(r, store.AuditEntry{UserID: a.User.ID, Action: "permission.update", StackID: st.ID,
-		Detail: fmt.Sprintf("user %q: backup=%t restore=%t", user.Username, p.CanBackup, p.CanRestore)})
+		Detail: fmt.Sprintf("user %q: backup=%t restore=%t logs=%t", user.Username, p.CanBackup, p.CanRestore, p.CanLogs)})
 
 	if isHTMX(r) {
 		s.renderPartial(w, "stack_settings.html", "perm-row",

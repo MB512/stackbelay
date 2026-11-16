@@ -32,6 +32,7 @@ func TestPermissions(t *testing.T) {
 		{UserID: alice, StackID: web, CanBackup: true},
 		{UserID: alice, StackID: db, CanBackup: true, CanRestore: true},
 		{UserID: bob, StackID: web, CanRestore: true},
+		{UserID: bob, StackID: db, CanLogs: true}, // logs alone is a grant
 	} {
 		if err := s.SetPermission(ctx, p); err != nil {
 			t.Fatal(err)
@@ -60,6 +61,9 @@ func TestPermissions(t *testing.T) {
 	}
 	if byUser, _ := s.PermissionsForStack(ctx, web); len(byUser) != 1 {
 		t.Fatalf("after revoke: %+v", byUser)
+	}
+	if p, _ := s.Permission(ctx, bob, db); !p.CanLogs || p.CanBackup || p.CanRestore || p.None() {
+		t.Fatalf("logs-only grant: %+v", p)
 	}
 
 	if err := s.SetPermission(ctx, Permission{UserID: 999, StackID: web, CanBackup: true}); !errors.Is(err, ErrNotFound) {

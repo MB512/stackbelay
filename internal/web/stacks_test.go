@@ -117,6 +117,22 @@ func TestStackAccessControl(t *testing.T) {
 	if !strings.Contains(r.body, `href="/stacks/web"`) || strings.Contains(r.body, `href="/stacks/db"`) {
 		t.Fatalf("alice should see web only:\n%s", r.body)
 	}
+
+	// The logs right alone also makes a stack visible.
+	r = e.post("/stacks/db/permissions", url.Values{"csrf_token": {e.csrf("/stacks/db/settings")},
+		"user_id": {itoa(aliceID)}, "can_logs": {"on"}})
+	expect(t, r, http.StatusSeeOther, "/stacks/db/settings")
+	r = get("/")
+	if !regexp.MustCompile(`href="/stacks/db"[\s\S]*<td>logs</td>`).MatchString(r.body) {
+		t.Fatalf("alice should see db with the logs right:\n%s", r.body)
+	}
+	db, err := e.st.StackByName(context.Background(), "db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.st.SetPermission(context.Background(), store.Permission{UserID: aliceID, StackID: db.ID}); err != nil {
+		t.Fatal(err)
+	}
 	// The Backups tab looks the same for alice and the admin, except the
 	// admin's extra Settings tab.
 	r = get("/stacks/web")
@@ -158,7 +174,7 @@ func TestStackAccessControl(t *testing.T) {
 	expect(t, e.post("/stacks/web/permissions", url.Values{"user_id": {itoa(aliceID)}, "can_backup": {"on"}}), http.StatusForbidden, "")
 
 	actions := auditActions(t, e.st)
-	if actions["permission.update"] != 2 || actions["user.create"] != 1 {
+	if actions["permission.update"] != 3 || actions["user.create"] != 1 {
 		t.Fatalf("audit: %v", actions)
 	}
 }

@@ -11,6 +11,7 @@ const (
 	ActionView    Action = iota // see status, snapshots and jobs
 	ActionBackup                // start a backup
 	ActionRestore               // start a restore
+	ActionLogs                  // view the live container logs
 )
 
 func (a Action) String() string {
@@ -21,6 +22,8 @@ func (a Action) String() string {
 		return "backup"
 	case ActionRestore:
 		return "restore"
+	case ActionLogs:
+		return "logs"
 	}
 	return "unknown"
 }
@@ -34,18 +37,20 @@ func Allowed(user store.User, perm store.Permission, action Action) bool {
 		return false
 	}
 	if user.IsAdmin {
-		return action >= ActionView && action <= ActionRestore
+		return action >= ActionView && action <= ActionLogs
 	}
 	if perm.UserID != user.ID {
 		return false // a permission of someone else
 	}
 	switch action {
 	case ActionView:
-		return perm.CanBackup || perm.CanRestore
+		return !perm.None() // any grant includes viewing the stack
 	case ActionBackup:
 		return perm.CanBackup
 	case ActionRestore:
 		return perm.CanRestore
+	case ActionLogs:
+		return perm.CanLogs
 	}
 	return false
 }
