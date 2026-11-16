@@ -1091,3 +1091,24 @@ was edited and backed up a short time ago, for quick fix-up edits (the
 rollback would then return to that earlier backup).
 
 A "Status" tab (running services, restart) remains open.
+
+### Stop, start and restart a stack without backup
+
+Idea (noted 2026-11-16, not designed yet): stop, start and restart a whole
+stack from the UI, deliberately without a backup, for quick operations
+(a hung service, maintenance on the host). Natural home: the open "Status"
+tab above.
+
+Points to settle when it is picked up:
+
+- Anything that changes a stack runs in a worker job, so these are job types
+  (for example `stop`, `start`, `restart`), not manager-side `docker compose`
+  calls. This also lets a stack stop or restart the manager's own stack.
+- Own permission flag per stack (not `can_backup`), because stopping a stack
+  is a different risk than backing it up; admins may always.
+- Per-stack queue/lock like every other job, so it cannot run in the middle
+  of a backup, update or restore of the same stack.
+- Never `docker compose down` (it removes containers and networks); `stop`
+  and `start`, or `restart`, only. No `--remove-orphans`.
+- Audit entry and job log like the other jobs; "restart" is also the place
+  to show the health wait after the start.
