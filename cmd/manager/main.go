@@ -34,6 +34,10 @@ import (
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
+		// Used by the image's HEALTHCHECK; see healthcheck.go.
+		os.Exit(healthcheck(context.Background(), os.Getenv, os.Stderr))
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	code := run(ctx, os.Getenv, os.ReadFile, os.Stderr, nil)
 	stop()

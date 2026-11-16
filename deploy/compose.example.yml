@@ -56,8 +56,3 @@ services:
       - ./data:/data
       # Optional, see above:
       # - /etc/stackvault/secret.key:/run/secrets/stackvault.key:ro
-    healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
-      interval: 30s
-      timeout: 5s
-      start_period: 10s

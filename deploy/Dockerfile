@@ -35,7 +35,10 @@ LABEL org.opencontainers.image.title="StackVault" \
       org.opencontainers.image.version="${VERSION}"
 # The base image's entrypoint (docker-entrypoint.sh) is not wanted: workers
 # are started as "/app/worker run /job" from this image without --entrypoint.
-# No HEALTHCHECK here: worker containers use the same image. The manager's
-# health check (GET /healthz) is set in the compose file.
+# The manager's health check (GET /healthz on STACKVAULT_LISTEN). Worker
+# containers use the same image and are started with --no-healthcheck.
+# A "healthcheck:" in a compose file still overrides this one.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD ["/app/manager", "healthcheck"]
 ENTRYPOINT []
 CMD ["/app/manager"]

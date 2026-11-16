@@ -17,8 +17,9 @@ func TestRunArgs(t *testing.T) {
 			{Type: "volume", Source: "stackvault_data", Target: "/job", SubPath: "jobs/01ABC"},
 			{Type: "volume", Source: "stackvault-restic-cache", Target: "/cache", ReadOnly: false},
 		},
-		Env: map[string]string{"RESTIC_PASSWORD": "s3cret", "RESTIC_REPOSITORY": "/r"},
-		Cmd: []string{"/app/worker", "run", "/job"},
+		Env:           map[string]string{"RESTIC_PASSWORD": "s3cret", "RESTIC_REPOSITORY": "/r"},
+		Cmd:           []string{"/app/worker", "run", "/job"},
+		NoHealthcheck: true,
 	}
 	args, err := runArgs(spec)
 	if err != nil {
@@ -31,6 +32,7 @@ func TestRunArgs(t *testing.T) {
 		"--mount", "type=volume,source=stackvault_data,target=/job,volume-subpath=jobs/01ABC",
 		"--mount", "type=volume,source=stackvault-restic-cache,target=/cache",
 		"--env", "RESTIC_PASSWORD", "--env", "RESTIC_REPOSITORY",
+		"--no-healthcheck",
 		"sha256:abc", "/app/worker", "run", "/job"}
 	if !reflect.DeepEqual(args, want) {
 		t.Fatalf("args:\n got %q\nwant %q", args, want)

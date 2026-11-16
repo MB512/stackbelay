@@ -67,6 +67,19 @@ func TestNewTemplate(t *testing.T) {
 	}
 }
 
+// Workers run in the manager's image, whose HEALTHCHECK probes the web
+// server; a worker has none and would turn "unhealthy".
+func TestSpecDisablesImageHealthcheck(t *testing.T) {
+	tpl := Template{Image: "img", StacksRoot: "/s", Socket: "/var/run/docker.sock", Jobs: docker.Mount{Type: "bind", Source: "/j"}}
+	spec, err := tpl.Spec("01ABC", restic.Repo{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !spec.NoHealthcheck {
+		t.Error("worker spec must set NoHealthcheck")
+	}
+}
+
 func TestSpecRejectsUnknownRepoVariables(t *testing.T) {
 	tpl := Template{Image: "img", StacksRoot: "/s", Socket: "/var/run/docker.sock", Jobs: docker.Mount{Type: "bind", Source: "/j"}}
 	if _, err := tpl.Spec("01ABCDEFGHJKMNPQRSTVWXYZ01", restic.Repo{Location: "/r", Env: []string{"LD_PRELOAD=/x"}}); err == nil {

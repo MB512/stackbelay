@@ -35,6 +35,10 @@ type ContainerSpec struct {
 	// process environment, so they never show up in "ps" or logs.
 	Env map[string]string
 	Cmd []string
+	// NoHealthcheck disables the HEALTHCHECK baked into the image
+	// (--no-healthcheck). Workers use the manager's image but run no web
+	// server, so the manager's check would mark them unhealthy.
+	NoHealthcheck bool
 }
 
 // ContainerState is the state of a container.
@@ -88,6 +92,9 @@ func runArgs(spec ContainerSpec) ([]string, error) {
 			return nil, fmt.Errorf("invalid container environment variable %q", k)
 		}
 		args = append(args, "--env", k) // name only, see ContainerSpec.Env
+	}
+	if spec.NoHealthcheck {
+		args = append(args, "--no-healthcheck")
 	}
 	args = append(args, spec.Image)
 	return append(args, spec.Cmd...), nil

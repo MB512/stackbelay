@@ -95,6 +95,8 @@ func (t Template) Spec(jobID string, repo restic.Repo) (docker.ContainerSpec, er
 		},
 		Env: env,
 		Cmd: []string{WorkerBinary, "run", WorkerJobDir},
+		// The image's HEALTHCHECK is the manager's (GET /healthz).
+		NoHealthcheck: true,
 	}, nil
 }
 

@@ -73,8 +73,10 @@ compose, so they are never affected by stopping a stack.
 | `STACKVAULT_LOG_LEVEL` | `debug`, `info`, `warn`, `error` |
 | `TZ` | time zone of the cron schedules (e.g. `Europe/Berlin`), default UTC in most images; the zone database is built into the binary |
 
-The database file is created with mode 0600. `/healthz` checks the database
-and is meant for the container health check. Stacks are discovered at
+The database file is created with mode 0600. `/healthz` checks the database.
+The image's `HEALTHCHECK` runs `manager healthcheck`, which calls it on the
+address from `STACKVAULT_LISTEN`, so compose files need no `healthcheck:`
+(one there still overrides it). Workers are started with `--no-healthcheck`. Stacks are discovered at
 startup and mirrored into the database.
 
 ### Secret key
