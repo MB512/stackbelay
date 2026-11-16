@@ -31,6 +31,10 @@ type Manager struct {
 	// so parallel jobs are opt-in.
 	MaxJobs  int
 	LogLevel slog.Level // STACKVAULT_LOG_LEVEL, default info
+	// EnableShell allows admins to open shells in stack containers
+	// (STACKVAULT_ENABLE_SHELL, default false). Off by default: a shell is
+	// free-form command execution.
+	EnableShell bool
 
 	// SecretKey encrypts repository credentials. From STACKVAULT_SECRET_KEY
 	// (base64) or STACKVAULT_SECRET_KEY_FILE (file containing the base64 key).
@@ -84,6 +88,13 @@ func LoadManager(getenv func(string) string, readFile func(string) ([]byte, erro
 		} else {
 			c.MaxJobs = n
 		}
+	}
+	if v := getenv("STACKVAULT_ENABLE_SHELL"); v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("STACKVAULT_ENABLE_SHELL: %w", err))
+		}
+		c.EnableShell = b
 	}
 	if v := getenv("STACKVAULT_ALLOW_INSECURE_HTTP"); v != "" {
 		b, err := strconv.ParseBool(v)

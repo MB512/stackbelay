@@ -131,5 +131,7 @@ fieldset.containers .actions { margin-left: auto; display: flex; gap: .5rem; }
 .log-frame.fullscreen .log { flex: 1; max-height: none; margin: 0; border-radius: 4px; }
 .log-frame.fullscreen .log-exit { align-self: flex-end; color: #d7dde5; border-color: #3a4350; }
 body.log-fullscreen { overflow: hidden; }
+/* Container shell (xterm.js draws inside). */
+.terminal { height: 70vh; padding: .4rem; background: #11151b; border-radius: 8px; border: 1px solid var(--border); }
 button[disabled] { opacity: .5; cursor: not-allowed; }
 .log:empty { display: none; }

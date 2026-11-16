@@ -1,0 +1,49 @@
+{{define "head"}}
+  {{- if .Data.Selected}}
+  <link rel="stylesheet" href="/static/xterm-6.0.0.css">
+  <script src="/static/xterm-6.0.0.js" defer></script>
+  <script src="/static/xterm-addon-fit-0.11.0.js" defer></script>
+  <script src="/static/shell.js" defer></script>
+  {{- end}}
+{{- end}}
+
+{{define "content"}}
+{{- with .Data}}
+{{template "stack-header" .}}
+
+<p class="hint">A shell in a container of this stack, as the container's user (<code>bash</code>, or <code>sh</code>
+  if there is no bash). Everything you type runs in the container. Opening and closing a shell is recorded in the
+  audit log, the commands are not.</p>
+{{- with .Unavailable}}<p class="error" role="alert">{{.}}</p>{{end}}
+
+{{- with .Selected}}
+<section>
+  <div class="section-head">
+    <h2>{{.Name}}</h2>
+    <span class="hint" id="shell-status" role="status">connecting…</span>
+    <a href="/stacks/{{$.Data.Stack.Name}}/shell">Close</a>
+  </div>
+  <div class="terminal" id="terminal" data-socket="{{$.Data.SocketURL}}"></div>
+  <noscript><p class="hint">The shell needs JavaScript.</p></noscript>
+</section>
+{{- else}}
+{{- if .Containers}}
+<table>
+  <thead><tr><th>Container</th><th>Service</th><th>State</th><th></th></tr></thead>
+  <tbody>
+    {{- range .Containers}}
+    <tr>
+      <td>{{.Name}}</td>
+      <td>{{.Service}}</td>
+      <td>{{if .Running}}<span class="badge ok">running</span>{{else}}<span class="badge">{{.State}}</span>{{end}}</td>
+      <td>{{if .Running}}<a href="?container={{.ID}}">Open shell</a>{{else}}<span class="muted">not running</span>{{end}}</td>
+    </tr>
+    {{- end}}
+  </tbody>
+</table>
+{{- else if not .Unavailable}}
+<p class="hint">This stack has no containers yet.</p>
+{{- end}}
+{{- end}}
+{{- end}}
+{{end}}

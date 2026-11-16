@@ -54,6 +54,13 @@ var bannerPW = regexp.MustCompile(`INITIAL ADMIN PASSWORD \(user "admin"\): (\S+
 // if secureCookies is set.
 func newEnv(t *testing.T, tls, secureCookies bool) *testEnv {
 	t.Helper()
+	return newEnvWith(t, tls, secureCookies, nil)
+}
+
+// newEnvWith is newEnv with a hook that configures the server before its
+// routes are built (e.g. EnableShell).
+func newEnvWith(t *testing.T, tls, secureCookies bool, configure func(*Server)) *testEnv {
+	t.Helper()
 	ctx := context.Background()
 	box, _ := secrets.New([]byte("0123456789abcdef0123456789abcdef"))
 	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "db"), box)
@@ -80,6 +87,9 @@ func newEnv(t *testing.T, tls, secureCookies bool) *testEnv {
 		Jobs: e.queue, JobsDir: t.TempDir(),
 	}
 	e.server = s
+	if configure != nil {
+		configure(s)
+	}
 	h, err := s.Handler()
 	if err != nil {
 		t.Fatal(err)

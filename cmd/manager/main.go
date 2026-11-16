@@ -93,8 +93,12 @@ func run(ctx context.Context, getenv func(string) string, readFile func(string) 
 		Logs:       &docker.CLI{},
 		// Compose editor: "docker compose config --quiet" on a temporary
 		// copy; applying runs in a worker job.
-		Compose:  &docker.CLI{},
-		Hostname: cfg.Hostname,
+		Compose: &docker.CLI{},
+		// Container shells (admins, opt-in): "docker exec -it" in a
+		// pseudo-terminal, see docs/security.md.
+		EnableShell: cfg.EnableShell,
+		Shells:      &docker.CLI{},
+		Hostname:    cfg.Hostname,
 		// On SIGTERM open live streams end at once (clients reconnect)
 		// instead of holding up the graceful shutdown.
 		Stopping: ctx.Done(),

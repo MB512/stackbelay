@@ -172,23 +172,23 @@ func TestStackLogsErrorsAndUnavailable(t *testing.T) {
 func TestStreamLimiter(t *testing.T) {
 	var l streamLimiter
 	for i := 0; i < maxLogStreamsPerUser; i++ {
-		if !l.acquire(1) {
+		if !l.acquire(1, maxLogStreamsPerUser, maxLogStreams) {
 			t.Fatalf("stream %d refused", i)
 		}
 	}
-	if l.acquire(1) {
+	if l.acquire(1, maxLogStreamsPerUser, maxLogStreams) {
 		t.Fatal("per-user limit not enforced")
 	}
 	l.release(1)
-	if !l.acquire(1) {
+	if !l.acquire(1, maxLogStreamsPerUser, maxLogStreams) {
 		t.Fatal("released stream not reusable")
 	}
 	for u := int64(2); l.total < maxLogStreams; u++ {
-		if !l.acquire(u) {
+		if !l.acquire(u, maxLogStreamsPerUser, maxLogStreams) {
 			t.Fatalf("user %d refused below the total limit", u)
 		}
 	}
-	if l.acquire(999) {
+	if l.acquire(999, maxLogStreamsPerUser, maxLogStreams) {
 		t.Fatal("total limit not enforced")
 	}
 }

@@ -32,23 +32,25 @@ const (
 	containerListTimeout = 15 * time.Second
 )
 
-// streamLimiter counts open log streams per user and in total. The zero
-// value is ready to use; it is safe for concurrent use.
+// streamLimiter counts open streams (log streams, shell sessions) per user
+// and in total. The zero value is ready to use; it is safe for concurrent
+// use.
 type streamLimiter struct {
 	mu     sync.Mutex
 	total  int
 	byUser map[int64]int
 }
 
-// acquire reserves a stream for the user; false if a limit is reached.
-// Every successful acquire must be followed by release.
-func (l *streamLimiter) acquire(userID int64) bool {
+// acquire reserves a stream for the user; false if perUser streams of the
+// user or total streams are open. Every successful acquire must be
+// followed by release.
+func (l *streamLimiter) acquire(userID int64, perUser, total int) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.byUser == nil {
 		l.byUser = map[int64]int{}
 	}
-	if l.total >= maxLogStreams || l.byUser[userID] >= maxLogStreamsPerUser {
+	if l.total >= total || l.byUser[userID] >= perUser {
 		return false
 	}
 	l.total++
@@ -110,7 +112,7 @@ func (s *Server) stackLogsPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a := authFrom(r.Context())
-	page := logsTab{stackHeader: newStackHeader(a.User, perm, st, tabLogs)}
+	page := logsTab{stackHeader: s.newStackHeader(a.User, perm, st, tabLogs)}
 	dir, found := s.stackDir(st)
 	switch {
 	case s.Logs == nil:
@@ -163,7 +165,7 @@ func (s *Server) stackLogEvents(w http.ResponseWriter, r *http.Request) {
 		}
 		since = t.Add(time.Nanosecond) // the line at "since" was already shown
 	}
-	if !s.logStreams.acquire(a.User.ID) {
+	if !s.logStreams.acquire(a.User.ID, maxLogStreamsPerUser, maxLogStreams) {
 		http.Error(w, "too many open log views", http.StatusTooManyRequests)
 		return
 	}

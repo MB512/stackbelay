@@ -51,7 +51,7 @@ type composeTab struct {
 func (s *Server) loadComposeTab(r *http.Request, st store.Stack) (composeTab, stacks.Stack, []byte, error) {
 	a := authFrom(r.Context())
 	page := composeTab{
-		stackHeader:     newStackHeader(a.User, store.Permission{}, st, tabCompose), // admin-only tab
+		stackHeader:     s.newStackHeader(a.User, store.Permission{}, st, tabCompose), // admin-only tab
 		CSRF:            a.Session.CSRFToken,
 		JobsUnavailable: s.jobsUnavailable(),
 	}

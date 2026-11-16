@@ -51,6 +51,11 @@ type Server struct {
 	// Compose validates edited compose files. If nil, the compose editor
 	// cannot apply changes.
 	Compose ComposeValidator
+	// EnableShell turns on the admin-only "Shell" tab
+	// (STACKVAULT_ENABLE_SHELL). When false its routes do not exist.
+	EnableShell bool
+	// Shells opens shells in stack containers. Required with EnableShell.
+	Shells ShellStarter
 	// Stopping is closed when the manager shuts down; open live streams
 	// then end at once instead of delaying the shutdown (clients
 	// reconnect). nil: streams only end with their client.
@@ -66,6 +71,8 @@ type Server struct {
 
 	templates  map[string]*template.Template
 	logStreams streamLimiter // open log streams
+	shells     streamLimiter // open shell sessions
+	shellCheck time.Duration // session re-check of open shells; default shellSessionCheck (tests shorten it)
 }
 
 func (s *Server) now() time.Time {
@@ -130,6 +137,10 @@ func (s *Server) Handler() (http.Handler, error) {
 			// Admin only.
 			r.Group(func(r chi.Router) {
 				r.Use(s.requireAdmin)
+				if s.EnableShell {
+					r.Get("/stacks/{name}/shell", s.stackShell)
+					r.Get("/stacks/{name}/shell/ws", s.shellSocket)
+				}
 				r.Get("/stacks/{name}/compose", s.stackCompose)
 				r.Post("/stacks/{name}/compose", s.applyCompose)
 				r.Get("/stacks/{name}/settings", s.stackSettings)

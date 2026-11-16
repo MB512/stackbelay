@@ -78,13 +78,14 @@ const (
 	tabBackups  = ""
 	tabLogs     = "logs"
 	tabCompose  = "compose"
+	tabShell    = "shell"
 	tabSettings = "settings"
 )
 
 // newStackHeader builds the tab list for user, whose permission on the
 // stack is perm. Every tab has its own permission check here and again in
 // its handler; tabs the user may not open are not shown.
-func newStackHeader(user store.User, perm store.Permission, st store.Stack, active string) stackHeader {
+func (s *Server) newStackHeader(user store.User, perm store.Permission, st store.Stack, active string) stackHeader {
 	base := "/stacks/" + url.PathEscape(st.Name)
 	tabs := []stackTab{{Label: "Backups", URL: base, Active: active == tabBackups}}
 	if auth.Allowed(user, perm, auth.ActionLogs) {
@@ -94,6 +95,11 @@ func newStackHeader(user store.User, perm store.Permission, st store.Stack, acti
 		// Editing the compose file is admin-only: it is equivalent to root
 		// on the host.
 		tabs = append(tabs, stackTab{Label: "Compose", URL: base + "/" + tabCompose, Active: active == tabCompose})
+		// Container shells: admin-only and opt-in; without
+		// STACKVAULT_ENABLE_SHELL the tab does not exist at all.
+		if s.EnableShell {
+			tabs = append(tabs, stackTab{Label: "Shell", URL: base + "/" + tabShell, Active: active == tabShell})
+		}
 		tabs = append(tabs, stackTab{Label: "Settings", URL: base + "/" + tabSettings, Active: active == tabSettings})
 	}
 	return stackHeader{Stack: st, Tabs: tabs}
@@ -197,7 +203,7 @@ func (s *Server) stackDetail(w http.ResponseWriter, r *http.Request) {
 func (s *Server) loadBackupsTab(r *http.Request, st store.Stack, perm store.Permission) (backupsTab, error) {
 	a := authFrom(r.Context())
 	page := backupsTab{
-		stackHeader:     newStackHeader(a.User, perm, st, tabBackups),
+		stackHeader:     s.newStackHeader(a.User, perm, st, tabBackups),
 		CanBackup:       auth.Allowed(a.User, perm, auth.ActionBackup),
 		CanRestore:      auth.Allowed(a.User, perm, auth.ActionRestore),
 		CanUpdate:       auth.Allowed(a.User, perm, auth.ActionUpdate),
@@ -329,7 +335,7 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, st store
 		return
 	}
 	page := settingsTab{
-		stackHeader: newStackHeader(authFrom(r.Context()).User, store.Permission{}, st, tabSettings), // admin-only tab: no grant needed
+		stackHeader: s.newStackHeader(authFrom(r.Context()).User, store.Permission{}, st, tabSettings), // admin-only tab: no grant needed
 		Repo:        repo,
 		Permissions: rows,
 		Schedules:   scheds,
