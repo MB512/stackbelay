@@ -63,7 +63,10 @@ CREATE TABLE schedules (
   stack_id    INTEGER NOT NULL REFERENCES stacks(id) ON DELETE CASCADE,
   cron_expr   TEXT NOT NULL,
   pre_stop    INTEGER NOT NULL DEFAULT 0,   -- take pre-stop snapshot first
-  enabled     INTEGER NOT NULL DEFAULT 1
+  enabled     INTEGER NOT NULL DEFAULT 1,
+  -- migration 0008:
+  job_type    TEXT NOT NULL DEFAULT 'backup' CHECK (job_type IN ('backup', 'update')),
+  rollback_in_place INTEGER NOT NULL DEFAULT 0 -- updates: roll back in place
 );
 
 CREATE TABLE jobs (

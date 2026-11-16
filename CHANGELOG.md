@@ -33,6 +33,12 @@ All notable changes to StackVault. The format is based on
 
 ### Added
 
+- **Scheduled updates**: a schedule on the Settings tab can now queue an
+  update instead of a backup. Scheduled updates always run "only if new",
+  so nothing is stopped or backed up unless an image changed. Options:
+  snapshot before stopping, and roll back in place. Updates (manual and
+  scheduled) can now skip the snapshot before stopping (worker flag
+  `--no-pre-stop`).
 - **Update tab** for users with the update right (the update moved off the
   Backups tab):
   - **Check now** asks the registries, without pulling, whether the tags of

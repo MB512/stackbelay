@@ -439,7 +439,10 @@ cancel):
    service changes, the job ends here as `succeeded` with
    `result.unchanged`: no snapshots, nothing stopped. Services without an
    image (built locally) do not count.
-3. With a repository: pre-stop snapshot (always; failure only warns).
+3. With a repository: pre-stop snapshot (failure only warns). It can be
+   turned off (`no_pre_stop`, worker flag `--no-pre-stop`, checkbox in the
+   update form and in update schedules); the final snapshot then has no
+   parent and copies everything with the stack stopped.
 4. `compose stop`.
 5. With a repository: final snapshot (parent = pre-stop): the state the
    rollback returns to. Failure in 4–5 (or cancellation before 6): `compose
@@ -810,9 +813,17 @@ where it is not wanted).
 ## Scheduler
 
 `internal/scheduler`, using `robfig/cron/v3` in the manager. A schedule only
-creates a `queued` backup job (trigger `schedule`, no requesting user);
-execution always goes through the same queue, per-stack lock and worker path
-as manual runs.
+creates a `queued` job (trigger `schedule`, no requesting user); execution
+always goes through the same queue, per-stack lock and worker path as manual
+runs. A schedule has a job type (Settings tab, admins):
+
+- **backup**, with the option "pre-stop snapshot";
+- **update**, always with "only if new" (a scheduled update never stops or
+  backs up a stack when no running service gets a new image or is pinned),
+  with the options "pre-stop snapshot" (`no_pre_stop` in the job when off)
+  and "roll back in place". It needs a repository: without one the job
+  fails (nobody confirms an update without backup), and it fails if the
+  stack is not running.
 
 - Expressions: the standard 5 fields (minute hour day-of-month month
   day-of-week) or descriptors (`@daily`, `@weekly`, `@every 6h`, ...).
@@ -826,8 +837,9 @@ as manual runs.
   handlers call `Reload` after every change, which replaces all cron entries.
 - Firing (`Scheduler.Fire`): re-reads the schedule and its stack, skips it if
   either was disabled (or the schedule deleted) since the last reload, then
-  submits the backup. If a backup of the stack is already queued, the run is
-  skipped (logged); a running backup does not block queueing the next one.
+  submits the job. If a job of the same type is already queued for the
+  stack, the run is skipped (logged); a running job does not block queueing
+  the next one.
   Audit entry `job.create` without user. A stack without repository or
   directory is not special-cased: the job is queued and fails visibly
   (the Settings tab warns about schedules without a repository).
