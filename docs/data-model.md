@@ -54,6 +54,7 @@ CREATE TABLE permissions (
   can_backup  INTEGER NOT NULL DEFAULT 0,
   can_restore INTEGER NOT NULL DEFAULT 0,
   can_logs    INTEGER NOT NULL DEFAULT 0,   -- live container logs; migration 0005
+  can_update  INTEGER NOT NULL DEFAULT 0,   -- update job; migration 0006
   PRIMARY KEY (user_id, stack_id)
 );
 
@@ -104,8 +105,8 @@ CREATE TABLE audit_log (
 - Admin: may manage users, stacks, repositories, schedules, and may do
   everything on every stack.
 - Non-admin: may start a backup only if `can_backup`, a restore only if
-  `can_restore` for that stack, and may view its live container logs only
-  if `can_logs` (logs are not redacted). Viewing a stack's status/snapshots
+  `can_restore` for that stack, an update only if `can_update`, and may
+  view its live container logs only if `can_logs` (logs are not redacted). Viewing a stack's status/snapshots
   requires at least one of the flags.
 - Checks happen server-side on every request and again when the job is created.
   The worker never decides permissions.
