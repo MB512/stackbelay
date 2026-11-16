@@ -589,3 +589,40 @@ func TestUpdateRepositoryHandling(t *testing.T) {
 		t.Fatalf("rolled-back update: %+v", got)
 	}
 }
+
+// A compose-apply job gets its new file in the job directory and the
+// checksums in the spec.
+func TestComposeApplyHandoff(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	content := []byte("services: {}\n")
+	sum := jobs.SHA256Hex(content)
+	base := jobs.SHA256Hex([]byte("old"))
+	j, err := e.d.Submit(ctx, store.Job{StackID: e.web, Type: jobs.TypeComposeApply, Trigger: store.TriggerManual,
+		ComposeContent: content, Options: store.JobOptions{ComposeFile: "compose.yml", ComposeSHA256: sum, ComposeBaseSHA256: base}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.d.Step(ctx)
+	if got := e.job(j.ID).State; got != jobs.StateRunning {
+		t.Fatalf("state %s: %+v", got, e.job(j.ID))
+	}
+	spec, err := jobs.ReadSpec(filepath.Join(e.jobsDir, j.ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.ComposeSHA256 != sum || spec.ComposeBaseSHA256 != base || spec.NoBackup {
+		t.Fatalf("spec %+v", spec)
+	}
+	got, err := os.ReadFile(filepath.Join(e.jobsDir, j.ID, jobs.ComposeNewFile))
+	if err != nil || string(got) != string(content) {
+		t.Fatalf("compose.new %q, %v", got, err)
+	}
+
+	// Without repository only with confirmation (like an update).
+	n := e.submit("norepo", jobs.TypeComposeApply, store.JobOptions{ComposeSHA256: sum, ComposeBaseSHA256: base})
+	e.d.Step(ctx)
+	if got := e.job(n.ID); got.State != jobs.StateFailed || !strings.Contains(got.Error, "no repository") {
+		t.Fatalf("unconfirmed without repository: %+v", got)
+	}
+}

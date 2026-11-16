@@ -291,18 +291,19 @@ func (d *Dispatcher) start(ctx context.Context, j store.Job) {
 		fail("starting job", fmt.Errorf("invalid job id %q", j.ID))
 		return
 	}
-	// Every job needs the repository, except an update the user confirmed
-	// to run without backup. An update of a stack that has a repository
-	// always backs up, even if it had none when the job was queued.
+	// Every job needs the repository, except an update or compose apply the
+	// user confirmed to run without backup. Such a job on a stack that has
+	// a repository always backs up, even if it had none when it was queued.
+	changes := j.Type == jobs.TypeUpdate || j.Type == jobs.TypeComposeApply
 	var resticRepo restic.Repo
 	noBackup := false
 	repo, err := d.Store.RepositoryForStack(ctx, j.StackID)
 	switch {
 	case err == nil:
 		resticRepo = repo.Restic()
-	case errors.Is(err, store.ErrNotFound) && j.Type == jobs.TypeUpdate && j.Options.NoBackup:
+	case errors.Is(err, store.ErrNotFound) && changes && j.Options.NoBackup:
 		noBackup = true
-		log.Warn("updating without backup: the stack has no repository (confirmed when the job was queued)")
+		log.Warn("changing the stack without backup: it has no repository (confirmed when the job was queued)")
 	case errors.Is(err, store.ErrNotFound):
 		fail("starting job", errors.New("the stack has no repository"))
 		return
@@ -321,7 +322,19 @@ func (d *Dispatcher) start(ctx context.Context, j store.Job) {
 		SkipSafetySnapshot: j.Options.SkipSafetySnapshot, NoStart: j.Options.NoStart, PinImages: j.Options.PinImages,
 		Trigger: j.Trigger, Requester: j.Requester, NoBackup: noBackup,
 	}
-	if j.Type == jobs.TypeRestore || (j.Type == jobs.TypeUpdate && !noBackup) {
+	if j.Type == jobs.TypeComposeApply {
+		spec.ComposeSHA256, spec.ComposeBaseSHA256 = j.Options.ComposeSHA256, j.Options.ComposeBaseSHA256
+		content, err := d.Store.JobComposeContent(ctx, j.ID)
+		if err != nil {
+			fail("loading the new compose file", err)
+			return
+		}
+		if err := os.WriteFile(filepath.Join(dir, jobs.ComposeNewFile), content, 0o600); err != nil {
+			fail("writing the new compose file", err)
+			return
+		}
+	}
+	if j.Type == jobs.TypeRestore || (changes && !noBackup) {
 		// Restoring the manager's own stack (also as an update's
 		// rollback): keep the job files.
 		spec.CarryOverJobs = d.Template.JobsDirInStack(j.StackName)
