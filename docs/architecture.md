@@ -150,7 +150,9 @@ carries
 `carry_over_jobs` (the jobs directory relative to the stack, e.g.
 `data/jobs`): right after the swap, before the stack starts, the worker
 copies it from the previous version into the restored stack, and at the
-end writes its final status and complete log into that copy too. The
+end writes its final status and complete log into that copy too. An
+in-place restore excludes that directory from the restore instead (see
+"In-place restore"); the job files never move. The
 restarted manager then reconciles: the self-backup that was running when
 the snapshot was taken is finished from its real result, and the restore
 itself (and any later jobs) are imported. Users, repositories and
@@ -303,6 +305,48 @@ Self-restore works for the same reason as self-backup. Mount the parent
 directory, never the stack folder itself, otherwise the swap would pull the
 mount point away from under the worker.
 
+### In-place restore
+
+Restore option **method** (UI radio buttons, default "switch over"; job
+option `in_place`, worker flag `--in-place`), for any user with the restore
+right. Restoring into staging and swapping needs room for a complete second
+copy and downloads the whole snapshot, which is slow and expensive for
+large stacks (photo libraries, file sync). In place, steps 4 and 5 become:
+
+4. `restic restore <snap>:<snapshot path> --target <root>/<stack> --delete
+   --overwrite if-changed [--exclude /<carry_over_jobs>]` (restic >= 0.17).
+   Files with the same size and modification time as in the snapshot count
+   as unchanged and are neither read nor written; the others are verified
+   and rewritten where their content differs; files that are not in the
+   snapshot are deleted. The manager's jobs directory (self-restore) is
+   excluded, which also protects it from `--delete`. Then the compose file
+   check, the directory metadata and the image pinning run on the stack
+   directory itself.
+5. No swap and no `<stack>.old-<ts>` directory.
+
+Failure handling differs once restic has started writing: the old state is
+gone, and starting a half-restored stack could damage its data further.
+
+- Failure before that (stop, safety snapshot): as with a swap, the stack is
+  started again as it was.
+- Failure during the restore or before the stack is completely restored
+  (restic, directory metadata): the job fails, the stack **stays
+  stopped**, and the error says how to get back: restore again, or restore
+  the safety snapshot. Without a safety snapshot (admins only) there is no
+  way back to the state before.
+- Failure after a complete restore but before the start (e.g. a pinned
+  image that cannot be pulled): the stack stays stopped with the restored
+  files.
+- Failure of the start: reported like any failed start.
+
+The safety snapshot is therefore the only rollback of an in-place restore;
+the UI says so next to the option.
+
+Automatic restores (the rollback of an update or a compose apply) still
+use the swap. Whether they should restore in place, at least for large
+stacks, is an open decision, see "Rollbacks: in place or with swap" under
+"Planned features".
+
 ## Pinning image versions on restore
 
 Goal: after a restore, run the image versions that were running at backup
@@ -319,7 +363,8 @@ How `pinned` works (`jobs.Pipeline.preparePinning`; the stack's own
 staging directory and **before the swap**, so any failure (no or invalid
 `metadata.txt`, an image that cannot be pulled, `COMPOSE_FILE` in `.env`)
 aborts the restore with the normal rollback: staging removed, the old stack
-started again.
+started again. In place there is nothing to go back to: the stack is left
+stopped with the restored files (see "In-place restore").
 
 1. Parse `metadata.txt` from the staging directory (`ParseMetadata`, every
    field validated; repo digests must match the digest syntax).
@@ -792,7 +837,7 @@ requires restic >= 0.17.
 ```
 worker run <job-dir>
 worker backup  [--pre-stop] <stack>
-worker restore [--no-safety-snapshot] [--no-start] [--pin-images] <stack> <snapshot-id>
+worker restore [--no-safety-snapshot] [--no-start] [--pin-images] [--in-place] <stack> <snapshot-id>
 worker update  [--no-backup] <stack>
 ```
 
@@ -888,6 +933,25 @@ from host A to host B, B must list A's snapshots of the same stack name: a
 per-repository (or per-import) setting **source host** (default: this host)
 selects whose snapshots are listed and restored. Restoring another host's
 snapshot is an admin action; new backups always use this host's name.
+
+### Rollbacks: in place or with swap (open decision)
+
+The automatic rollback of an update or a compose apply restores the final
+snapshot by swapping directories (see "Update pipeline"). For large stacks
+that means downloading the whole stack and holding a second copy, although
+almost nothing changed since the snapshot taken minutes before. An in-place
+rollback would only rewrite the few changed files. To decide:
+
+- in place always, never, or per stack (a stack setting "large data" that
+  also preselects the method on the restore page);
+- what happens when an in-place rollback fails half-way: the stack is then
+  stopped and partly restored, and there is no failed-version directory to
+  inspect (with a swap it is kept as `<stack>.old-<ts>`);
+- whether the pre-stop snapshot (taken while running) makes the in-place
+  comparison faster: it is the parent of the final snapshot, and with
+  if-changed restic only checks size and mtime of unchanged files anyway.
+
+Until then rollbacks keep the swap.
 
 ### Compose editor: skip repeated backups
 

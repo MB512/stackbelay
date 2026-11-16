@@ -33,6 +33,16 @@ All notable changes to StackVault. The format is based on
 
 ### Added
 
+- **In-place restore** for large stacks: the restore page offers a second
+  method next to "into a new directory, then switch over". In place, restic
+  restores over the stack directory: unchanged files (same size and
+  modification time) are kept, changed files are rewritten, files that are
+  not in the snapshot are deleted. This saves the download of the whole
+  snapshot and the disk space of a second copy. There is no
+  `<stack>.old-<time>` directory: the safety snapshot is the only way back,
+  and if the restore fails half-way the stack is left stopped and partly
+  restored until it is restored again. Worker flag `--in-place`. Automatic
+  rollbacks of updates and compose changes still switch over.
 - **Container shell** (opt-in, administrators only): with
   `STACKVAULT_ENABLE_SHELL=true` a "Shell" tab opens a terminal in the browser
   for any running container of a stack (`bash`, or `sh`, as the container's

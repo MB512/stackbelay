@@ -101,8 +101,14 @@ attackers reaching the UI, a leaked database file.
 10. **TLS.** The app speaks plain HTTP and is meant to run behind a reverse
     proxy that terminates TLS. Document this prominently. Offer an option to
     refuse login over non-HTTPS unless explicitly allowed.
-11. **Restore safety.** Restore always takes a `pre-restore` safety snapshot
-    and swaps directories instead of overwriting in place.
+11. **Restore safety.** Restore takes a `pre-restore` safety snapshot (only
+    admins can skip it) and by default swaps directories, so the current
+    directory is untouched until the restored copy is complete. The
+    in-place restore (any user with the restore right, chosen explicitly)
+    overwrites the stack directory; its only way back is the safety
+    snapshot, and a failed in-place restore leaves the stack stopped
+    instead of starting a partly restored one. Automatic rollbacks always
+    swap.
 12. **Backup of the backup tool.** The manager's `/data` (DB, job files) is
     inside its stack folder and gets backed up with it. With the default key
     source, `/data/secret.key` is in that backup too, so a restore of the

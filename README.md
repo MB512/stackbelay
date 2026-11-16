@@ -22,8 +22,10 @@ strategy you already trust until it has proven itself on your hosts.
   also when the backup fails or is cancelled.
 - **Restores** into a staging directory first, then swap: the previous
   directory is kept (`<stack>.old-<time>`), a safety snapshot of the current
-  state is taken before. Optionally with the **image versions from backup
-  time** (pinned by digest).
+  state is taken before. For large stacks a restore can run **in place**
+  instead: only files that differ from the snapshot are downloaded and
+  rewritten. Optionally with the **image versions from backup time**
+  (pinned by digest).
 - **Schedules** (cron expressions) per stack, plus manual backups. Jobs are
   queued; one job per stack at a time.
 - **Multi-user** with per-stack rights (view, backup, restore); admins
