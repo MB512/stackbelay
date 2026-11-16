@@ -1057,6 +1057,29 @@ Phases of a job that wait without output and could say what they wait for:
   show the services still pending.
 - **Rollback** after a failed update: its own phase marker on the job page.
 
+### Sizes and durations in the snapshot and job lists
+
+Requested 2026-11-16. Most of the data already exists:
+
+- **Snapshot list**: add **size** and **duration** per snapshot. Snapshots
+  made with restic >= 0.17 carry a `summary` in `restic snapshots --json`
+  (checked with 0.18): `data_added_packed` is what the snapshot added to
+  the repository after deduplication and compression, i.e. what was
+  transferred and stored (not the size on the source disk);
+  `backup_end - backup_start` is the duration. The snapshot cache
+  (`snapshot_cache`) needs columns for them, filled on refresh; older
+  snapshots without `summary` show "–". Note: a final snapshot after a
+  pre-stop snapshot adds little (only what changed in between), so the
+  list should make clear that the size is "added", not the full size.
+- **Job list on the Backups tab**: a **duration** column
+  (`finished_at - started_at`, "running for …" while it runs). No schema
+  change.
+- **Size of the stack directory**: `total_bytes_processed` of the newest
+  snapshot is the size of the stack directory at backup time (files
+  processed, before deduplication). Show it on the Backups tab ("Stack
+  size at the last backup: 315 MB"), maybe also in the stack list. The
+  manager does not need to walk the directory itself.
+
 ### Compose editor: skip repeated backups
 
 The log view, the update and the compose editor (agreed 2026-11-16) are
