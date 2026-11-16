@@ -1010,6 +1010,53 @@ editor have the option "roll back in place" (default: swap). Still open:
 - what to keep for inspection when an in-place rollback replaces the
   failed version (nothing today; with a swap it is `<stack>.old-<ts>`).
 
+### Progress and feedback for long operations
+
+Requested 2026-11-16: the UI should show progress (percent, speed,
+remaining time) or at least messages for operations that take long, and a
+spinner where no progress is known. Today a job shows its log lines as they
+come, but nothing between them, and synchronous actions show nothing until
+the page returns.
+
+With real progress (the tools report it):
+
+- **Backup** (pre-stop and final snapshot): `restic backup --json` already
+  prints `message_type: "status"` lines (`percent_done`, `bytes_done`,
+  `total_bytes`, `files_done`, `seconds_remaining`); `restic.CLI` drops
+  them. Idea: the worker writes the latest status (throttled, e.g. every
+  2 s) to a small `progress.json` in the job directory, the job page's
+  live stream sends it as its own SSE event, and the page shows a progress
+  bar with speed and remaining time.
+- **Restore**, also in place and as a rollback: `restic restore --json`
+  prints status lines too (restic >= 0.17: `percent_done`, `bytes_restored`,
+  `total_bytes`); same mechanism.
+- **Pulling images** (update, pinned restore): runs with `--quiet` today.
+  `docker compose --progress json pull` (and `docker pull` without
+  `--quiet`) report per-layer progress; summarize it as "image x: n of m
+  MB".
+
+Synchronous requests that only need a spinner or a message (the page waits
+for the answer):
+
+- **Check for updates** (about 4 s per stack, longer with many images): a
+  spinner and a disabled button while it runs; better, per-service rows
+  that fill in as each registry answers (SSE or HTMX polling).
+- **Saving a repository** (access check by listing snapshots), **Initialize
+  repository** (several seconds) and **Refresh snapshots**: slow with
+  remote repositories.
+- **Validate and apply** in the compose editor (`docker compose config`).
+- **Opening a shell** ("connecting…" exists) and the **log view** before the
+  first lines arrive.
+
+Phases of a job that wait without output and could say what they wait for:
+
+- **Queued** behind another job of the stack, or behind the global limit
+  (`STACKVAULT_MAX_JOBS`): show the position or the blocking job.
+- **Stopping the stack** (`compose stop`, up to the stop timeout of each
+  container) and **waiting until healthy** (up to 5 minutes for updates):
+  show the services still pending.
+- **Rollback** after a failed update: its own phase marker on the job page.
+
 ### Compose editor: skip repeated backups
 
 The log view, the update and the compose editor (agreed 2026-11-16) are
