@@ -76,15 +76,19 @@ type stackHeader struct {
 // Tab ids, also the last path segment of the tab ("" = the stack's root).
 const (
 	tabBackups  = ""
+	tabLogs     = "logs"
 	tabSettings = "settings"
 )
 
-// newStackHeader builds the tab list for user. Every tab has its own
-// permission check here and again in its handler; tabs the user may not
-// open are not shown.
-func newStackHeader(user store.User, st store.Stack, active string) stackHeader {
+// newStackHeader builds the tab list for user, whose permission on the
+// stack is perm. Every tab has its own permission check here and again in
+// its handler; tabs the user may not open are not shown.
+func newStackHeader(user store.User, perm store.Permission, st store.Stack, active string) stackHeader {
 	base := "/stacks/" + url.PathEscape(st.Name)
 	tabs := []stackTab{{Label: "Backups", URL: base, Active: active == tabBackups}}
+	if auth.Allowed(user, perm, auth.ActionLogs) {
+		tabs = append(tabs, stackTab{Label: "Logs", URL: base + "/" + tabLogs, Active: active == tabLogs})
+	}
 	if user.IsAdmin {
 		tabs = append(tabs, stackTab{Label: "Settings", URL: base + "/" + tabSettings, Active: active == tabSettings})
 	}
@@ -188,7 +192,7 @@ func (s *Server) stackDetail(w http.ResponseWriter, r *http.Request) {
 func (s *Server) loadBackupsTab(r *http.Request, st store.Stack, perm store.Permission) (backupsTab, error) {
 	a := authFrom(r.Context())
 	page := backupsTab{
-		stackHeader:     newStackHeader(a.User, st, tabBackups),
+		stackHeader:     newStackHeader(a.User, perm, st, tabBackups),
 		CanBackup:       auth.Allowed(a.User, perm, auth.ActionBackup),
 		CanRestore:      auth.Allowed(a.User, perm, auth.ActionRestore),
 		CSRF:            a.Session.CSRFToken,
@@ -319,7 +323,7 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, st store
 		return
 	}
 	page := settingsTab{
-		stackHeader: newStackHeader(authFrom(r.Context()).User, st, tabSettings),
+		stackHeader: newStackHeader(authFrom(r.Context()).User, store.Permission{}, st, tabSettings), // admin-only tab: no grant needed
 		Repo:        repo,
 		Permissions: rows,
 		Schedules:   scheds,

@@ -1,0 +1,36 @@
+{{define "content"}}
+{{- with .Data}}
+{{template "stack-header" .}}
+
+{{- /* static/stacklog.js fills #stack-log from the event stream and
+       shows or hides lines with the container checkboxes. */}}
+<section id="stack-logs" data-events="/stacks/{{.Stack.Name}}/logs/events"{{if .Unavailable}} data-unavailable{{end}}>
+  {{- with .Unavailable}}
+  <p class="error">{{.}}</p>
+  {{- else}}
+  <fieldset class="containers" id="log-containers">
+    <legend>Containers</legend>
+    {{- range .Containers}}
+    <label class="check"><input type="checkbox" value="{{.}}" checked> {{.}}</label>
+    {{- else}}
+    <p class="hint" id="log-containers-empty">This stack has no containers yet.</p>
+    {{- end}}
+    <span class="actions">
+      <button type="button" class="secondary" id="log-show-all">Show all</button>
+      <button type="button" class="secondary" id="log-hide-all">Hide all</button>
+    </span>
+  </fieldset>
+  <p class="hint">Live output of <code>docker compose logs</code>: the last {{logTail}} lines of every container, then new lines as they come.
+    Times are UTC. <span id="stack-log-live" aria-live="polite"></span></p>
+  <div class="log" id="stack-log" role="log"></div>
+  <noscript><p class="hint">The live log view needs JavaScript.</p></noscript>
+  {{- end}}
+</section>
+<script src="/static/stacklog.js" defer></script>
+{{- end}}
+{{end}}
+
+{{- /* One container log line; also sent as a "line" event of the stream. */}}
+{{define "container-log-line" -}}
+<div class="line" data-c="{{.Container}}">{{with .Time}}<span class="ts">{{.}}</span> {{end}}{{with .Container}}<span class="ctr">{{.}}</span> {{end}}{{.Text}}{{if .Cut}} <span class="attrs">[line cut]</span>{{end}}</div>
+{{- end}}

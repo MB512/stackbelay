@@ -27,8 +27,11 @@ attackers reaching the UI, a leaked database file.
    validated options; the snapshot id must be in the stack's snapshot cache.
    Only admins may skip the pre-restore safety snapshot. Besides creating
    workers, the manager may run only read-only compose commands for
-   discovered stacks, with fixed argument lists (planned: `logs` and `ps`
-   for the log view, `config --quiet` to validate an edited compose file).
+   discovered stacks, with fixed argument lists: `logs` and `ps` for the
+   log view (after checking that the compose project belongs to the stack
+   directory; at most 4 streams per user, 20 in total; planned: `config
+   --quiet` to validate an edited compose file). Container logs are not
+   redacted, so viewing them is a separate per-stack right (`can_logs`).
    Everything that changes a stack runs in a worker job.
    Editing a compose file (planned) is admin-only: it is equivalent to root
    on the host. Optional hardening: put a socket proxy between

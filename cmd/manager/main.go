@@ -87,7 +87,11 @@ func run(ctx context.Context, getenv func(string) string, readFile func(string) 
 		Snapshots: snapCache,
 		Repos:     resticCLI,
 		JobsDir:   cfg.JobsDir(),
-		Hostname:  cfg.Hostname,
+		// Container logs: read-only "docker compose logs/ps" for
+		// discovered stacks (see docs/security.md, rule 3).
+		StacksRoot: cfg.StacksRoot,
+		Logs:       &docker.CLI{},
+		Hostname:   cfg.Hostname,
 		// On SIGTERM open live streams end at once (clients reconnect)
 		// instead of holding up the graceful shutdown.
 		Stopping: ctx.Done(),

@@ -42,6 +42,12 @@ type Server struct {
 	Schedules ScheduleReloader
 	// JobsDir is the jobs directory (for job logs).
 	JobsDir string
+	// StacksRoot is STACKS_ROOT; stack directories are looked up there by
+	// discovery (stacks.Lookup), never taken from the URL.
+	StacksRoot string
+	// Logs reads container logs for the Logs tab. If nil, the tab says
+	// that logs are unavailable.
+	Logs StackLogs
 	// Stopping is closed when the manager shuts down; open live streams
 	// then end at once instead of delaying the shutdown (clients
 	// reconnect). nil: streams only end with their client.
@@ -55,7 +61,8 @@ type Server struct {
 	// Now returns the current time; defaults to time.Now (tests override it).
 	Now func() time.Time
 
-	templates map[string]*template.Template
+	templates  map[string]*template.Template
+	logStreams streamLimiter // open log streams
 }
 
 func (s *Server) now() time.Time {
@@ -107,6 +114,8 @@ func (s *Server) Handler() (http.Handler, error) {
 			r.Get("/stacks/{name}", s.stackDetail)
 			r.Post("/stacks/{name}/snapshots/refresh", s.refreshStackSnapshots)
 			r.Post("/stacks/{name}/backup", s.startBackup)
+			r.Get("/stacks/{name}/logs", s.stackLogsPage)
+			r.Get("/stacks/{name}/logs/events", s.stackLogEvents)
 			r.Get("/stacks/{name}/restore", s.restoreForm)
 			r.Post("/stacks/{name}/restore", s.startRestore)
 			r.Get("/jobs/{id}", s.jobDetail)

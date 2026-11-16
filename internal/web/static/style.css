@@ -114,5 +114,9 @@ table.details th { width: 10rem; }
 .log .WARN .lvl { color: #e8b44c; }
 .log .ERROR .lvl, .log .ERROR { color: #f28b82; }
 .log .attrs { color: #9aa5b4; }
+.log .ctr { color: #7cb7ff; }
+.log .line[hidden] { display: none; }
+fieldset.containers { display: flex; flex-wrap: wrap; gap: .3rem 1.2rem; align-items: center; }
+fieldset.containers .actions { margin-left: auto; display: flex; gap: .5rem; }
 button[disabled] { opacity: .5; cursor: not-allowed; }
 .log:empty { display: none; }

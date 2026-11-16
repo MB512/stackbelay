@@ -444,6 +444,8 @@ with a light and a dark set; the job log is a dark panel in both modes.
 | `GET /` | logged in | stacks the user may view (admins: all) |
 | `GET /stacks/{name}` | view right | "Backups" tab: repository location, cached snapshots (same for every user) |
 | `POST /stacks/{name}/backup` | backup right | queue a backup (option: pre-stop snapshot) |
+| `GET /stacks/{name}/logs` | logs right | "Logs" tab: container checkboxes and live log panel |
+| `GET /stacks/{name}/logs/events` | logs right | live container logs (SSE), see "Container logs" |
 | `GET /stacks/{name}/restore?snapshot=<id>` | restore right | confirmation page with options |
 | `POST /stacks/{name}/restore` | restore right | queue a restore of a cached, not removed snapshot; only admins may skip the safety snapshot |
 | `GET /jobs/{id}` | view right on the job's stack | job details and log; followed live by `static/joblog.js` while not final |
@@ -480,9 +482,10 @@ keeping repositories and their indexes small.
 
 Stack pages share a header with tabs (`stack-header` in `partials.html`).
 The tab list is built per user in `newStackHeader`; a tab is only shown if
-the user may open it, and its handler checks the permission again. Planned
-tabs (logs, status with restart, editing `compose.yml`) are added there
-with their own permissions.
+the user may open it, and its handler checks the permission again. Tabs:
+"Backups" (view right), "Logs" (logs right), "Settings" (admin). Planned
+tabs (compose editor, status with restart) are added there with their own
+permissions.
 
 Stacks a user may not view answer 404 (not 403), so stack names are not
 revealed. `{name}` must pass `stacks.ValidName` and exist in the database
@@ -521,6 +524,41 @@ redacted before writing).
   back, then receives the missed lines and the final details.
 - Viewing the stream needs the view right on the job's stack (like the job
   page). Log files are kept per job; cleanup by age is a later option.
+
+## Container logs
+
+The "Logs" tab (`can_logs`, admins always) shows the live output of all
+containers of a stack, mixed in the order `docker compose logs` prints
+them. One checkbox per container shows or hides its lines; filtering
+happens in the browser only (`static/stacklog.js`), the stream always
+carries all containers.
+
+- The manager runs the logs itself (no worker): `docker compose
+  --project-directory <stack dir> logs --follow --timestamps --no-color
+  --tail 500` (`docker.CLI.FollowLogs`, fixed argument list). The stack
+  directory comes from discovery (`stacks.Lookup`), never from the URL.
+  Before reading, the compose project must belong to that directory (same
+  check as the pipelines), so a project name clash cannot show another
+  project's logs. The checkbox list comes from `compose ps --all`, with
+  names as compose prefixes log lines (`app-1`: container name without
+  `<project>-`; a custom `container_name` as is).
+- `GET /stacks/{name}/logs/events` streams Server-Sent Events: `line`
+  (one line as escaped HTML with `data-c` = container; event id = the
+  line's timestamp, RFC 3339), `end` (compose ended on its own) and
+  `failed` (error text; not named `error`, which would also fire
+  `EventSource.onerror`). A comment every 15 s keeps idle connections
+  open. Lines are cut at 16 KiB; the browser keeps the last 5000.
+- The compose process ends with the request (client gone) or when the
+  manager shuts down. Current Compose versions keep following a stopped
+  stack, so a backup's stop/start does not end the view. On a lost
+  connection the script reconnects with `?since=<last id>` (resumes 1 ns
+  after that line) and backoff up to 30 s, after checking that the page is
+  still accessible.
+- Limits: 4 open streams per user, 20 in total (each is a compose
+  process); more answer 429 and the browser retries with backoff.
+- Logs are **not** redacted: applications may log secrets, hence the
+  separate right. A new stream (without `since`) is audited as
+  `stack.logs`; reconnects are not.
 
 ## Scheduler
 
@@ -701,34 +739,14 @@ Agreed on 2026-11-16, implemented in this order (each one step towards the
 "More stack tabs" idea; a Status tab with restart remains open). Each
 feature moves into the main sections when it is implemented.
 
-**Permissions.** Migration adds `permissions.can_logs` and
-`permissions.can_update` (`auth.ActionLogs`, `auth.ActionUpdate`; admins
-have both). A row with all flags 0 is still deleted. Having any flag gives
+**Permissions.** `permissions.can_logs` exists (migration 0005,
+`auth.ActionLogs`); the update adds `permissions.can_update`
+(`auth.ActionUpdate`). Admins have both. A row with all flags 0 is still deleted. Having any flag gives
 the view right. The compose editor is admin-only: editing a compose file
 is equivalent to root on the host (privileged containers, host mounts), so
 it gets no per-stack permission.
 
-#### 1. Log view (tab "Logs", `can_logs`)
-
-- Live logs of all containers of the stack, mixed, in the order
-  `docker compose logs` prints them. One checkbox per container shows or
-  hides its lines (client side, no new request).
-- The manager reads the logs itself (decision: no log worker container):
-  `docker compose --project-directory <stack dir> logs --follow
-  --timestamps --no-color --tail 500` via `exec.CommandContext` with a
-  fixed argument list, for discovered stacks only. The process ends when
-  the client disconnects or the manager shuts down (context). This extends
-  security rule 3: besides creating workers, the manager may run read-only
-  compose commands (`logs`, `ps`) and `config` (validation, see 3).
-- Transport: SSE like job logs (`GET /stacks/{name}/logs/events`), one
-  event per line with container name, timestamp and text, rendered as
-  escaped HTML. Reconnect resumes with `--since <last timestamp>` (a line
-  at the boundary may repeat). Lines are cut at 16 KiB.
-- Limits: a few concurrent streams per user and a global maximum (both
-  constants first), so open tabs cannot start unlimited processes.
-- Logs are not redacted: applications may log secrets, which is why
-  viewing them is a separate right. Opening the stream is audited
-  (`stack.logs`).
+#### 1. Log view: implemented, see "Container logs".
 
 #### 2. Update (job type `update`, `can_update`)
 

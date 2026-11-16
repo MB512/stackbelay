@@ -21,10 +21,12 @@ var staticFS embed.FS
 
 // pages are the page templates; each is combined with base.html and
 // partials.html.
-var pages = []string{"login.html", "password.html", "error.html", "stacks.html", "stack.html", "stack_settings.html", "users.html", "job.html", "restore.html"}
+var pages = []string{"login.html", "password.html", "error.html", "stacks.html", "stack.html", "stack_settings.html", "users.html", "job.html", "restore.html", "stack_logs.html"}
 
 // templateFuncs are available in all templates.
 var templateFuncs = template.FuncMap{
+	// logTail is how many lines per container the Logs tab starts with.
+	"logTail": func() int { return logTailLines },
 	// version is the build version, shown in the page footer.
 	"version": func() string { return buildinfo.Version },
 	// when formats a timestamp for display; the zero time is shown as "never".
