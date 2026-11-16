@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
@@ -55,7 +56,7 @@ func run(ctx context.Context, getenv func(string) string, readFile func(string) 
 	}
 	log := slog.New(slog.NewJSONHandler(stderr, &slog.HandlerOptions{Level: cfg.LogLevel}))
 
-	st, err := openStore(ctx, cfg)
+	st, err := openStore(ctx, cfg, log)
 	if err != nil {
 		log.Error("starting manager", "error", err)
 		return 1
@@ -160,20 +161,68 @@ func run(ctx context.Context, getenv func(string) string, readFile func(string) 
 	return 0
 }
 
-// openStore creates the data directories and opens the database.
-func openStore(ctx context.Context, cfg config.Manager) (*store.Store, error) {
+// openStore creates the data directories, loads the secret key and opens
+// the database.
+func openStore(ctx context.Context, cfg config.Manager, log *slog.Logger) (*store.Store, error) {
 	if err := os.MkdirAll(cfg.JobsDir(), 0o700); err != nil {
 		return nil, fmt.Errorf("creating data directories: %w", err)
 	}
-	box, err := secrets.New(cfg.SecretKey)
+	key, err := secretKey(cfg, log)
+	if err != nil {
+		return nil, err
+	}
+	box, err := secrets.New(key)
 	if err != nil {
 		return nil, err
 	}
 	st, err := store.Open(ctx, cfg.DBPath(), box)
+	if errors.Is(err, store.ErrKeyMismatch) {
+		return nil, fmt.Errorf("opening database %s: %w (key from %s)", cfg.DBPath(), err, keySourceName(cfg))
+	}
 	if err != nil {
 		return nil, fmt.Errorf("opening database %s: %w", cfg.DBPath(), err)
 	}
 	return st, nil
+}
+
+// secretKey returns the key that encrypts repository credentials: from
+// STACKVAULT_SECRET_KEY or STACKVAULT_SECRET_KEY_FILE if set, otherwise
+// from the key file in the data directory. That file is created only on a
+// fresh install (no database yet), never next to data that was encrypted
+// with another key.
+func secretKey(cfg config.Manager, log *slog.Logger) ([]byte, error) {
+	keyPath := cfg.SecretKeyPath()
+	if cfg.SecretKey != nil {
+		if _, err := os.Lstat(keyPath); err == nil {
+			log.Warn("ignoring the key file in the data directory: STACKVAULT_SECRET_KEY or STACKVAULT_SECRET_KEY_FILE is set",
+				"path", keyPath)
+		}
+		return cfg.SecretKey, nil
+	}
+
+	_, err := os.Stat(cfg.DBPath())
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, fmt.Errorf("checking database: %w", err)
+	}
+	freshInstall := err != nil
+	key, _, err := secrets.LoadOrCreateKeyFile(keyPath, freshInstall, log)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, fmt.Errorf("no secret key: %s does not exist, but the database %s does; "+
+			"restore the key file or set STACKVAULT_SECRET_KEY_FILE (a new key could not decrypt the stored credentials)",
+			keyPath, cfg.DBPath())
+	}
+	if err != nil {
+		return nil, err
+	}
+	return key, nil
+}
+
+// keySourceName names where the secret key came from, for error messages.
+func keySourceName(cfg config.Manager) string {
+	if cfg.SecretKey != nil {
+		return "STACKVAULT_SECRET_KEY / STACKVAULT_SECRET_KEY_FILE"
+	}
+	return cfg.SecretKeyPath()
 }
 
 // syncStacks mirrors the discovered stacks into the database.

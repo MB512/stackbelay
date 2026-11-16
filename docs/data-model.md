@@ -83,6 +83,11 @@ CREATE INDEX jobs_stack_state ON jobs(stack_id, state);
 --   result TEXT NOT NULL DEFAULT '{}'  -- JSON: pre_stop_snapshot, safety_snapshot, previous_dir
 --   UNIQUE INDEX jobs_one_running_per_stack ON jobs(stack_id) WHERE state = 'running'
 
+CREATE TABLE meta (                       -- migration 0004
+  key   TEXT PRIMARY KEY,                   -- "key_check"
+  value BLOB NOT NULL
+) STRICT;
+
 CREATE TABLE audit_log (
   id         INTEGER PRIMARY KEY,
   at         TEXT NOT NULL,
@@ -111,8 +116,13 @@ CREATE TABLE audit_log (
 ## Notes
 
 - Timestamps: UTC, RFC 3339 strings.
-- Secrets key: `STACKVAULT_SECRET_KEY` (32 bytes, base64) from env or file. Losing
-  it means losing access to stored repo credentials; document in README.
+- Secrets key: 32 bytes, base64, from `STACKVAULT_SECRET_KEY`,
+  `STACKVAULT_SECRET_KEY_FILE` or `<data>/secret.key` (generated on a fresh
+  install only). Losing it means losing access to stored repo credentials.
+- `meta.key_check`: AES-256-GCM of `stackvault key check` with associated
+  data `stackvault:key-check`. Checked by `store.Open`; a key that does not
+  open it is refused (`store.ErrKeyMismatch`). Written on first open, for a
+  0.1 database only after an existing repository secret decrypted.
 - Migrations: numbered SQL files (`internal/store/migrations/NNNN_name.sql`)
   embedded via `embed`, applied at startup, each in its own transaction, and
   recorded in `schema_migrations`. Never edit an applied migration; add a new

@@ -29,6 +29,19 @@ func TestLoadManagerDefaults(t *testing.T) {
 	}
 }
 
+func TestLoadManagerWithoutKeySource(t *testing.T) {
+	c, err := LoadManager(lookup(map[string]string{
+		"STACKS_ROOT":         "/home/docker",
+		"STACKVAULT_HOSTNAME": "host-a",
+	}), noFiles)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.SecretKey != nil || c.SecretKeyPath() != "/data/secret.key" {
+		t.Fatalf("SecretKey %v, SecretKeyPath %s", c.SecretKey, c.SecretKeyPath())
+	}
+}
+
 func TestLoadManagerKeyFile(t *testing.T) {
 	read := func(p string) ([]byte, error) {
 		if p == "/run/secrets/key" {
@@ -59,7 +72,7 @@ func TestLoadManagerErrors(t *testing.T) {
 		env     map[string]string
 		wantErr []string
 	}{
-		{"nothing set", map[string]string{}, []string{"STACKS_ROOT", "STACKVAULT_HOSTNAME", "STACKVAULT_SECRET_KEY or"}},
+		{"nothing set", map[string]string{}, []string{"STACKS_ROOT", "STACKVAULT_HOSTNAME"}},
 		{"both keys", map[string]string{"STACKVAULT_SECRET_KEY": testKey, "STACKVAULT_SECRET_KEY_FILE": "/k"}, []string{"only one"}},
 		{"short key", map[string]string{"STACKVAULT_SECRET_KEY": "c2hvcnQ="}, []string{"32 bytes"}},
 		{"missing key file", map[string]string{"STACKVAULT_SECRET_KEY_FILE": "/nope"}, []string{"STACKVAULT_SECRET_KEY_FILE"}},

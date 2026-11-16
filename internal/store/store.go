@@ -37,7 +37,8 @@ type Store struct {
 }
 
 // Open opens (creating if necessary) the SQLite database at path and applies
-// pending migrations. box encrypts and decrypts stored credentials.
+// pending migrations. box encrypts and decrypts stored credentials; if its
+// key does not match the database, Open fails with ErrKeyMismatch.
 func Open(ctx context.Context, dbPath string, box *secrets.Box) (*Store, error) {
 	if box == nil {
 		return nil, errors.New("store: secrets box is required")
@@ -69,6 +70,10 @@ func Open(ctx context.Context, dbPath string, box *secrets.Box) (*Store, error) 
 	}
 	s := &Store{db: db, box: box}
 	if err := s.migrate(ctx); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	if err := s.checkKey(ctx); err != nil {
 		_ = db.Close()
 		return nil, err
 	}

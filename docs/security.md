@@ -28,7 +28,13 @@ attackers reaching the UI, a leaked database file.
    manager and Docker that allows only container create/start/inspect/logs and
    the calls the manager itself needs.
 4. **Secrets at rest.** Repo passwords and backend credentials are encrypted
-   with AES-256-GCM using `STACKVAULT_SECRET_KEY`. The key is not stored in the DB.
+   with AES-256-GCM using the secret key (`STACKVAULT_SECRET_KEY`,
+   `STACKVAULT_SECRET_KEY_FILE`, or by default `<data>/secret.key`, mode
+   0600, generated only on a fresh install; see "Secret key" in
+   architecture.md). The key is not stored in the DB; a `key_check` row in
+   `meta` lets the manager refuse to start with a key that does not match,
+   and it never creates a new key next to an existing database. The key is
+   never logged and never passed to workers.
    Each ciphertext is bound to its row via associated data, so an attacker
    with write access to the DB cannot move a secret to another stack's
    repository. Repository locations are plain text and must not embed
@@ -78,8 +84,13 @@ attackers reaching the UI, a leaked database file.
 11. **Restore safety.** Restore always takes a `pre-restore` safety snapshot
     and swaps directories instead of overwriting in place.
 12. **Backup of the backup tool.** The manager's `/data` (DB, job files) is
-    inside its stack folder and gets backed up with it. The secrets key is NOT
-    part of that backup by design; document where the user must keep it.
+    inside its stack folder and gets backed up with it. With the default key
+    source, `/data/secret.key` is in that backup too, so a restore of the
+    manager's stack brings back a matching key and database; the backup is
+    protected by the restic repository password. Users who want the key in
+    no backup at all set `STACKVAULT_SECRET_KEY_FILE` to a file outside
+    `STACKS_ROOT` (optional hardening, documented in the README). Either
+    way the README tells users to keep a copy of the key elsewhere.
 
 ## Reporting vulnerabilities
 

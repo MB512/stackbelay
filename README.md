@@ -53,17 +53,11 @@ after 0.1.
 
 ## Quick start
 
-1. Create the stack directory and the secret key:
+1. Create the stack directory:
 
    ```sh
    mkdir -p /home/docker/stackvault && cd /home/docker/stackvault
-   sudo install -d -m 700 /etc/stackvault
-   openssl rand -base64 32 | sudo tee /etc/stackvault/secret.key >/dev/null
-   sudo chmod 600 /etc/stackvault/secret.key
    ```
-
-   Keep a copy of the key somewhere safe. It encrypts the stored repository
-   passwords and is deliberately **not** part of any backup.
 
 2. Copy [`deploy/compose.example.yml`](deploy/compose.example.yml) to
    `/home/docker/stackvault/compose.yml` and adjust `STACKS_ROOT`, the
@@ -76,10 +70,35 @@ after 0.1.
    docker compose logs stackvault | grep "INITIAL ADMIN PASSWORD"
    ```
 
+   On the first start StackVault also generates the secret key that
+   encrypts the stored repository passwords: `data/secret.key` (mode 0600).
+   **Keep a copy somewhere safe**, outside this host. Without it the stored
+   repository passwords cannot be decrypted, and StackVault refuses to start
+   with a database whose key is missing or wrong instead of creating a new
+   one.
+
 4. Open the UI through your reverse proxy, log in as `admin`, set a new
    password. For each stack: **Settings** -> repository (location and
    password; "Initialize repository" creates a new one), schedules and user
    rights. Then **Back up now** on the stack's Backups tab.
+
+### Optional: keep the key out of the backups
+
+`data/secret.key` lies inside the StackVault stack, so it is part of that
+stack's own backups (protected by its restic repository password). That
+makes restoring StackVault itself simple. To keep the key in no backup at
+all, store it outside `STACKS_ROOT` and point `STACKVAULT_SECRET_KEY_FILE`
+at it:
+
+```sh
+sudo install -d -m 700 /etc/stackvault
+openssl rand -base64 32 | sudo tee /etc/stackvault/secret.key >/dev/null
+sudo chmod 600 /etc/stackvault/secret.key
+```
+
+On an existing installation, move the generated key there instead
+(`sudo mv data/secret.key /etc/stackvault/secret.key`) — a new key would not
+match the database. Then enable the commented lines in the compose file.
 
 The image is `ghcr.io/mb512/stackvault` (linux/amd64, linux/arm64). It
 contains the manager (web UI, scheduler) and the worker; the manager starts
@@ -93,7 +112,7 @@ Environment variables only:
 |---|---|
 | `STACKS_ROOT` | absolute stacks root, mounted at the **same path** in the container (required) |
 | `STACKVAULT_HOSTNAME` | name of this Docker host, recorded in every snapshot (required) |
-| `STACKVAULT_SECRET_KEY_FILE` / `STACKVAULT_SECRET_KEY` | 32-byte key, base64; exactly one is required |
+| `STACKVAULT_SECRET_KEY_FILE` / `STACKVAULT_SECRET_KEY` | 32-byte key, base64; at most one. Default: `<STACKVAULT_DATA_DIR>/secret.key`, generated on the first start |
 | `STACKVAULT_DATA_DIR` | database and job files, default `/data` |
 | `STACKVAULT_LISTEN` | listen address, default `:8080` |
 | `STACKVAULT_SESSION_TTL` | session lifetime, default `12h` |

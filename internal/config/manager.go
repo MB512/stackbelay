@@ -34,8 +34,13 @@ type Manager struct {
 
 	// SecretKey encrypts repository credentials. From STACKVAULT_SECRET_KEY
 	// (base64) or STACKVAULT_SECRET_KEY_FILE (file containing the base64 key).
+	// Nil if neither is set: the manager then uses SecretKeyPath, see
+	// secrets.LoadOrCreateKeyFile.
 	SecretKey []byte
 }
+
+// SecretKeyPath is the key file used when no key source is configured.
+func (m Manager) SecretKeyPath() string { return filepath.Join(m.DataDir, secrets.KeyFileName) }
 
 // DBPath is the SQLite database file.
 func (m Manager) DBPath() string { return filepath.Join(m.DataDir, "stackvault.db") }
@@ -93,8 +98,8 @@ func LoadManager(getenv func(string) string, readFile func(string) ([]byte, erro
 	case key != "" && keyFile != "":
 		errs = append(errs, errors.New("set only one of STACKVAULT_SECRET_KEY and STACKVAULT_SECRET_KEY_FILE"))
 	case key == "" && keyFile == "":
-		errs = append(errs, errors.New("STACKVAULT_SECRET_KEY or STACKVAULT_SECRET_KEY_FILE is required "+
-			"(32 random bytes, base64; generate with: openssl rand -base64 32)"))
+		// No explicit source: the key file in the data directory is used
+		// (loaded or created at startup, not here).
 	default:
 		if keyFile != "" {
 			b, err := readFile(keyFile)

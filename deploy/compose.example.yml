@@ -5,12 +5,17 @@
 #
 #   /home/docker/stackvault/compose.yml   <- this file
 #   /home/docker/stackvault/data/         <- database and job files (part of
-#                                            the stackvault stack's backups)
+#                                            the stackvault stack's backups),
+#                                            incl. the generated secret.key
 #   /home/docker/<other stacks>/compose.yml
-#   /etc/stackvault/secret.key            <- outside STACKS_ROOT, NOT backed up
 #
-# Create the key once and keep a copy somewhere safe (without it the stored
-# repository passwords cannot be decrypted):
+# On the first start StackVault generates data/secret.key, the key that
+# encrypts the stored repository passwords. Keep a copy somewhere safe:
+# without it the repository passwords cannot be decrypted.
+#
+# Optional hardening, so the key is in no backup: keep it outside
+# STACKS_ROOT and enable the two commented STACKVAULT_SECRET_KEY_FILE lines
+# below (on an existing installation, move data/secret.key there):
 #
 #   sudo install -d -m 700 /etc/stackvault
 #   openssl rand -base64 32 | sudo tee /etc/stackvault/secret.key >/dev/null
@@ -32,7 +37,8 @@ services:
       STACKS_ROOT: /home/docker
       # Name of this Docker host, recorded as restic --host in every snapshot.
       STACKVAULT_HOSTNAME: myhost
-      STACKVAULT_SECRET_KEY_FILE: /run/secrets/stackvault.key
+      # Optional, see above:
+      # STACKVAULT_SECRET_KEY_FILE: /run/secrets/stackvault.key
       # Time zone of the backup schedules.
       TZ: Europe/Berlin
       # Only for a first test without a TLS proxy:
@@ -46,7 +52,8 @@ services:
       # Equivalent to root on the host; see docs/security.md.
       - /var/run/docker.sock:/var/run/docker.sock
       - ./data:/data
-      - /etc/stackvault/secret.key:/run/secrets/stackvault.key:ro
+      # Optional, see above:
+      # - /etc/stackvault/secret.key:/run/secrets/stackvault.key:ro
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
       interval: 30s

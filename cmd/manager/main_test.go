@@ -107,7 +107,7 @@ func TestRunServesAndShutsDown(t *testing.T) {
 func TestRunConfigError(t *testing.T) {
 	var out bytes.Buffer
 	code := run(context.Background(), func(string) string { return "" }, noFiles, &out, nil)
-	if code != 2 || !strings.Contains(out.String(), "STACKVAULT_SECRET_KEY") {
+	if code != 2 || !strings.Contains(out.String(), "STACKS_ROOT") {
 		t.Fatalf("code %d, output %q", code, out.String())
 	}
 }

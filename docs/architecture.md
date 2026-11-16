@@ -62,7 +62,7 @@ compose, so they are never affected by stopping a stack.
 |---|---|
 | `STACKS_ROOT` | absolute stacks root, mounted at the same path as on the host (required) |
 | `STACKVAULT_HOSTNAME` | name of the Docker host, passed to workers for `restic --host` (required) |
-| `STACKVAULT_SECRET_KEY` / `STACKVAULT_SECRET_KEY_FILE` | 32-byte key, base64 (`openssl rand -base64 32`); exactly one is required. Not part of any backup: keep a copy elsewhere |
+| `STACKVAULT_SECRET_KEY` / `STACKVAULT_SECRET_KEY_FILE` | 32-byte key, base64 (`openssl rand -base64 32`); at most one may be set. Neither set: `<STACKVAULT_DATA_DIR>/secret.key`, created on a fresh install. See "Secret key" |
 | `STACKVAULT_DATA_DIR` | database and job directories, default `/data` |
 | `STACKVAULT_LISTEN` | listen address, default `:8080` |
 | `STACKVAULT_SESSION_TTL` | session lifetime, default `12h` |
@@ -75,6 +75,45 @@ compose, so they are never affected by stopping a stack.
 The database file is created with mode 0600. `/healthz` checks the database
 and is meant for the container health check. Stacks are discovered at
 startup and mirrored into the database.
+
+### Secret key
+
+The key encrypts repository credentials in the database (AES-256-GCM, see
+`internal/secrets`). Sources, in this order:
+
+1. `STACKVAULT_SECRET_KEY` (base64 in the variable) or
+   `STACKVAULT_SECRET_KEY_FILE` (path of a file containing it). Setting
+   both is a configuration error. If `<data>/secret.key` exists as well, it
+   is ignored with a warning.
+2. Neither set: `<STACKVAULT_DATA_DIR>/secret.key`.
+
+The format is the same everywhere: base64 of 32 bytes, surrounding
+whitespace ignored. The data-dir key file is **generated only on a fresh
+install**: no key source set, `secret.key` missing **and** `stackvault.db`
+missing. It is created with `O_EXCL` and mode 0600, file and directory are
+fsynced before the key is used, and the path (never the key) is logged once.
+If the database exists but no key is found, the manager refuses to start: a
+new key would silently make the stored credentials unreadable. A key file
+readable by group or others is accepted with a warning.
+
+**Key check.** After the migrations, `store.Open` verifies the key against
+the `meta` row `key_check` (the text `stackvault key check` sealed with
+associated data `stackvault:key-check`). If it does not decrypt, startup is
+refused with "the secret key does not match this database". A database
+from 0.1 has no such row: if it has a repository, that secret must decrypt
+with its own associated data and the row is written; if it fails, startup is
+refused. Without repositories nothing was encrypted yet and the row is
+written right away.
+
+**Backups.** With the data directory inside the manager's stack (as in
+`deploy/compose.example.yml`), `secret.key` is part of that stack's
+backups, next to the database. They are protected by the restic repository
+password, which is not stored on the host in plain text and must be known to
+restore anyway. Restoring the manager's stack restores the matching key and
+database together. To keep the key out of every backup, use
+`STACKVAULT_SECRET_KEY_FILE` with a file outside `STACKS_ROOT` (e.g.
+`/etc/stackvault/secret.key`). Workers never receive the key: it is not in
+their environment, and their only data-dir mount is their own job directory.
 
 ## Job handoff
 
