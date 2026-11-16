@@ -69,7 +69,7 @@ CREATE TABLE schedules (
 CREATE TABLE jobs (
   id            TEXT PRIMARY KEY,           -- ULID
   stack_id      INTEGER NOT NULL REFERENCES stacks(id),
-  type          TEXT NOT NULL,              -- backup | restore
+  type          TEXT NOT NULL,              -- backup | restore | update | compose-apply
   trigger       TEXT NOT NULL,              -- manual | schedule
   requested_by  INTEGER REFERENCES users(id), -- NULL for schedule
   state         TEXT NOT NULL,              -- queued | running | succeeded | failed | cancelled
@@ -84,6 +84,11 @@ CREATE INDEX jobs_stack_state ON jobs(stack_id, state);
 -- migration 0003:
 --   result TEXT NOT NULL DEFAULT '{}'  -- JSON: pre_stop_snapshot, safety_snapshot, previous_dir
 --   UNIQUE INDEX jobs_one_running_per_stack ON jobs(stack_id) WHERE state = 'running'
+
+CREATE TABLE job_compose (                -- migration 0007
+  job_id  TEXT PRIMARY KEY REFERENCES jobs(id) ON DELETE CASCADE,
+  content BLOB NOT NULL                     -- new compose file of a compose-apply job
+) STRICT;
 
 CREATE TABLE meta (                       -- migration 0004
   key   TEXT PRIMARY KEY,                   -- "key_check"

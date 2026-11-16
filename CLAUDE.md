@@ -128,9 +128,8 @@ Run `go vet` and `go test ./... -race` before every commit.
    snapshot browser are not part of 0.1.
 6. **M6 Release 0.1**: Dockerfile, GHCR publish via GitHub Actions, README, LICENSE.
 
-After 0.1, the next features are **log view, update and compose editor**
-(design in "Planned features" in `docs/architecture.md`, in that order).
-Then **restore from a different host**
+After 0.1, the log view, the update job and the compose editor were added
+(see `docs/architecture.md`). Next planned: **restore from a different host**
 (stack migration: import of stacks from other hosts, restore into a
 not-yet-existing stack, stack name must stay identical, source host
 selection). See "Planned features" in `docs/architecture.md`.

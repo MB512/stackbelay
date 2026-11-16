@@ -144,7 +144,8 @@ carries trigger and requester for this; a directory without status becomes
 (`/data` is part of it). Restoring that stack would move the job files away
 with the previous version and bring back an older database. So for a
 restore of the stack that contains the jobs directory (and for an update
-with backup, whose rollback is such a restore), the spec carries
+or compose apply with backup, whose rollback is such a restore), the spec
+carries
 `carry_over_jobs` (the jobs directory relative to the stack, e.g.
 `data/jobs`): right after the swap, before the stack starts, the worker
 copies it from the previous version into the restored stack, and at the
@@ -411,6 +412,56 @@ silently skipping the backup.
 Not covered: images built locally (`build:`) are not rebuilt; a service
 that starts, passes the check and fails later is not detected.
 
+## Compose editor
+
+The admin-only "Compose" tab edits the stack's main compose file (the one
+discovery picked, see `stacks.MainFileNames()`); override files and `.env`
+are not editable. It is admin-only because a compose file can mount any
+host path and run privileged containers, i.e. it is equivalent to root on
+the host. The editor is a plain `<textarea>` (no editor library, no
+script); files over 256 KiB or that are not UTF-8 text are shown as not
+editable.
+
+"Validate and apply" (`POST /stacks/{name}/compose`, CSRF, admin):
+
+1. Line breaks are normalized (browsers send CRLF). Refused with the text
+   kept in the form: empty, larger than 256 KiB, not UTF-8, unchanged, or
+   the file on disk changed since the editor was opened (the form carries
+   the SHA-256 of the loaded version; the user reloads to see the current
+   one, so no change is lost). Without repository the "no backup and no
+   rollback" checkbox is required.
+2. Validation in the manager (`docker.CLI.ValidateCompose`): the text in a
+   temporary file **outside** the stack directory, checked with `docker
+   compose --project-directory <stack> --file <tmp> config --quiet`, so
+   `.env` and relative paths resolve as for the real file. Compose's message
+   is shown in the form (with the real file name).
+3. A `compose-apply` job is queued. The new content is stored in
+   `job_compose` (not in the job's options), the options carry the file
+   name and both checksums. The audit entry (`job.create`) has checksum and
+   size, never the content. The manager never writes the file itself.
+
+The dispatcher writes the content to `compose.new` in the job directory;
+the worker checks it against `compose_sha256` from the spec and runs
+`jobs.Pipeline.ComposeApply` on the same sequence as the update
+(`runChange`, see "Update pipeline"):
+
+- before any snapshot: the file on disk must still have the base checksum,
+  otherwise the job fails with nothing changed; the current file is saved
+  as `compose.previous` in the job directory (manual revert);
+- with a repository: pre-stop snapshot, stop, final snapshot; without:
+  stop only. A stack that was not running is not stopped, gets one
+  snapshot (with a repository) and the new file, and stays stopped;
+- the file is replaced atomically (temporary file in the stack directory,
+  same mode and owner, fsync, rename);
+- started are the services that ran before and are still defined, plus
+  services the new file adds; waited for (running/healthy, 5 min) are the
+  previously running ones (new services may be one-shot tasks). Containers
+  of removed services stay stopped (logged; remove them with `docker
+  compose up --remove-orphans`);
+- if they do not come up: rollback with a repository (restore of the final
+  snapshot, which brings back the old compose file, with pinned images), no
+  rollback without one.
+
 ## Snapshot cache
 
 Listing snapshots on a remote repository can be slow, so the manager keeps a
@@ -498,8 +549,10 @@ with a light and a dark set; the job log is a dark panel in both modes.
 | `POST /stacks/{name}/restore` | restore right | queue a restore of a cached, not removed snapshot; only admins may skip the safety snapshot |
 | `GET /jobs/{id}` | view right on the job's stack | job details and log; followed live by `static/joblog.js` while not final |
 | `GET /jobs/{id}/events` | view right on the job's stack | live stream of the job (SSE), see "Live logs" |
-| `POST /jobs/{id}/cancel` | backup/restore/update right (by job type) | cancel a queued or running job |
+| `POST /jobs/{id}/cancel` | backup/restore/update right (by job type; compose-apply: admin) | cancel a queued or running job |
 | `POST /stacks/{name}/snapshots/refresh` | view right | refresh the snapshot cache (read-only restic; at most once per 10 s per stack; HTMX: returns the snapshot section) |
+| `GET /stacks/{name}/compose` | admin | "Compose" tab: editor for the main compose file |
+| `POST /stacks/{name}/compose` | admin | validate and queue a compose-apply job, see "Compose editor" |
 | `GET /stacks/{name}/settings` | admin | "Settings" tab: repository, schedules with next run, enable/disable, per-user permissions |
 | `POST /stacks/{name}/repository` | admin | create/update the repository, then refresh the snapshot cache as an access check |
 | `POST /stacks/{name}/repository/init` | admin | `restic init` at the stored location (offered only when no repository exists there) |
@@ -531,9 +584,9 @@ keeping repositories and their indexes small.
 Stack pages share a header with tabs (`stack-header` in `partials.html`).
 The tab list is built per user in `newStackHeader`; a tab is only shown if
 the user may open it, and its handler checks the permission again. Tabs:
-"Backups" (view right), "Logs" (logs right), "Settings" (admin). Planned
-tabs (compose editor, status with restart) are added there with their own
-permissions.
+"Backups" (view right), "Logs" (logs right), "Compose" and "Settings"
+(admin). A planned "Status" tab (restart) is added there with its own
+permission.
 
 Stacks a user may not view answer 404 (not 403), so stack names are not
 revealed. `{name}` must pass `stacks.ValidName` and exist in the database
@@ -732,7 +785,8 @@ queueing, scheduled backup, restore, pinned restore); it builds the release
 image from `deploy/Dockerfile`, as does `scripts/e2e-self.sh`.
 `scripts/e2e-update.sh` runs the update job on the host: a successful
 update, a failed one with automatic rollback, and a failed one without
-backup (no rollback).
+backup (no rollback); and the compose-apply job: a valid change and one
+with a missing image (rollback to the previous compose file).
 
 Not yet implemented: restore into a not-yet-existing stack (import), see
 "Restore from another host" and "Planned features".
@@ -791,39 +845,12 @@ per-repository (or per-import) setting **source host** (default: this host)
 selects whose snapshots are listed and restored. Restoring another host's
 snapshot is an admin action; new backups always use this host's name.
 
-### Next: log view, update, compose editor
+### Compose editor: skip repeated backups
 
-Agreed on 2026-11-16, implemented in this order (each one step towards the
-"More stack tabs" idea; a Status tab with restart remains open). Each
-feature moves into the main sections when it is implemented.
+The log view, the update and the compose editor (agreed 2026-11-16) are
+implemented, see "Container logs", "Update pipeline" and "Compose editor".
+Open idea for the editor: an option to skip the backup when the same stack
+was edited and backed up a short time ago, for quick fix-up edits (the
+rollback would then return to that earlier backup).
 
-**Permissions.** `permissions.can_logs` (migration 0005,
-`auth.ActionLogs`) and `permissions.can_update` (migration 0006,
-`auth.ActionUpdate`); admins have both. A row with all flags 0 is still deleted. Having any flag gives
-the view right. The compose editor is admin-only: editing a compose file
-is equivalent to root on the host (privileged containers, host mounts), so
-it gets no per-stack permission.
-
-#### 1. Log view: implemented, see "Container logs".
-
-#### 2. Update: implemented, see "Update pipeline".
-
-#### 3. Compose editor (tab "Compose", admin only)
-
-- Edits the stack's main compose file (`stacks.MainFileNames()`), not
-  override files or `.env`. Plain `<textarea>` first (no editor library),
-  size limit 256 KiB.
-- Save: CSRF, admin, audit (`compose.apply` with SHA-256 and size, never
-  the content). The form carries the SHA-256 of the file it was loaded
-  from; if the file changed meanwhile, saving is refused (no lost
-  updates).
-- Validation in the manager before anything is queued: the new content in
-  a temporary file outside the stack, `docker compose --project-directory
-  <stack dir> --file <tmp> config --quiet`. Errors are shown in the form.
-- Save queues a job `compose-apply` (content in the job spec, mode 0600):
-  backup like 2.2–2.4 if a repository is configured, write the file
-  atomically (temp file + rename, same mode and owner), then 2.5–2.6
-  (`up`, health wait, rollback with repository, no rollback without). The
-  previous content is kept in the job directory for a manual revert.
-- Later option (not now): skip the backup when the same stack was edited
-  and backed up a short time ago, for quick fix-up edits.
+A "Status" tab (running services, restart) remains open.

@@ -33,6 +33,13 @@ All notable changes to StackVault. The format is based on
 
 ### Added
 
+- **Compose editor** (administrators only): a "Compose" tab to edit a stack's
+  main compose file. Applying validates the file with `docker compose config`,
+  backs the stack up, writes the file, starts the services and rolls back to
+  the backup if they do not come up within 5 minutes. Changes made to the file
+  on disk after it was opened in the editor are never overwritten. Without a
+  repository it works after an explicit confirmation, but without backup and
+  without rollback.
 - **Update** of a stack (new per-stack permission "Update"): pulls the newest
   images of the running services while the stack keeps running, backs it up
   (snapshot while running, then stopped), recreates the services and waits

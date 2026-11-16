@@ -5,6 +5,9 @@
 #   1. update with backup succeeds (pull, pre-stop + final snapshot, up)
 #   2. update with backup fails (service unhealthy) -> automatic rollback
 #   3. update without backup fails -> no rollback, stack left as it is
+#   4. compose-apply (compose editor job) with a valid change
+#   5. compose-apply with an image that does not exist -> rollback to the
+#      previous compose file
 #
 # A failure is forced with a healthcheck that fails once the file "broken"
 # exists in a named volume (not part of the stack directory, so neither the
@@ -115,5 +118,47 @@ pass "left as it is (new container kept, no restore)"
 if bin/worker update "$STACK" 2>"$WORK/update4.log"; then fail "update with backup ran without repository"; fi
 grep -q "no repository configured" "$WORK/update4.log" || fail "unexpected error: $(tail -1 "$WORK/update4.log")"
 pass "update with backup refused without repository settings"
+
+# compose_job <job-dir> <new content file>: a compose-apply job directory as
+# the manager writes it (spec.json + compose.new).
+compose_job() {
+	mkdir -p "$1"
+	cp "$2" "$1/compose.new"
+	python3 -I - "$1" "$DIR/compose.yml" "$STACK" <<'PY'
+import hashlib, json, sys
+job, current, stack = sys.argv[1:]
+sha = lambda p: hashlib.sha256(open(p, "rb").read()).hexdigest()
+spec = {"version": 1, "id": "01JCZ8G3T4S5V6W7X8Y9Z0ABCD", "type": "compose-apply", "stack": stack,
+        "compose_sha256": sha(job + "/compose.new"), "compose_base_sha256": sha(current)}
+json.dump(spec, open(job + "/spec.json", "w"))
+PY
+}
+job_state() { python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["state"])' "$1/status.json"; }
+
+step "4. compose-apply with a valid change"
+set_broken "rm -f /flags/broken"
+(cd "$DIR" && docker compose up --detach --wait app >/dev/null)
+cp "$DIR/compose.yml" "$WORK/compose.orig"
+sed 's/exec sleep 3600/echo edited; exec sleep 3600/' "$DIR/compose.yml" >"$WORK/compose.edited"
+compose_job "$WORK/job4" "$WORK/compose.edited"
+env "${REPO_ENV[@]}" bin/worker run "$WORK/job4" 2>/dev/null || { cat "$WORK/job4/log.txt"; fail "compose-apply failed"; }
+[[ "$(job_state "$WORK/job4")" == succeeded ]] || fail "job state $(job_state "$WORK/job4")"
+cmp -s "$DIR/compose.yml" "$WORK/compose.edited" || fail "compose file not replaced"
+cmp -s "$WORK/job4/compose.previous" "$WORK/compose.orig" || fail "previous compose file not kept"
+docker compose --project-directory "$DIR" logs app | grep -q edited || fail "app does not run the edited command"
+[[ "$(state app)" == running ]] || fail "app not running"
+pass "file replaced, previous kept, app runs the new configuration"
+
+step "5. compose-apply with a missing image: rollback"
+sed 's/busybox:1.36/busybox:stackvault-does-not-exist/' "$DIR/compose.yml" >"$WORK/compose.bad"
+cp "$DIR/compose.yml" "$WORK/compose.before5"
+compose_job "$WORK/job5" "$WORK/compose.bad"
+if env "${REPO_ENV[@]}" bin/worker run "$WORK/job5" 2>/dev/null; then fail "compose-apply with a missing image succeeded"; fi
+has_msg "$WORK/job5/log.txt" "rolled back to the state before the compose-apply" || { cat "$WORK/job5/log.txt"; fail "no rollback"; }
+cmp -s "$DIR/compose.yml" "$WORK/compose.before5" || fail "compose file not rolled back"
+[[ "$(state app)" == running ]] || fail "app not running after rollback"
+python3 -I -c 'import json,sys; assert json.load(open(sys.argv[1]))["rolled_back"]' "$WORK/job5/status.json" || fail "status not rolled_back"
+pass "rolled back to the previous compose file, app running"
+rm -rf "$ROOT/$STACK".old-*
 
 printf '\n\033[32mall update checks passed\033[0m\n'

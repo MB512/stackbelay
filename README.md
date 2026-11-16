@@ -152,7 +152,7 @@ docker build -f deploy/Dockerfile -t stackvault:dev .
 scripts/e2e-local.sh      # worker pipeline against the local Docker daemon
 scripts/e2e-dispatch.sh   # manager + worker containers through the web UI
 scripts/e2e-self.sh       # StackVault backs up and restores itself
-scripts/e2e-update.sh     # update job: success, rollback, no backup
+scripts/e2e-update.sh     # update and compose-apply jobs: success, rollback, no backup
 ```
 
 Development guidelines: [`CLAUDE.md`](CLAUDE.md).

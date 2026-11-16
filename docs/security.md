@@ -13,8 +13,7 @@ attackers reaching the UI, a leaked database file.
 ## Rules
 
 1. **No free-form execution.** Users can only trigger predefined job types
-   (`backup`, `restore`, `update`; planned: `compose-apply`) on discovered
-   stacks. All external
+   (`backup`, `restore`, `update`, `compose-apply`) on discovered stacks. All external
    commands use `exec.CommandContext` with argument lists, never a shell.
 2. **Input validation.** Stack names must match the discovered set. Snapshot IDs
    must match `^[0-9a-f]{8,64}$` and are verified against `restic snapshots`.
@@ -29,12 +28,16 @@ attackers reaching the UI, a leaked database file.
    workers, the manager may run only read-only compose commands for
    discovered stacks, with fixed argument lists: `logs` and `ps` for the
    log view (after checking that the compose project belongs to the stack
-   directory; at most 4 streams per user, 20 in total; planned: `config
-   --quiet` to validate an edited compose file). Container logs are not
-   redacted, so viewing them is a separate per-stack right (`can_logs`).
+   directory; at most 4 streams per user, 20 in total) and `config --quiet`
+   on a temporary copy outside the stack to validate an edited compose
+   file. Container logs are not redacted, so viewing them is a separate
+   per-stack right (`can_logs`).
    Everything that changes a stack runs in a worker job.
-   Editing a compose file (planned) is admin-only: it is equivalent to root
-   on the host. Optional hardening: put a socket proxy between
+   Editing a compose file is admin-only (it is equivalent to root on the
+   host); the manager only validates it, the file is written by the
+   compose-apply job in a worker, after a backup. The new content is
+   checked against its SHA-256 in the worker, and an apply is refused if
+   the file changed since it was opened in the editor. Optional hardening: put a socket proxy between
    manager and Docker that allows only container create/start/inspect/logs and
    the calls the manager itself needs.
 4. **Secrets at rest.** Repo passwords and backend credentials are encrypted
