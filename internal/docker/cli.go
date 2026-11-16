@@ -237,6 +237,15 @@ func (c *CLI) Up(ctx context.Context, dir string, composeFiles, services []strin
 	return err
 }
 
+// Pull implements Client.
+func (c *CLI) Pull(ctx context.Context, dir string, services []string) error {
+	if len(services) == 0 {
+		return nil // "compose pull" without services would pull everything
+	}
+	_, err := c.compose(ctx, dir, append([]string{"pull", "--ignore-buildable", "--quiet", "--"}, services...)...)
+	return err
+}
+
 // EnsureImage implements Client.
 func (c *CLI) EnsureImage(ctx context.Context, ref string) (bool, error) {
 	if strings.HasPrefix(ref, "-") { // never let a reference become a flag

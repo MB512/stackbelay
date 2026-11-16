@@ -47,6 +47,10 @@ type Client interface {
 	// is present, otherwise it is pulled. ref is a validated
 	// "name@sha256:..." reference. pulled reports whether it was pulled.
 	EnsureImage(ctx context.Context, ref string) (pulled bool, err error)
+	// Pull pulls the current images of the given services (compose pull).
+	// Services that are built locally (build:) are skipped. Running
+	// containers are not affected.
+	Pull(ctx context.Context, projectDir string, services []string) error
 	// WaitHealthy blocks until all given services are running and, if they
 	// have a healthcheck, healthy. It gives up when ctx is done.
 	WaitHealthy(ctx context.Context, projectDir string, services []string) error

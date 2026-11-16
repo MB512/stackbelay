@@ -56,6 +56,11 @@ func (f *fakeDocker) Services(ctx context.Context, dir string) ([]docker.Service
 	return f.services, f.fail("Services")
 }
 
+func (f *fakeDocker) Pull(ctx context.Context, dir string, services []string) error {
+	f.calls.add("docker.Pull %s", strings.Join(services, ","))
+	return f.fail("Pull")
+}
+
 func (f *fakeDocker) Stop(ctx context.Context, dir string) error {
 	f.calls.add("docker.Stop")
 	return f.fail("Stop")
