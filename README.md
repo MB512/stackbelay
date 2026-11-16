@@ -9,8 +9,9 @@ stacks root (e.g. `/home/docker/<stack>/compose.yml`). StackVault backs up the w
 directory, including bind-mounted data inside it, with the stack stopped,
 so the backup is consistent without database-specific dumps.
 
-Status: **0.1**, first release. Use it next to, not instead of, a backup
-strategy you already trust until it has proven itself on your hosts.
+Status: **0.2**. Use it next to, not instead of, a backup strategy you
+already trust until it has proven itself on your hosts. Upgrading from 0.1:
+see [Upgrading from 0.1](#upgrading-from-01-move-the-secret-key-into-the-data-directory).
 
 ## Features
 
@@ -26,10 +27,16 @@ strategy you already trust until it has proven itself on your hosts.
   instead: only files that differ from the snapshot are downloaded and
   rewritten. Optionally with the **image versions from backup time**
   (pinned by digest).
-- **Schedules** (cron expressions) per stack, plus manual backups. Jobs are
-  queued; one job per stack at a time.
-- **Multi-user** with per-stack rights (view, backup, restore); admins
-  manage users, repositories, schedules and rights.
+- **Updates** with backup and automatic rollback: pull newer images, back
+  up, recreate the services, roll back to the backup if they do not come
+  up. An update check shows which services have newer images (without
+  pulling); "only if new" skips everything when nothing changed.
+- **Schedules** (cron expressions) per stack for backups and updates, plus
+  manual runs. Jobs are queued; one job per stack at a time.
+- **Live container logs** per stack, with a filter per container.
+- **Compose editor** and an opt-in **container shell** for admins.
+- **Multi-user** with per-stack rights (backup, restore, update, logs);
+  admins manage users, repositories, schedules and rights.
 - **Live job logs** in the browser, job history, audit log.
 - Backup and restore run in a separate, short-lived **worker container**.
   StackVault can therefore back up and restore **its own stack**.
@@ -37,9 +44,8 @@ strategy you already trust until it has proven itself on your hosts.
   [rest-server](https://github.com/restic/rest-server) in **append-only**
   mode. Retention (`forget`/`prune`) is left to the repository owner.
 
-Not in 0.1: restoring a stack from another host (migration), retention,
-Windows, Kubernetes. Restore from another host is the first planned feature
-after 0.1.
+Not in 0.2: restoring a stack from another host (migration), retention,
+Windows, Kubernetes. Restore from another host is the next planned feature.
 
 ## Requirements
 
@@ -101,6 +107,34 @@ sudo chmod 600 /etc/stackvault/secret.key
 On an existing installation, move the generated key there instead
 (`sudo mv data/secret.key /etc/stackvault/secret.key`) — a new key would not
 match the database. Then enable the commented lines in the compose file.
+
+### Upgrading from 0.1: move the secret key into the data directory
+
+0.1 required the secret key outside the stack (`STACKVAULT_SECRET_KEY_FILE`,
+usually `/etc/stackvault/secret.key`). That still works unchanged. Since 0.2
+the default place is `data/secret.key` inside the StackVault stack, so the
+stack's own backup contains everything needed to run StackVault again:
+database **and** key. Restoring StackVault on a new host is then just a
+restore of its stack. To switch an existing installation:
+
+```sh
+cd /home/docker/stackvault             # the StackVault stack directory
+docker compose down
+sudo install -m 600 /etc/stackvault/secret.key data/secret.key
+# with STACKVAULT_SECRET_KEY (the key itself in the environment) instead:
+#   printf '%s\n' '<the key>' | sudo tee data/secret.key >/dev/null && sudo chmod 600 data/secret.key
+```
+
+Then remove `STACKVAULT_SECRET_KEY_FILE` (or `STACKVAULT_SECRET_KEY`) and
+the key's volume line from `compose.yml`, set the image to `0.2`, and start
+it again (`docker compose up -d`). StackVault checks the key against the
+database at startup and refuses to start if it does not match, so a wrong
+copy cannot damage anything. Run a backup of the StackVault stack
+afterwards, and keep `/etc/stackvault/secret.key` until that backup exists.
+
+Trade-off: whoever gets a copy of the StackVault stack's backup (and its
+repository password) now also has the key that decrypts the stored
+repository passwords. To keep the 0.1 behaviour, change nothing.
 
 The image is `ghcr.io/mb512/stackvault` (linux/amd64, linux/arm64). It
 contains the manager (web UI, scheduler) and the worker; the manager starts
