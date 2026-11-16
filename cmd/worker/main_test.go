@@ -159,3 +159,14 @@ func TestReadComposeNew(t *testing.T) {
 		t.Fatal("missing file accepted")
 	}
 }
+
+func TestParseRestoreArgs(t *testing.T) {
+	spec, _, err := parseArgs([]string{"restore", "--in-place", "--pin-images", "web", "0123abcd"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := jobs.Spec{Type: jobs.TypeRestore, Stack: "web", SnapshotID: "0123abcd", PinImages: true, InPlace: true}
+	if spec != want {
+		t.Fatalf("got %+v, want %+v", spec, want)
+	}
+}

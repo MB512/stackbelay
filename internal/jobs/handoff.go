@@ -92,6 +92,7 @@ type Spec struct {
 	SkipSafetySnapshot bool   `json:"skip_safety_snapshot,omitempty"`
 	NoStart            bool   `json:"no_start,omitempty"`
 	PinImages          bool   `json:"pin_images,omitempty"` // see RestoreOptions.PinImages
+	InPlace            bool   `json:"in_place,omitempty"`   // see RestoreOptions.InPlace
 	// CarryOverJobs is set when the manager restores (or updates, for the
 	// rollback) its own stack: the manager's jobs directory, relative to
 	// the stack directory (e.g. "data/jobs"). See RestoreOptions.CarryOver.
@@ -136,7 +137,7 @@ func (s Spec) Validate() error {
 	}
 	switch s.Type {
 	case TypeBackup:
-		if s.SnapshotID != "" || s.SkipSafetySnapshot || s.NoStart || s.PinImages || s.CarryOverJobs != "" {
+		if s.SnapshotID != "" || s.SkipSafetySnapshot || s.NoStart || s.PinImages || s.InPlace || s.CarryOverJobs != "" {
 			return errors.New("restore options set on a backup job")
 		}
 		if s.NoBackup {
@@ -157,7 +158,7 @@ func (s Spec) Validate() error {
 		}
 	case TypeUpdate, TypeComposeApply:
 		// The pre-stop snapshot is always taken (with a repository).
-		if s.PreStop || s.SnapshotID != "" || s.SkipSafetySnapshot || s.NoStart || s.PinImages {
+		if s.PreStop || s.SnapshotID != "" || s.SkipSafetySnapshot || s.NoStart || s.PinImages || s.InPlace {
 			return fmt.Errorf("backup or restore options set on a job of type %s", s.Type)
 		}
 		if s.CarryOverJobs != "" && !ValidCarryOver(s.CarryOverJobs) {

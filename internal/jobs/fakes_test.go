@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 
@@ -128,6 +129,8 @@ type fakeRestic struct {
 	// ids overrides the snapshot id returned by Backup per tag (default
 	// "snap-<tag>").
 	ids map[string]string
+	// inPlaceVisit, if set, is called by RestoreInPlace with the target.
+	inPlaceVisit func(target string)
 }
 
 func (f *fakeRestic) CheckRepo(ctx context.Context, repo restic.Repo) error {
@@ -168,6 +171,35 @@ func (f *fakeRestic) Restore(ctx context.Context, repo restic.Repo, id, subpath,
 		}
 	}
 	return f.failOn["Restore"]
+}
+
+// RestoreInPlace writes restoreFiles into target and, like restic
+// --delete, removes other top-level entries that are not excluded.
+func (f *fakeRestic) RestoreInPlace(ctx context.Context, repo restic.Repo, id, subpath, target string, exclude []string) error {
+	f.calls.add("restic.RestoreInPlace %s:%s exclude=%s", id, subpath, strings.Join(exclude, ","))
+	if f.inPlaceVisit != nil {
+		f.inPlaceVisit(target)
+	}
+	entries, err := os.ReadDir(target)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		if _, ok := f.restoreFiles[e.Name()]; ok || slices.ContainsFunc(exclude, func(x string) bool {
+			return strings.SplitN(x, "/", 2)[0] == e.Name()
+		}) {
+			continue
+		}
+		if err := os.RemoveAll(filepath.Join(target, e.Name())); err != nil {
+			return err
+		}
+	}
+	for name, content := range f.restoreFiles {
+		if err := os.WriteFile(filepath.Join(target, name), []byte(content), 0o644); err != nil {
+			return err
+		}
+	}
+	return f.failOn["RestoreInPlace"]
 }
 
 func (f *fakeRestic) Node(ctx context.Context, repo restic.Repo, id, path string) (restic.Node, error) {

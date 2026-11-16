@@ -488,7 +488,7 @@ func TestRestoreOfManagerStackCarriesJobsOver(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
 	e.d.Template.Jobs = docker.Mount{Type: "bind", Source: "/home/docker/web/data/jobs"} // the manager lives in "web"
-	own := e.submit("web", jobs.TypeRestore, store.JobOptions{SnapshotID: "aaaaaaaa11111111"})
+	own := e.submit("web", jobs.TypeRestore, store.JobOptions{SnapshotID: "aaaaaaaa11111111", InPlace: true})
 	other := e.submit("db", jobs.TypeRestore, store.JobOptions{SnapshotID: "aaaaaaaa11111111"})
 	e.d.Step(ctx)
 	for id, want := range map[string]string{own.ID: "data/jobs", other.ID: ""} {
@@ -498,6 +498,9 @@ func TestRestoreOfManagerStackCarriesJobsOver(t *testing.T) {
 		}
 		if spec.CarryOverJobs != want || spec.Trigger != store.TriggerManual {
 			t.Errorf("spec of %s: carry-over %q, trigger %q", spec.Stack, spec.CarryOverJobs, spec.Trigger)
+		}
+		if spec.InPlace != (id == own.ID) { // in place, the carry-over directory is excluded from the restore
+			t.Errorf("spec of %s: in place %t", spec.Stack, spec.InPlace)
 		}
 	}
 }

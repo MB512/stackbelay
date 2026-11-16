@@ -34,7 +34,7 @@
       <tr><th>Finished</th><td>{{if .Job.FinishedAt.IsZero}}<span class="muted">–</span>{{else}}{{when .Job.FinishedAt}}{{end}}</td></tr>
       {{- with .Job.Options}}
       {{- if .SnapshotID}}<tr><th>Restoring</th><td><code>{{printf "%.8s" .SnapshotID}}</code>
-        {{- if .SkipSafetySnapshot}}, without safety snapshot{{end}}{{if .NoStart}}, stack not started afterwards{{end}}{{if .PinImages}}, image versions pinned{{end}}</td></tr>{{end}}
+        {{- if .SkipSafetySnapshot}}, without safety snapshot{{end}}{{if .NoStart}}, stack not started afterwards{{end}}{{if .PinImages}}, image versions pinned{{end}}{{if .InPlace}}, in place{{end}}</td></tr>{{end}}
       {{- if .PreStop}}<tr><th>Options</th><td>snapshot before stopping</td></tr>{{end}}
       {{- if .ComposeFile}}<tr><th>Compose file</th><td><code>{{.ComposeFile}}</code>, new content <code>{{printf "%.12s" .ComposeSHA256}}</code> (SHA-256); the replaced file is kept in the job directory as <code>compose.previous</code></td></tr>{{end}}
       {{- if .NoBackup}}<tr><th>Options</th><td>without backup if the stack has no repository: no rollback on failure</td></tr>{{end}}

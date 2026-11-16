@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # End-to-end smoke test of the worker against the local Docker daemon and a
 # local restic repository. Creates a throwaway stack in a temp directory,
-# backs it up, changes data, restores and checks the result.
+# backs it up, changes data, restores (with swap and in place) and checks the
+# result.
 #
 # Requirements: docker (with compose plugin) usable without sudo, restic >= 0.17, go.
 # Usage: scripts/e2e-local.sh            (KEEP=1 keeps the temp directory)
@@ -138,6 +139,20 @@ SEEN="$(docker compose --project-directory "$DIR" exec -T app cat /data/value.tx
 pass "app running and its bind mount shows restored data"
 [[ "$(state oneshot)" != running ]] || fail "oneshot running after restore"
 pass "oneshot not started (was not running at backup time)"
+
+step "restore in place"
+echo v3 >"$DIR/data/value.txt"
+echo stale >"$DIR/data/created-after-backup.txt"
+before_inode="$(stat -c %i "$DIR")"
+./bin/worker restore --in-place "$STACK" "${SNAP:0:8}" 2>"$WORK/inplace.log" || { cat "$WORK/inplace.log"; fail "in-place restore failed"; }
+[[ "$(cat "$DIR/data/value.txt")" == v1 ]] || fail "data not restored in place"
+[[ ! -e "$DIR/data/created-after-backup.txt" ]] || fail "file created after the backup not deleted"
+[[ "$(stat -c %i "$DIR")" == "$before_inode" ]] || fail "stack directory was replaced instead of restored in place"
+[[ -z "$(log_field "$WORK/inplace.log" "job succeeded" previous_dir)" ]] || fail "in-place restore reports a previous directory"
+[[ "$(stat -c %a "$DIR")" == 750 ]] || fail "stack dir mode not restored: $(stat -c %a "$DIR")"
+SEEN="$(docker compose --project-directory "$DIR" exec -T app cat /data/value.txt)"
+[[ "$SEEN" == v1 ]] || fail "app sees '$SEEN' instead of restored data"
+pass "restored in place (v1, extra file deleted, same directory, app running)"
 
 step "restore with an invalid snapshot is rejected before stopping"
 if ./bin/worker restore "$STACK" deadbeef 2>"$WORK/bad.log"; then fail "restore of unknown snapshot succeeded"; fi

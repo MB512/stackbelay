@@ -7,8 +7,7 @@
   <p>Snapshot <code>{{.Snapshot.ShortID}}</code> from <strong>{{when .Snapshot.Time}}</strong>
     (host {{.Snapshot.Hostname}}{{range .Snapshot.Tags}}, <span class="badge">{{.}}</span>{{end}}).</p>
   <p class="warning">The stack is stopped and its directory is replaced by the snapshot's content.
-    Changes made since the snapshot are lost from the live stack. The current directory is kept next to it
-    (<code>{{.Stack.Name}}.old-…</code>) for a manual rollback.</p>
+    Changes made since the snapshot are lost from the live stack.</p>
 </div>
 
 <form method="post" action="/stacks/{{.Stack.Name}}/restore" class="card wide">
@@ -21,6 +20,18 @@
   <p class="hint">The current state is backed up first (safety snapshot).</p>
   {{- end}}
   <label class="check"><input type="checkbox" name="start" checked> Start the stack after restoring</label>
+  <fieldset>
+    <legend>Restore method</legend>
+    <label class="check"><input type="radio" name="method" value="swap" checked>
+      Into a new directory, then switch over (the current directory is kept as <code>{{.Stack.Name}}.old-…</code>)</label>
+    <label class="check"><input type="radio" name="method" value="in-place">
+      In place (only changed files are restored; for large stacks)</label>
+    <p class="hint">Switching over needs room for a complete second copy and downloads the whole snapshot, but the stack
+      directory is untouched until the restored copy is complete, and the previous directory stays available for a manual
+      rollback. In place downloads and rewrites only files that differ from the snapshot (same size and modification time
+      count as unchanged) and deletes files that are not in the snapshot. Nothing of the current state is kept except the
+      safety snapshot: if the restore fails half-way, the stack stays stopped and partly restored until you restore again.</p>
+  </fieldset>
   <fieldset>
     <legend>Image versions</legend>
     <label class="check"><input type="radio" name="images" value="tags" checked>

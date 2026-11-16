@@ -6,7 +6,7 @@
 //
 //	worker run <job-dir>
 //	worker backup  [--pre-stop] <stack>
-//	worker restore [--no-safety-snapshot] [--no-start] [--pin-images] <stack> <snapshot-id>
+//	worker restore [--no-safety-snapshot] [--no-start] [--pin-images] [--in-place] <stack> <snapshot-id>
 //	worker update  [--no-backup] <stack>
 //
 // "run" is how the manager starts a job: the job is described by
@@ -43,7 +43,7 @@ import (
 const usage = `usage:
   worker run <job-dir>
   worker backup  [--pre-stop] <stack>
-  worker restore [--no-safety-snapshot] [--no-start] [--pin-images] <stack> <snapshot-id>
+  worker restore [--no-safety-snapshot] [--no-start] [--pin-images] [--in-place] <stack> <snapshot-id>
   worker update  [--no-backup] <stack>
 `
 
@@ -186,11 +186,12 @@ func parseArgs(args []string) (jobs.Spec, string, error) {
 		noSafety := fs.Bool("no-safety-snapshot", false, "skip the pre-restore safety snapshot")
 		noStart := fs.Bool("no-start", false, "do not start the stack after restoring")
 		pin := fs.Bool("pin-images", false, "start with the image versions recorded in the snapshot")
+		inPlace := fs.Bool("in-place", false, "restore over the stack directory instead of swapping in a restored copy")
 		if err := fs.Parse(args[1:]); err != nil || fs.NArg() != 2 {
-			return jobs.Spec{}, "", fmt.Errorf("%w: restore expects [--no-safety-snapshot] [--no-start] [--pin-images] <stack> <snapshot-id>", errUsage)
+			return jobs.Spec{}, "", fmt.Errorf("%w: restore expects [--no-safety-snapshot] [--no-start] [--pin-images] [--in-place] <stack> <snapshot-id>", errUsage)
 		}
 		return jobs.Spec{Type: jobs.TypeRestore, Stack: fs.Arg(0), SnapshotID: fs.Arg(1),
-			SkipSafetySnapshot: *noSafety, NoStart: *noStart, PinImages: *pin}, "", nil
+			SkipSafetySnapshot: *noSafety, NoStart: *noStart, PinImages: *pin, InPlace: *inPlace}, "", nil
 
 	case "update":
 		fs := flag.NewFlagSet("update", flag.ContinueOnError)
@@ -226,7 +227,7 @@ func execute(ctx context.Context, p *jobs.Pipeline, cfg config.Worker, spec jobs
 	case jobs.TypeRestore:
 		res, err := p.Restore(ctx, stack, jobs.RestoreOptions{
 			SnapshotID: spec.SnapshotID, SkipSafetySnapshot: spec.SkipSafetySnapshot, NoStart: spec.NoStart,
-			PinImages: spec.PinImages, CarryOver: spec.CarryOverJobs,
+			PinImages: spec.PinImages, InPlace: spec.InPlace, CarryOver: spec.CarryOverJobs,
 		})
 		status.Snapshot, status.SafetySnapshot, status.PreviousDir = res.Snapshot, res.SafetySnapshot, res.OldDir
 		if res.OldDir != "" {

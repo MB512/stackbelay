@@ -158,11 +158,13 @@ func (s *Server) startRestore(w http.ResponseWriter, r *http.Request) {
 		SnapshotID: sn.ID,
 		NoStart:    r.PostFormValue("start") != "on",
 		PinImages:  r.PostFormValue("images") == "pinned",
+		InPlace:    r.PostFormValue("method") == "in-place",
 		// The safety snapshot is the way back if the restore was a mistake.
 		SkipSafetySnapshot: authFrom(r.Context()).User.IsAdmin && r.PostFormValue("safety_snapshot") != "on",
 	}
-	s.submitJob(w, r, st, store.Job{Type: jobs.TypeRestore, Options: opts}, fmt.Sprintf("restore of snapshot %s, safety snapshot: %t, start: %t, pinned images: %t",
-		sn.ShortID, !opts.SkipSafetySnapshot, !opts.NoStart, opts.PinImages), true)
+	s.submitJob(w, r, st, store.Job{Type: jobs.TypeRestore, Options: opts},
+		fmt.Sprintf("restore of snapshot %s, safety snapshot: %t, start: %t, pinned images: %t, in place: %t",
+			sn.ShortID, !opts.SkipSafetySnapshot, !opts.NoStart, opts.PinImages, opts.InPlace), true)
 }
 
 // updatePage is the data of the update confirmation page.

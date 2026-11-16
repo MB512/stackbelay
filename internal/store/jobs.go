@@ -25,6 +25,7 @@ type JobOptions struct {
 	SkipSafetySnapshot bool   `json:"skip_safety_snapshot,omitempty"` // restore
 	NoStart            bool   `json:"no_start,omitempty"`             // restore
 	PinImages          bool   `json:"pin_images,omitempty"`           // restore: image versions from metadata.txt
+	InPlace            bool   `json:"in_place,omitempty"`             // restore: over the stack directory, no swap
 	// NoBackup (update): the user confirmed updating a stack without
 	// repository, i.e. without backup and without rollback. It only takes
 	// effect if the stack still has no repository when the job starts.
