@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -273,6 +274,34 @@ func (c *CLI) Restore(ctx context.Context, repo Repo, snapshotID, subpath, targe
 	}
 	return c.runJSON(ctx, repo, func([]byte) {},
 		"restore", "--target", target, "--", snapshotID+":"+subpath)
+}
+
+// RestoreInPlace implements Runner: "restic restore --delete --overwrite
+// if-changed". if-changed treats a file with the same size and modification
+// time as unchanged and only reads (and, on a mismatch, rewrites) the
+// others, so a large stack is restored without downloading or copying the
+// data that did not change. Each excluded directory becomes an anchored
+// pattern ("/data/jobs"), which also protects it from --delete.
+func (c *CLI) RestoreInPlace(ctx context.Context, repo Repo, snapshotID, subpath, target string, exclude []string) error {
+	if !SnapshotIDPattern.MatchString(snapshotID) {
+		return fmt.Errorf("invalid snapshot id %q", snapshotID)
+	}
+	args := []string{"restore", "--target", target, "--delete", "--overwrite", "if-changed"}
+	for _, dir := range exclude {
+		if !validExcludeDir(dir) {
+			return fmt.Errorf("invalid exclude directory %q", dir)
+		}
+		args = append(args, "--exclude", "/"+dir)
+	}
+	args = append(args, "--", snapshotID+":"+subpath)
+	return c.runJSON(ctx, repo, func([]byte) {}, args...)
+}
+
+// validExcludeDir accepts clean relative paths without restic pattern
+// syntax (*, ?, [, \), so the pattern matches exactly that directory.
+func validExcludeDir(dir string) bool {
+	return dir != "" && dir != "." && filepath.IsLocal(dir) && filepath.Clean(dir) == dir &&
+		!strings.ContainsAny(dir, "*?[\\\x00\n")
 }
 
 // Node implements Runner. It runs "restic ls --json <id> <path>", which

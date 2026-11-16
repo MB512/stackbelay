@@ -98,3 +98,66 @@ func TestCLIIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// RestoreInPlace rewrites changed files, deletes files that are not in the
+// snapshot and leaves excluded directories alone.
+func TestCLIRestoreInPlace(t *testing.T) {
+	if _, err := exec.LookPath("restic"); err != nil {
+		t.Skip("restic not in PATH")
+	}
+	ctx := context.Background()
+	tmp := t.TempDir()
+	pwFile := filepath.Join(tmp, "pw")
+	if err := os.WriteFile(pwFile, []byte("integration-test-pw\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	repo := Repo{Location: filepath.Join(tmp, "repo"), Env: []string{"RESTIC_PASSWORD_FILE=" + pwFile}}
+	c := &CLI{}
+	if err := c.Init(ctx, repo); err != nil {
+		t.Fatal(err)
+	}
+	stack := filepath.Join(tmp, "stacks", "web")
+	write := func(rel, content string) {
+		t.Helper()
+		p := filepath.Join(stack, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("compose.yml", "services: {}\n")
+	write("data/db", "v1")
+	write("data/jobs/J1/log.txt", "old log")
+	id, err := c.Backup(ctx, repo, stack, BackupOptions{Host: "test-host"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	write("data/db", "v2 longer")
+	write("data/new-file", "created after the snapshot")
+	write("data/jobs/J1/log.txt", "current log")
+	write("data/jobs/J2/status.json", "{}")
+	if err := c.RestoreInPlace(ctx, repo, id, stack, stack, []string{"data/jobs"}); err != nil {
+		t.Fatal(err)
+	}
+	for rel, want := range map[string]string{
+		"data/db":                  "v1",
+		"data/jobs/J1/log.txt":     "current log", // excluded: untouched
+		"data/jobs/J2/status.json": "{}",          // excluded: not deleted
+	} {
+		if got, err := os.ReadFile(filepath.Join(stack, rel)); err != nil || string(got) != want {
+			t.Errorf("%s: %q, %v; want %q", rel, got, err, want)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(stack, "data", "new-file")); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("file not in the snapshot was not deleted: %v", err)
+	}
+
+	for _, bad := range []string{"", ".", "/data", "../x", "data/*", "a/./b", "x[1]"} {
+		if err := c.RestoreInPlace(ctx, repo, id, stack, stack, []string{bad}); err == nil {
+			t.Errorf("exclude %q accepted", bad)
+		}
+	}
+}
