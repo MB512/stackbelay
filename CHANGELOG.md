@@ -33,6 +33,19 @@ All notable changes to StackVault. The format is based on
 
 ### Added
 
+- **Update tab** for users with the update right (the update moved off the
+  Backups tab):
+  - **Check now** asks the registries, without pulling, whether the tags of
+    the stack's images point to newer images, and lists every service with
+    its running and available version (the image's version label if it has
+    one, otherwise build date and digest).
+  - **Only if there is something new** (on by default): the update job
+    pulls, and if no running service gets a new image it ends there,
+    without backup and without restarting anything.
+  - **Roll back in place**: a failed update restores its backup in place,
+    rewriting only the files changed since the backup. The compose editor
+    has the same option. Worker flags `--only-if-new`,
+    `--rollback-in-place`.
 - **In-place restore** for large stacks: the restore page offers a second
   method next to "into a new directory, then switch over". In place, restic
   restores over the stack directory: unchanged files (same size and

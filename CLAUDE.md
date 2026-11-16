@@ -112,7 +112,8 @@ Run `go vet` and `go test ./... -race` before every commit.
   pinning must match the digest syntax `^[a-z0-9./_-]+@sha256:[0-9a-f]{64}$`.
 - The web process gets no direct Docker access beyond creating worker
   containers from a fixed template and read-only compose commands for
-  discovered stacks (`ps`, `logs`, `config --quiet` for validation), plus
+  discovered stacks (`ps`, `logs`, `config --quiet` for validation), the
+  read-only update check (`image inspect`, `buildx imagetools inspect`), plus
   `docker exec -it` for the opt-in admin shell, always with fixed argument
   lists. Anything that changes a stack (stop, up, pull,
   writing compose files) runs in a worker job. See `docs/security.md`.
@@ -132,9 +133,10 @@ Run `go vet` and `go test ./... -race` before every commit.
 6. **M6 Release 0.1**: Dockerfile, GHCR publish via GitHub Actions, README, LICENSE.
 
 After 0.1, the log view, the update job, the compose editor, the container
-shell and the in-place restore were added (see `docs/architecture.md`).
-Open decision: whether automatic rollbacks restore in place (see
-"Rollbacks: in place or with swap"). Next planned: **restore from a different host**
+shell, the in-place restore and the Update tab (update check, "only if
+new", in-place rollback per job) were added (see `docs/architecture.md`).
+Open: a per-stack default for in-place rollbacks (see "Rollbacks: in place
+or with swap"). Next planned: **restore from a different host**
 (stack migration: import of stacks from other hosts, restore into a
 not-yet-existing stack, stack name must stay identical, source host
 selection). See "Planned features" in `docs/architecture.md`.

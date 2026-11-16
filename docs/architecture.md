@@ -342,10 +342,11 @@ gone, and starting a half-restored stack could damage its data further.
 The safety snapshot is therefore the only rollback of an in-place restore;
 the UI says so next to the option.
 
-Automatic restores (the rollback of an update or a compose apply) still
-use the swap. Whether they should restore in place, at least for large
-stacks, is an open decision, see "Rollbacks: in place or with swap" under
-"Planned features".
+Automatic restores (the rollback of an update or a compose apply) use the
+swap unless the user chose "roll back in place" for that job (update form,
+compose editor). Whether that choice should become a per-stack default is
+still open, see "Rollbacks: in place or with swap" under "Planned
+features".
 
 ## Pinning image versions on restore
 
@@ -416,8 +417,9 @@ Notes and limits (show them in the UI):
 ## Update pipeline
 
 Job type `update` (`jobs.Pipeline.Update`), started by users with the update
-right (`can_update`) after a confirmation page. It runs in a worker like
-backup and restore (same queue, per-stack lock, live log, cancel):
+right (`can_update`) from the "Update" tab (see "Update check"). It runs in
+a worker like backup and restore (same queue, per-stack lock, live log,
+cancel):
 
 1. With a repository: check it. Record the stack state; the stack must have
    running services (an update recreates the running services; a stopped
@@ -426,6 +428,13 @@ backup and restore (same queue, per-stack lock, live log, cancel):
    **before** the update.
 2. `docker compose pull --ignore-buildable --quiet -- <running services>`
    while the stack keeps running. Failure: the job fails, nothing changed.
+   With the option **only if new** (`only_if_new`, worker flag
+   `--only-if-new`, preselected in the UI) the worker then compares, per
+   running service, the id of the local image its compose file names
+   (`docker image inspect <ref>`, i.e. what `up` would use) with the
+   container's image id. If no service differs, the job ends here as
+   `succeeded` with `result.unchanged`: no snapshots, nothing stopped.
+   Services without an image (built locally) do not count.
 3. With a repository: pre-stop snapshot (always; failure only warns).
 4. `compose stop`.
 5. With a repository: final snapshot (parent = pre-stop): the state the
@@ -439,10 +448,15 @@ backup and restore (same queue, per-stack lock, live log, cancel):
      final snapshot without safety snapshot (the final snapshot already is
      the state before the update), with image pinning (old digests from its
      `metadata.txt`), carrying the manager's job files over if it is the
-     manager's own stack. The failed version's directory is kept as
-     `<stack>.old-<time>`. The rollback also runs if the job was cancelled
-     during step 6 (own timeout, 2 h). The job ends `failed` with
-     `result.rolled_back`.
+     manager's own stack. By default the snapshot is restored into a new
+     directory and swapped in; the failed version's directory is kept as
+     `<stack>.old-<time>`. With the option **roll back in place**
+     (`rollback_in_place`, worker flag `--rollback-in-place`) it is
+     restored in place (see "In-place restore"): only the few files
+     changed since the final snapshot are rewritten, nothing of the failed
+     version is kept, and a rollback that fails half-way leaves the stack
+     stopped. The rollback also runs if the job was cancelled during step 6
+     (own timeout, 2 h). The job ends `failed` with `result.rolled_back`.
    - without repository: **no rollback at all**, not even starting the old
      images (they could damage data a new version already migrated). The
      job fails and the stack stays as it is.
@@ -458,6 +472,35 @@ silently skipping the backup.
 Not covered: images built locally (`build:`) are not rebuilt; a service
 that starts, passes the check and fails later is not detected.
 
+### Update check
+
+The "Update" tab (update right) has a **Check now** button (`POST
+/stacks/{name}/update/check`, CSRF token because every check sends
+registry requests; not audited, it changes nothing). The manager
+(`docker.CLI.CheckUpdates`) runs only read-only commands with fixed
+argument lists:
+
+1. `docker compose config/ps` (after the project owner check) and `docker
+   image inspect` of each container's image: running version (repo
+   digests, `org.opencontainers.image.version` label, creation date,
+   platform).
+2. `docker buildx imagetools inspect --format '{{json .}}' -- <ref>` per
+   image reference of the compose file (at most 4 at a time, 2 minutes in
+   total): asks the registry for the digest the tag points to now and the
+   image config (label, date) for the container's platform. Nothing is
+   pulled. Private registries need credentials in the manager's Docker
+   client configuration; without them the service shows "unknown".
+3. Per service: **up to date** (the registry digest is one of the
+   container image's repo digests), **update available**, **unknown**
+   (registry error, no container, image without registry digest) or **not
+   checked** (built locally, pinned by digest in the compose file). A
+   container started by a pinned restore or rollback
+   (`name@sha256:...` instead of the tag) is compared by digest and marked
+   as such. The table shows running and available version: the version
+   label if the image has one, else creation date and short digest.
+
+At most one check per user and three in total run at a time. The check is
+a preview: the update job pulls and compares again itself ("only if new").
 ## Compose editor
 
 The admin-only "Compose" tab edits the stack's main compose file (the one
@@ -481,6 +524,8 @@ editable.
    compose --project-directory <stack> --file <tmp> config --quiet`, so
    `.env` and relative paths resolve as for the real file. Compose's message
    is shown in the form (with the real file name).
+   With a repository, the checkbox "roll back in place" sets
+   `rollback_in_place` (see "Update pipeline", step 7).
 3. A `compose-apply` job is queued. The new content is stored in
    `job_compose` (not in the job's options), the options carry the file
    name and both checksums. The audit entry (`job.create`) has checksum and
@@ -589,7 +634,8 @@ with a light and a dark set; the job log is a dark panel in both modes.
 | `POST /stacks/{name}/backup` | backup right | queue a backup (option: pre-stop snapshot) |
 | `GET /stacks/{name}/logs` | logs right | "Logs" tab: container checkboxes and live log panel |
 | `GET /stacks/{name}/logs/events` | logs right | live container logs (SSE), see "Container logs" |
-| `GET /stacks/{name}/update` | update right | confirmation page; without repository it requires confirming "no backup, no rollback" |
+| `GET /stacks/{name}/update` | update right | "Update" tab: update check and update form (only if new, rollback method); without repository it requires confirming "no backup, no rollback" |
+| `POST /stacks/{name}/update/check` | update right | check for newer images (registry query, no pull), see "Update check" |
 | `POST /stacks/{name}/update` | update right | queue an update, see "Update pipeline" |
 | `GET /stacks/{name}/restore?snapshot=<id>` | restore right | confirmation page with options |
 | `POST /stacks/{name}/restore` | restore right | queue a restore of a cached, not removed snapshot; only admins may skip the safety snapshot |
@@ -936,22 +982,14 @@ snapshot is an admin action; new backups always use this host's name.
 
 ### Rollbacks: in place or with swap (open decision)
 
-The automatic rollback of an update or a compose apply restores the final
-snapshot by swapping directories (see "Update pipeline"). For large stacks
-that means downloading the whole stack and holding a second copy, although
-almost nothing changed since the snapshot taken minutes before. An in-place
-rollback would only rewrite the few changed files. To decide:
+Since 2026-11-16 the user chooses per job: the update form and the compose
+editor have the option "roll back in place" (default: swap). Still open:
 
-- in place always, never, or per stack (a stack setting "large data" that
-  also preselects the method on the restore page);
-- what happens when an in-place rollback fails half-way: the stack is then
-  stopped and partly restored, and there is no failed-version directory to
-  inspect (with a swap it is kept as `<stack>.old-<ts>`);
-- whether the pre-stop snapshot (taken while running) makes the in-place
-  comparison faster: it is the parent of the final snapshot, and with
-  if-changed restic only checks size and mtime of unchanged files anyway.
-
-Until then rollbacks keep the swap.
+- a per-stack default (a stack setting "large data" that preselects in
+  place on the update, compose and restore forms), useful once scheduled
+  updates exist;
+- what to keep for inspection when an in-place rollback replaces the
+  failed version (nothing today; with a swap it is `<stack>.old-<ts>`).
 
 ### Compose editor: skip repeated backups
 

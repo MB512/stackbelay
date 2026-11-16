@@ -37,7 +37,11 @@ attackers reaching the UI, a leaked database file.
    log view (after checking that the compose project belongs to the stack
    directory; at most 4 streams per user, 20 in total) and `config --quiet`
    on a temporary copy outside the stack to validate an edited compose
-   file. Container logs are not redacted, so viewing them is a separate
+   file. For the update check it also runs `docker image inspect` and
+   `docker buildx imagetools inspect -- <ref>` (registry query, no pull) on
+   the image references of a discovered stack's compose file; references
+   that could be read as a flag or contain control characters are
+   rejected. Container logs are not redacted, so viewing them is a separate
    per-stack right (`can_logs`).
    Everything that changes a stack runs in a worker job.
    Editing a compose file is admin-only (it is equivalent to root on the
