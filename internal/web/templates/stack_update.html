@@ -40,6 +40,26 @@
       {{- end}}
     </tbody>
   </table>
+  {{- with .Pinned}}
+  <div class="card wide">
+    <p><strong>Pinned versions:</strong> {{range $i, $s := .}}{{if $i}}, {{end}}<code>{{$s}}</code>{{end}}
+      {{if eq (len .) 1}}runs{{else}}run{{end}} the image by digest, as a restore or rollback started
+      {{if eq (len .) 1}}it{{else}}them{{end}}, not by the tag in the compose file. Unpinning recreates
+      {{if eq (len .) 1}}it{{else}}them{{end}} with the tag: an update with "only if there is something new", so it
+      also pulls newer images of the tags and recreates their services{{if $.Data.HasRepo}}, with backup and
+      automatic rollback{{end}}.</p>
+    {{- if $.Data.HasRepo}}
+    <form method="post" action="/stacks/{{$.Data.Stack.Name}}/update">
+      <input type="hidden" name="csrf_token" value="{{$.Data.CSRF}}">
+      <input type="hidden" name="only_if_new" value="on">
+      <input type="hidden" name="rollback" value="swap">
+      <button type="submit"{{if $.Data.Unavailable}} disabled{{end}}>Unpin now</button>
+    </form>
+    {{- else}}
+    <p class="hint">The stack has no repository: use the update form below (no backup, no rollback).</p>
+    {{- end}}
+  </div>
+  {{- end}}
   {{- end}}
 </section>
 
@@ -74,7 +94,8 @@
     {{- with .Problem}}<p class="error" role="alert">{{.}}</p>{{end}}
     <label class="check"><input type="checkbox" name="only_if_new" checked>
       Only if there is something new: after the pull, stop without backup and without restarting anything if every
-      running service already runs the newest image of its tag</label>
+      running service already runs the newest image of its tag (a version pinned by a restore counts as new: the
+      update switches it back to the tag)</label>
     {{- if .HasRepo}}
     <fieldset>
       <legend>Rollback</legend>

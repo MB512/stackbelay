@@ -3,6 +3,7 @@ package jobs
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"slices"
 
 	"github.com/MB512/stackvault/internal/docker"
@@ -18,7 +19,8 @@ type UpdateOptions struct {
 	// RestoreOptions.CarryOver).
 	CarryOver string
 	// OnlyIfNew ends the job after the pull, without snapshots and without
-	// stopping anything, if no running service would get another image.
+	// stopping anything, if no running service would get another image or
+	// configuration (see Pipeline.newImages).
 	OnlyIfNew bool
 	// RollbackInPlace restores the final snapshot in place on a rollback
 	// (see RestoreOptions.InPlace).
@@ -42,7 +44,7 @@ func (p *Pipeline) Update(ctx context.Context, stack stacks.Stack, opts UpdateOp
 			if !opts.OnlyIfNew {
 				return nil
 			}
-			changed, err := p.newImages(ctx, stack, services, running)
+			changed, err := p.newImages(ctx, log, stack, services, running)
 			if err != nil {
 				return fmt.Errorf("comparing images (the stack was not changed): %w", err)
 			}
@@ -50,7 +52,7 @@ func (p *Pipeline) Update(ctx context.Context, stack stacks.Stack, opts UpdateOp
 				log.Info("no new images: every running service already runs the image of its tag")
 				return errUnchanged
 			}
-			log.Info("new images", "services", changed)
+			log.Info("services to update", "services", changed)
 			return nil
 		},
 		// The change is in the pulled images: "up" recreates the running
@@ -61,22 +63,34 @@ func (p *Pipeline) Update(ctx context.Context, stack stacks.Stack, opts UpdateOp
 	})
 }
 
-// newImages returns the running services whose container image differs
-// from the local image their compose file names now (after the pull).
-// Services without such an image (built locally) do not count.
-func (p *Pipeline) newImages(ctx context.Context, stack stacks.Stack, services []docker.ServiceState, running []string) ([]string, error) {
-	ids, err := p.Docker.ImageIDs(ctx, stack.Dir, running)
+// newImages returns the running services that "up" would change: their
+// container runs another image than the local image their compose file
+// names now (after the pull), or runs another reference than the compose
+// file names, e.g. a version pinned by digest by a restore or rollback
+// (recreating it switches back to the tag). Services without an image in
+// the compose file (built locally) do not count.
+func (p *Pipeline) newImages(ctx context.Context, log *slog.Logger, stack stacks.Stack, services []docker.ServiceState,
+	running []string) ([]string, error) {
+	images, err := p.Docker.ConfiguredImages(ctx, stack.Dir, running)
 	if err != nil {
 		return nil, err
 	}
 	var changed []string
 	for _, s := range services {
-		if !slices.Contains(running, s.Name) || ids[s.Name] == "" {
+		img := images[s.Name]
+		if !slices.Contains(running, s.Name) || img.Ref == "" {
 			continue
 		}
-		if ids[s.Name] != s.ImageID {
-			changed = append(changed, s.Name)
+		switch {
+		case img.ID != "" && img.ID != s.ImageID:
+			log.Info("new image", "service", s.Name, "image", img.Ref)
+		case s.ImageRef != "" && s.ImageRef != img.Ref:
+			log.Info("the container runs another image reference than the compose file names (pinned by a restore?)",
+				"service", s.Name, "container_image", s.ImageRef, "compose_image", img.Ref)
+		default:
+			continue
 		}
+		changed = append(changed, s.Name)
 	}
 	return changed, nil
 }

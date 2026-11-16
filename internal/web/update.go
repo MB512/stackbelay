@@ -45,6 +45,9 @@ type updateTab struct {
 	Checks     []docker.ImageCheck
 	// NewImages counts running services with an available update.
 	NewImages int
+	// Pinned lists running services that run a version pinned by digest
+	// (restore, rollback); an update switches them back to their tag.
+	Pinned []string
 	// CanCheck is false if this installation cannot check (no checker).
 	CanCheck bool
 }
@@ -127,6 +130,9 @@ func (s *Server) checkUpdates(w http.ResponseWriter, r *http.Request) {
 	for _, c := range checks {
 		if c.Running && c.Status == docker.UpdateAvailable {
 			page.NewImages++
+		}
+		if c.Running && c.Pinned {
+			page.Pinned = append(page.Pinned, c.Service)
 		}
 	}
 	s.Logger.Info("update check", "stack", st.Name, "user", user.Username, "services", len(checks), "new_images", page.NewImages)

@@ -56,18 +56,24 @@ func validImageRef(ref string) bool {
 		!strings.ContainsFunc(ref, func(r rune) bool { return r <= ' ' || r == 0x7f })
 }
 
-// ImageIDs implements Client.
-func (c *CLI) ImageIDs(ctx context.Context, dir string, services []string) (map[string]string, error) {
+// ConfiguredImage is the image a service's compose definition names.
+type ConfiguredImage struct {
+	Ref string // image reference in the compose file, "" if none (built locally)
+	ID  string // id of the local image Ref resolves to, "" if not present
+}
+
+// ConfiguredImages implements Client.
+func (c *CLI) ConfiguredImages(ctx context.Context, dir string, services []string) (map[string]ConfiguredImage, error) {
 	configured, err := c.configuredServices(ctx, dir)
 	if err != nil {
 		return nil, err
 	}
-	ids := make(map[string]string, len(services))
+	images := make(map[string]ConfiguredImage, len(services))
 	byRef := map[string]string{}
 	for _, name := range services {
 		ref := configured[name].Image
 		if !validImageRef(ref) {
-			ids[name] = ""
+			images[name] = ConfiguredImage{}
 			continue
 		}
 		id, seen := byRef[ref]
@@ -83,9 +89,9 @@ func (c *CLI) ImageIDs(ctx context.Context, dir string, services []string) (map[
 			}
 			byRef[ref] = id
 		}
-		ids[name] = id
+		images[name] = ConfiguredImage{Ref: ref, ID: id}
 	}
-	return ids, nil
+	return images, nil
 }
 
 // UpdateStatus is the result of an update check for one service.
@@ -115,6 +121,10 @@ type ImageCheck struct {
 	Available ImageVersion
 	Status    UpdateStatus
 	Note      string // explanation for NotChecked/Unknown, or a remark
+	// Pinned: the container runs the image by digest instead of the tag of
+	// the compose file, as a restore or rollback with pinned image versions
+	// starts it. An update recreates it with the tag.
+	Pinned bool
 }
 
 // remoteImage is what the registry reports for a reference.
@@ -290,6 +300,7 @@ func evaluateUpdate(s ServiceState, cfg configuredService, local localImage, has
 	}
 	if pinnedByRestore(s.ImageRef, cfg.Image) {
 		// Started by a restore or rollback with pinned image versions.
+		check.Pinned = true
 		check.Note = strings.TrimPrefix(check.Note+"; runs a version pinned by digest by a restore or rollback", "; ")
 	}
 	if !check.Running && s.ContainerID != "" {

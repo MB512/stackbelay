@@ -112,6 +112,9 @@ func TestEvaluateUpdate(t *testing.T) {
 			if tt.wantFromTo != [2]string{} && (got.Current.Version != tt.wantFromTo[0] || got.Available.Version != tt.wantFromTo[1]) {
 				t.Errorf("versions %q -> %q", got.Current.Version, got.Available.Version)
 			}
+			if got.Pinned != strings.HasPrefix(tt.name, "pinned by a restore") {
+				t.Errorf("pinned = %v", got.Pinned)
+			}
 			if got.Status == UpdateAvailable && got.Current.Digest == got.Available.Digest {
 				t.Errorf("same digest for an available update: %+v", got)
 			}

@@ -90,23 +90,49 @@ func TestUpdate(t *testing.T) {
 			name: "only if new: no new image, nothing touched",
 			opts: UpdateOptions{Backup: true, OnlyIfNew: true},
 			setup: func(e *env) {
-				e.docker.imageIDs = map[string]string{"app": testImageID, "db": ""} // db: no image to compare
+				e.docker.images = map[string]docker.ConfiguredImage{
+					"app": {Ref: "nextcloud:29", ID: testImageID},
+					"db":  {Ref: "postgres:16"}, // image not present: nothing to compare
+				}
 			},
-			wantCalls: []string{check, svcs, pull, "docker.ImageIDs app,db"},
+			wantCalls: []string{check, svcs, pull, "docker.ConfiguredImages app,db"},
 			wantRes:   ChangeResult{Unchanged: true},
 		},
 		{
-			name:      "only if new: a new image, full update",
-			opts:      UpdateOptions{Backup: true, OnlyIfNew: true},
-			setup:     func(e *env) { e.docker.imageIDs = map[string]string{"app": "sha256:new", "db": ""} },
-			wantCalls: []string{check, svcs, pull, "docker.ImageIDs app,db", prestop, stop, final, up, healthy},
+			name: "only if new: a new image, full update",
+			opts: UpdateOptions{Backup: true, OnlyIfNew: true},
+			setup: func(e *env) {
+				e.docker.images = map[string]docker.ConfiguredImage{"app": {Ref: "nextcloud:29", ID: "sha256:new"}, "db": {Ref: "postgres:16"}}
+			},
+			wantCalls: []string{check, svcs, pull, "docker.ConfiguredImages app,db", prestop, stop, final, up, healthy},
 			wantRes:   ChangeResult{PreStopSnapshot: "snap-pre-stop", Snapshot: "snap-final"},
+		},
+		{
+			// Same image, but the container runs it by digest (pinned by a
+			// restore): the update recreates it with the tag ("unpin").
+			name: "only if new: pinned container, full update",
+			opts: UpdateOptions{Backup: true, OnlyIfNew: true},
+			setup: func(e *env) {
+				e.docker.services[0].ImageRef = "nextcloud@" + strings.TrimPrefix(testDigest, "nextcloud@")
+				e.docker.images = map[string]docker.ConfiguredImage{"app": {Ref: "nextcloud:29", ID: testImageID}, "db": {Ref: "postgres:16"}}
+			},
+			wantCalls: []string{check, svcs, pull, "docker.ConfiguredImages app,db", prestop, stop, final, up, healthy},
+			wantRes:   ChangeResult{PreStopSnapshot: "snap-pre-stop", Snapshot: "snap-final"},
+		},
+		{
+			name: "only if new: built locally does not count",
+			opts: UpdateOptions{Backup: true, OnlyIfNew: true},
+			setup: func(e *env) {
+				e.docker.images = map[string]docker.ConfiguredImage{"app": {}, "db": {}}
+			},
+			wantCalls: []string{check, svcs, pull, "docker.ConfiguredImages app,db"},
+			wantRes:   ChangeResult{Unchanged: true},
 		},
 		{
 			name:      "only if new: comparing fails, nothing touched",
 			opts:      UpdateOptions{Backup: true, OnlyIfNew: true},
-			setup:     func(e *env) { e.docker.failOn["ImageIDs"] = errBoom },
-			wantCalls: []string{check, svcs, pull, "docker.ImageIDs app,db"},
+			setup:     func(e *env) { e.docker.failOn["ConfiguredImages"] = errBoom },
+			wantCalls: []string{check, svcs, pull, "docker.ConfiguredImages app,db"},
 			wantErr:   "comparing images (the stack was not changed)",
 		},
 		{

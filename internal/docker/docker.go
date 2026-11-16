@@ -51,10 +51,11 @@ type Client interface {
 	// Services that are built locally (build:) are skipped. Running
 	// containers are not affected.
 	Pull(ctx context.Context, projectDir string, services []string) error
-	// ImageIDs returns for each of the services the id of the local image
-	// its compose file names ("" if it names none, or the image is not
-	// present). After Pull these are the images "up" would use.
-	ImageIDs(ctx context.Context, projectDir string, services []string) (map[string]string, error)
+	// ConfiguredImages returns for each of the services the image its
+	// compose file names and the id of that local image (empty if it names
+	// none, or the image is not present). After Pull these are the images
+	// "up" would use.
+	ConfiguredImages(ctx context.Context, projectDir string, services []string) (map[string]ConfiguredImage, error)
 	// WaitHealthy blocks until all given services are running and, if they
 	// have a healthcheck, healthy. It gives up when ctx is done.
 	WaitHealthy(ctx context.Context, projectDir string, services []string) error

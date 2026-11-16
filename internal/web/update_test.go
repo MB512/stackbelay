@@ -122,7 +122,8 @@ func TestUpdateCheck(t *testing.T) {
 		{Service: "app", Image: "nextcloud:29", Running: true, Status: docker.UpdateAvailable,
 			Current:   docker.ImageVersion{Version: "29.0.1", Digest: "sha256:aaaaaaaaaaaaaaaa"},
 			Available: docker.ImageVersion{Version: "29.0.2", Created: created, Digest: "sha256:bbbbbbbbbbbbbbbb"}},
-		{Service: "db", Image: "<b>postgres:16</b>", Running: true, Status: docker.UpToDate},
+		{Service: "db", Image: "<b>postgres:16</b>", Running: true, Status: docker.UpToDate, Pinned: true,
+			Note: "runs a version pinned by digest by a restore or rollback"},
 		{Service: "tool", Status: docker.NotChecked, Note: "built locally (build:), not pulled by an update"},
 	}}
 	e.server.Updates = u
@@ -140,13 +141,25 @@ func TestUpdateCheck(t *testing.T) {
 	expect(t, r, http.StatusOK, "")
 	for _, want := range []string{"1 running service can be updated", "29.0.1 (sha256:aaaaaaaaaaaa)",
 		"29.0.2 (2026-01-02, sha256:bbbbbbbbbbbb)", "update available", "up to date", "not checked",
-		"built locally", "&lt;b&gt;postgres:16&lt;/b&gt;", `name="only_if_new"`} {
+		"built locally", "&lt;b&gt;postgres:16&lt;/b&gt;", `name="only_if_new"`,
+		"<code>db</code>\n      runs the image by digest", ">Unpin now</button>"} {
 		if !strings.Contains(r.body, want) {
 			t.Errorf("check result lacks %q", want)
 		}
 	}
 	if len(u.dirs) != 1 || u.dirs[0] != filepath.Join(e.server.StacksRoot, "web") {
 		t.Fatalf("checked dirs %v", u.dirs)
+	}
+
+	// The unpin button posts an update with "only if new" and swap rollback.
+	if !strings.Contains(r.body, `<input type="hidden" name="only_if_new" value="on">`) {
+		t.Fatal("unpin form without only_if_new")
+	}
+	// Nothing pinned: no unpin box.
+	u.checks[1].Pinned = false
+	r = e.post("/stacks/web/update/check", url.Values{"csrf_token": {e.csrf("/stacks/web/update")}})
+	if strings.Contains(r.body, "Unpin now") {
+		t.Fatal("unpin offered without pinned services")
 	}
 
 	u.err = errors.New("compose project is broken")

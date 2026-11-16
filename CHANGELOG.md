@@ -46,6 +46,10 @@ All notable changes to StackVault. The format is based on
     rewriting only the files changed since the backup. The compose editor
     has the same option. Worker flags `--only-if-new`,
     `--rollback-in-place`.
+  - **Unpin**: containers that a restore or rollback started with pinned
+    image versions (by digest) are marked in the check, and "Unpin now"
+    switches them back to the tags of the compose file (an update with
+    backup; "only if new" counts pinned containers as changed).
 - **In-place restore** for large stacks: the restore page offers a second
   method next to "into a new directory, then switch over". In place, restic
   restores over the stack directory: unchanged files (same size and

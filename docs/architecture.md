@@ -432,9 +432,13 @@ cancel):
    `--only-if-new`, preselected in the UI) the worker then compares, per
    running service, the id of the local image its compose file names
    (`docker image inspect <ref>`, i.e. what `up` would use) with the
-   container's image id. If no service differs, the job ends here as
-   `succeeded` with `result.unchanged`: no snapshots, nothing stopped.
-   Services without an image (built locally) do not count.
+   container's image id, and the container's image reference with the
+   compose file's. A service also counts as changed when its container
+   runs another reference, e.g. a version pinned by digest by a restore or
+   rollback: recreating it switches back to the tag ("unpin"). If no
+   service changes, the job ends here as `succeeded` with
+   `result.unchanged`: no snapshots, nothing stopped. Services without an
+   image (built locally) do not count.
 3. With a repository: pre-stop snapshot (always; failure only warns).
 4. `compose stop`.
 5. With a repository: final snapshot (parent = pre-stop): the state the
@@ -496,7 +500,10 @@ argument lists:
    checked** (built locally, pinned by digest in the compose file). A
    container started by a pinned restore or rollback
    (`name@sha256:...` instead of the tag) is compared by digest and marked
-   as such. The table shows running and available version: the version
+   as pinned. If running services are pinned, the tab offers **Unpin
+   now** (with a repository): it queues an update with "only if new" and
+   rollback by swap, which recreates them with their tag (and, as any
+   update, pulls newer images of the tags). The table shows running and available version: the version
    label if the image has one, else creation date and short digest.
 
 At most one check per user and three in total run at a time. The check is
