@@ -142,5 +142,15 @@ fieldset.containers .actions { margin-left: auto; display: flex; gap: .5rem; }
 body.log-fullscreen { overflow: hidden; }
 /* Container shell (xterm.js draws inside). */
 .terminal { height: 70vh; padding: .4rem; background: #11151b; border-radius: 8px; border: 1px solid var(--border); }
+.term-frame.fullscreen {
+  position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column;
+  gap: .4rem; padding: .4rem; background: #11151b;
+}
+.term-frame.fullscreen .terminal { flex: 1; min-height: 0; height: auto; border-color: #3a4350; }
+.term-bar { display: flex; align-items: center; gap: 1rem; color: #d7dde5; }
+.term-bar[hidden] { display: none; }
+.term-bar .term-title { font-weight: 600; }
+.term-bar .term-exit { margin-left: auto; color: #d7dde5; border-color: #3a4350; }
+body.term-fullscreen { overflow: hidden; }
 button[disabled] { opacity: .5; cursor: not-allowed; }
 .log:empty { display: none; }

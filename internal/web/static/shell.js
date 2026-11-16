@@ -75,4 +75,21 @@
 	window.addEventListener("resize", function () {
 		fit.fit();
 	});
+
+	// Full screen inside the browser window (like the log view): the frame
+	// covers the page; the terminal is fitted to its new size, which sends
+	// the new size to the shell. Only the button exits: Esc goes to the shell.
+	var frame = document.getElementById("shell-frame");
+	var bar = document.getElementById("shell-bar");
+	var enter = document.getElementById("shell-fullscreen");
+	var exit = document.getElementById("shell-exit-fullscreen");
+	function setFullscreen(on) {
+		frame.classList.toggle("fullscreen", on);
+		document.body.classList.toggle("term-fullscreen", on);
+		bar.hidden = !on;
+		fit.fit();
+		term.focus();
+	}
+	enter.addEventListener("click", function () { setFullscreen(true); });
+	exit.addEventListener("click", function () { setFullscreen(false); });
 })();

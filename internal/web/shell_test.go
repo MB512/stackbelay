@@ -151,7 +151,8 @@ func TestShellAccess(t *testing.T) {
 		t.Fatalf("CSP %q", csp)
 	}
 	if !strings.Contains(string(body), `data-socket="/stacks/web/shell/ws?container=0000000000a1&amp;csrf=`) ||
-		!strings.Contains(string(body), "/static/xterm-6.0.0.js") {
+		!strings.Contains(string(body), "/static/xterm-6.0.0.js") ||
+		!strings.Contains(string(body), `id="shell-fullscreen"`) || !strings.Contains(string(body), `id="shell-bar" hidden`) {
 		t.Fatalf("terminal page:\n%s", body)
 	}
 	if csp := e.get("/stacks/web").header.Get("Content-Security-Policy"); strings.Contains(csp, "unsafe-inline") {

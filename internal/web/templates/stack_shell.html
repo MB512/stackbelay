@@ -21,9 +21,19 @@
   <div class="section-head">
     <h2>{{.Name}}</h2>
     <span class="hint" id="shell-status" role="status">connecting…</span>
+    <button type="button" class="secondary" id="shell-fullscreen">Full screen</button>
     <a href="/stacks/{{$.Data.Stack.Name}}/shell">Close</a>
   </div>
-  <div class="terminal" id="terminal" data-socket="{{$.Data.SocketURL}}"></div>
+  {{- /* In full screen the frame covers the whole browser window and shows
+         only the terminal and a bar with the container name and the exit
+         button. Esc is not a shortcut here: it belongs to the shell. */}}
+  <div class="term-frame" id="shell-frame">
+    <div class="term-bar" id="shell-bar" hidden>
+      <span class="term-title">{{.Name}}</span>
+      <button type="button" class="secondary term-exit" id="shell-exit-fullscreen">Exit full screen</button>
+    </div>
+    <div class="terminal" id="terminal" data-socket="{{$.Data.SocketURL}}"></div>
+  </div>
   <noscript><p class="hint">The shell needs JavaScript.</p></noscript>
 </section>
 {{- else}}
