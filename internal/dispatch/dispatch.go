@@ -212,7 +212,7 @@ func (d *Dispatcher) reconcileDir(ctx context.Context, id string, importing bool
 		ID: id, StackID: st.ID, StackName: st.Name, Type: spec.Type, Trigger: spec.Trigger, QueuedAt: queued,
 		Options: store.JobOptions{PreStop: spec.PreStop, SnapshotID: spec.SnapshotID,
 			SkipSafetySnapshot: spec.SkipSafetySnapshot, NoStart: spec.NoStart, PinImages: spec.PinImages,
-			InPlace: spec.InPlace, NoBackup: spec.NoBackup},
+			InPlace: spec.InPlace, NoBackup: spec.NoBackup, OnlyIfNew: spec.OnlyIfNew, RollbackInPlace: spec.RollbackInPlace},
 	}
 	if j.Trigger == "" {
 		j.Trigger = store.TriggerManual
@@ -221,7 +221,7 @@ func (d *Dispatcher) reconcileDir(ctx context.Context, id string, importing bool
 	case statusErr == nil && status.ID == id:
 		j.State, j.Snapshot, j.Error = status.State, status.Snapshot, status.Error
 		j.Result = store.JobResult{PreStopSnapshot: status.PreStopSnapshot, SafetySnapshot: status.SafetySnapshot,
-			PreviousDir: status.PreviousDir, RolledBack: status.RolledBack}
+			PreviousDir: status.PreviousDir, RolledBack: status.RolledBack, Unchanged: status.Unchanged}
 		if status.StartedAt != nil {
 			j.StartedAt = *status.StartedAt
 		}
@@ -320,7 +320,9 @@ func (d *Dispatcher) start(ctx context.Context, j store.Job) {
 		ID: j.ID, Type: j.Type, Stack: j.StackName,
 		PreStop: j.Options.PreStop, SnapshotID: j.Options.SnapshotID,
 		SkipSafetySnapshot: j.Options.SkipSafetySnapshot, NoStart: j.Options.NoStart, PinImages: j.Options.PinImages,
-		InPlace: j.Options.InPlace, Trigger: j.Trigger, Requester: j.Requester, NoBackup: noBackup,
+		InPlace: j.Options.InPlace, OnlyIfNew: j.Options.OnlyIfNew, Trigger: j.Trigger, Requester: j.Requester, NoBackup: noBackup,
+		// Without backup there is no rollback, in place or not.
+		RollbackInPlace: j.Options.RollbackInPlace && !noBackup,
 	}
 	if j.Type == jobs.TypeComposeApply {
 		spec.ComposeSHA256, spec.ComposeBaseSHA256 = j.Options.ComposeSHA256, j.Options.ComposeBaseSHA256
@@ -411,7 +413,7 @@ func (d *Dispatcher) finalStatus(j store.Job) (st jobs.Status, ok bool, err erro
 func (d *Dispatcher) finishWithStatus(ctx context.Context, j store.Job, st jobs.Status) {
 	d.finish(ctx, j, st.State, st.Snapshot, st.Error, store.JobResult{
 		PreStopSnapshot: st.PreStopSnapshot, SafetySnapshot: st.SafetySnapshot, PreviousDir: st.PreviousDir,
-		RolledBack: st.RolledBack,
+		RolledBack: st.RolledBack, Unchanged: st.Unchanged,
 	})
 }
 

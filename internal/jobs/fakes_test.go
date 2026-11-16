@@ -54,6 +54,13 @@ type fakeDocker struct {
 	// on (the services of an edited compose file).
 	servicesAfter []docker.ServiceState
 	servicesCalls int
+	// imageIDs is returned by ImageIDs (service -> local image id).
+	imageIDs map[string]string
+}
+
+func (f *fakeDocker) ImageIDs(ctx context.Context, dir string, services []string) (map[string]string, error) {
+	f.calls.add("docker.ImageIDs %s", strings.Join(services, ","))
+	return f.imageIDs, f.fail("ImageIDs")
 }
 
 func (f *fakeDocker) fail(m string) error { return f.failOn[m] }

@@ -121,6 +121,21 @@ func TestComposeApplyRollback(t *testing.T) {
 	}
 }
 
+func TestComposeApplyRollbackInPlace(t *testing.T) {
+	e := rollbackEnv(t)
+	e.docker.upFailures = 1
+	opts := composeOpts(t, e, true)
+	opts.RollbackInPlace = true
+	res, err := e.p.ComposeApply(context.Background(), e.stack, opts)
+	if err == nil || !res.RolledBack || res.OldDir != "" || !strings.Contains(err.Error(), "rolled back in place") {
+		t.Fatalf("result %+v, err %v", res, err)
+	}
+	if got := readCompose(t, e); got != "services:\n  app: {}\n" {
+		t.Fatalf("compose file after rollback %q", got)
+	}
+	assertNoSideDirs(t, e)
+}
+
 func TestComposeApplyWithoutBackup(t *testing.T) {
 	tests := []struct {
 		name      string

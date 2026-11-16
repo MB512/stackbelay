@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -168,5 +169,19 @@ func TestParseRestoreArgs(t *testing.T) {
 	want := jobs.Spec{Type: jobs.TypeRestore, Stack: "web", SnapshotID: "0123abcd", PinImages: true, InPlace: true}
 	if spec != want {
 		t.Fatalf("got %+v, want %+v", spec, want)
+	}
+}
+
+func TestParseUpdateArgs(t *testing.T) {
+	spec, _, err := parseArgs([]string{"update", "--only-if-new", "--rollback-in-place", "web"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := jobs.Spec{Type: jobs.TypeUpdate, Stack: "web", OnlyIfNew: true, RollbackInPlace: true}
+	if spec != want {
+		t.Fatalf("got %+v, want %+v", spec, want)
+	}
+	if _, _, err := parseArgs([]string{"update", "--no-backup", "--rollback-in-place", "web"}); !errors.Is(err, errUsage) {
+		t.Fatalf("no-backup with rollback-in-place: %v", err)
 	}
 }

@@ -87,6 +87,29 @@ func TestUpdate(t *testing.T) {
 			wantErr:   "not rolled back (no repository)",
 		},
 		{
+			name: "only if new: no new image, nothing touched",
+			opts: UpdateOptions{Backup: true, OnlyIfNew: true},
+			setup: func(e *env) {
+				e.docker.imageIDs = map[string]string{"app": testImageID, "db": ""} // db: no image to compare
+			},
+			wantCalls: []string{check, svcs, pull, "docker.ImageIDs app,db"},
+			wantRes:   ChangeResult{Unchanged: true},
+		},
+		{
+			name:      "only if new: a new image, full update",
+			opts:      UpdateOptions{Backup: true, OnlyIfNew: true},
+			setup:     func(e *env) { e.docker.imageIDs = map[string]string{"app": "sha256:new", "db": ""} },
+			wantCalls: []string{check, svcs, pull, "docker.ImageIDs app,db", prestop, stop, final, up, healthy},
+			wantRes:   ChangeResult{PreStopSnapshot: "snap-pre-stop", Snapshot: "snap-final"},
+		},
+		{
+			name:      "only if new: comparing fails, nothing touched",
+			opts:      UpdateOptions{Backup: true, OnlyIfNew: true},
+			setup:     func(e *env) { e.docker.failOn["ImageIDs"] = errBoom },
+			wantCalls: []string{check, svcs, pull, "docker.ImageIDs app,db"},
+			wantErr:   "comparing images (the stack was not changed)",
+		},
+		{
 			name: "nothing running: refused before pulling",
 			opts: UpdateOptions{Backup: true},
 			setup: func(e *env) {
@@ -216,4 +239,30 @@ func TestUpdateCancelledDuringUpStillRollsBack(t *testing.T) {
 	if err == nil || !res.RolledBack {
 		t.Fatalf("rollback did not run after cancellation: %+v, %v", res, err)
 	}
+}
+
+func TestUpdateRollbackInPlace(t *testing.T) {
+	e := rollbackEnv(t)
+	e.docker.upFailures = 1
+	res, err := e.p.Update(context.Background(), e.stack, UpdateOptions{Backup: true, RollbackInPlace: true})
+	if !errors.Is(err, errBoom) || !strings.Contains(err.Error(), "rolled back in place to snapshot "+snapID[:8]) {
+		t.Fatalf("err = %v", err)
+	}
+	if !res.RolledBack || res.OldDir != "" {
+		t.Fatalf("result %+v", res)
+	}
+	found := false
+	for _, c := range e.calls.list() {
+		found = found || c == "restic.RestoreInPlace "+snapID+":/home/docker/web exclude="
+		if strings.HasPrefix(c, "restic.Restore ") {
+			t.Fatalf("rolled back with swap: %v", e.calls.list())
+		}
+	}
+	if !found {
+		t.Fatalf("no in-place restore: %v", e.calls.list())
+	}
+	if got := readData(t, e.stack.Dir); got != "restored" {
+		t.Errorf("stack dir has %q after rollback", got)
+	}
+	assertNoSideDirs(t, e)
 }

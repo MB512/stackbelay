@@ -7,7 +7,7 @@
 //	worker run <job-dir>
 //	worker backup  [--pre-stop] <stack>
 //	worker restore [--no-safety-snapshot] [--no-start] [--pin-images] [--in-place] <stack> <snapshot-id>
-//	worker update  [--no-backup] <stack>
+//	worker update  [--no-backup] [--only-if-new] [--rollback-in-place] <stack>
 //
 // "run" is how the manager starts a job: the job is described by
 // <job-dir>/spec.json, and the worker writes status.json and log.txt there.
@@ -44,7 +44,7 @@ const usage = `usage:
   worker run <job-dir>
   worker backup  [--pre-stop] <stack>
   worker restore [--no-safety-snapshot] [--no-start] [--pin-images] [--in-place] <stack> <snapshot-id>
-  worker update  [--no-backup] <stack>
+  worker update  [--no-backup] [--only-if-new] [--rollback-in-place] <stack>
 `
 
 func main() {
@@ -197,10 +197,16 @@ func parseArgs(args []string) (jobs.Spec, string, error) {
 		fs := flag.NewFlagSet("update", flag.ContinueOnError)
 		fs.SetOutput(io.Discard)
 		noBackup := fs.Bool("no-backup", false, "update without snapshots and without rollback (no repository)")
+		onlyIfNew := fs.Bool("only-if-new", false, "stop after the pull if no running service gets a new image")
+		rollbackInPlace := fs.Bool("rollback-in-place", false, "on a rollback, restore the final snapshot in place")
 		if err := fs.Parse(args[1:]); err != nil || fs.NArg() != 1 {
-			return jobs.Spec{}, "", fmt.Errorf("%w: update expects [--no-backup] <stack>", errUsage)
+			return jobs.Spec{}, "", fmt.Errorf("%w: update expects [--no-backup] [--only-if-new] [--rollback-in-place] <stack>", errUsage)
 		}
-		return jobs.Spec{Type: jobs.TypeUpdate, Stack: fs.Arg(0), NoBackup: *noBackup}, "", nil
+		if *noBackup && *rollbackInPlace {
+			return jobs.Spec{}, "", fmt.Errorf("%w: --rollback-in-place needs a backup (not with --no-backup)", errUsage)
+		}
+		return jobs.Spec{Type: jobs.TypeUpdate, Stack: fs.Arg(0), NoBackup: *noBackup, OnlyIfNew: *onlyIfNew,
+			RollbackInPlace: *rollbackInPlace}, "", nil
 
 	default:
 		return jobs.Spec{}, "", fmt.Errorf("%w: unknown command %q", errUsage, args[0])
@@ -235,7 +241,8 @@ func execute(ctx context.Context, p *jobs.Pipeline, cfg config.Worker, spec jobs
 		}
 		return err
 	case jobs.TypeUpdate:
-		res, err := p.Update(ctx, stack, jobs.UpdateOptions{Backup: !spec.NoBackup, CarryOver: spec.CarryOverJobs})
+		res, err := p.Update(ctx, stack, jobs.UpdateOptions{Backup: !spec.NoBackup, CarryOver: spec.CarryOverJobs,
+			OnlyIfNew: spec.OnlyIfNew, RollbackInPlace: spec.RollbackInPlace})
 		recordChange(status, res)
 		return err
 	case jobs.TypeComposeApply:
@@ -248,7 +255,7 @@ func execute(ctx context.Context, p *jobs.Pipeline, cfg config.Worker, spec jobs
 		}
 		res, err := p.ComposeApply(ctx, stack, jobs.ComposeApplyOptions{
 			Content: content, BaseSHA256: spec.ComposeBaseSHA256, Backup: !spec.NoBackup, CarryOver: spec.CarryOverJobs,
-			PreviousCopy: filepath.Join(jobDir, jobs.ComposePreviousFile),
+			RollbackInPlace: spec.RollbackInPlace, PreviousCopy: filepath.Join(jobDir, jobs.ComposePreviousFile),
 		})
 		recordChange(status, res)
 		return err
@@ -260,7 +267,7 @@ func execute(ctx context.Context, p *jobs.Pipeline, cfg config.Worker, spec jobs
 // recordChange stores the result of an update or compose apply in status.
 func recordChange(status *jobs.Status, res jobs.ChangeResult) {
 	status.Snapshot, status.PreStopSnapshot = res.Snapshot, res.PreStopSnapshot
-	status.PreviousDir, status.RolledBack = res.OldDir, res.RolledBack
+	status.PreviousDir, status.RolledBack, status.Unchanged = res.OldDir, res.RolledBack, res.Unchanged
 }
 
 // readComposeNew reads the new compose file of a compose-apply job from its

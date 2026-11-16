@@ -28,8 +28,15 @@ type ChangeResult struct {
 	PreStopSnapshot string // "" if not taken or failed
 	Snapshot        string // final snapshot: the state before the change
 	RolledBack      bool   // the change failed and the final snapshot was restored
-	OldDir          string // after a rollback: directory of the failed version
+	OldDir          string // after a rollback with swap: directory of the failed version
+	// Unchanged: there was nothing to change (update "only if new" found
+	// no new image); the stack was not touched.
+	Unchanged bool
 }
+
+// errUnchanged is returned by change.prepare when there is nothing to
+// change: the job ends successfully before any snapshot or stop.
+var errUnchanged = errors.New("nothing to change")
 
 // change describes a job that changes a stack the same way: back up, change,
 // start, verify, and roll back to the backup if it does not come up.
@@ -42,11 +49,15 @@ type change struct {
 	// migrated).
 	backup    bool
 	carryOver string // see RestoreOptions.CarryOver (for the rollback)
+	// rollbackInPlace restores the final snapshot in place instead of
+	// swapping directories (see RestoreOptions.InPlace).
+	rollbackInPlace bool
 	// requireRunning refuses a stack without running services.
 	requireRunning bool
 	// prepare (optional) runs while the stack still runs, before any
-	// snapshot. A failure ends the job with nothing changed.
-	prepare func(ctx context.Context, running []string) error
+	// snapshot. A failure ends the job with nothing changed; errUnchanged
+	// ends it successfully, also with nothing changed.
+	prepare func(ctx context.Context, services []docker.ServiceState, running []string) error
 	// apply runs with the stack stopped, after the final snapshot. It
 	// returns the services to start and those to wait for. changed
 	// reports whether the stack was modified: a failure with changed=false
@@ -100,7 +111,13 @@ func (p *Pipeline) runChange(ctx context.Context, stack stacks.Stack, c change) 
 
 	// 2. Preparation while the stack still runs.
 	if c.prepare != nil {
-		if err := c.prepare(ctx, running); err != nil {
+		err := c.prepare(ctx, services, running)
+		if errors.Is(err, errUnchanged) {
+			res.Unchanged = true
+			log.Info("nothing to change; the stack was not touched")
+			return res, nil
+		}
+		if err != nil {
 			return res, err
 		}
 	}
@@ -180,11 +197,13 @@ func (p *Pipeline) runChange(ctx context.Context, stack stacks.Stack, c change) 
 			"The stack is left as it is; check it manually.")
 		return res, fmt.Errorf("%s failed and was not rolled back (no repository): %w", c.name, failure)
 	}
-	log.Warn("rolling back: restoring the final snapshot with the previous image versions", "snapshot", res.Snapshot)
+	log.Warn("rolling back: restoring the final snapshot with the previous image versions", "snapshot", res.Snapshot,
+		"in_place", c.rollbackInPlace)
 	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), orDefault(p.RollbackTimeout, DefaultRollbackTimeout))
 	defer cancel()
 	rres, rerr := p.Restore(rctx, stack, RestoreOptions{
 		SnapshotID: res.Snapshot, SkipSafetySnapshot: true, PinImages: true, CarryOver: c.carryOver,
+		InPlace: c.rollbackInPlace,
 	})
 	res.OldDir = rres.OldDir
 	if rerr != nil {
@@ -194,6 +213,9 @@ func (p *Pipeline) runChange(ctx context.Context, stack stacks.Stack, c change) 
 	}
 	res.RolledBack = true
 	log.Info("rolled back to the state before the "+c.name, "snapshot", res.Snapshot, "failed_version_dir", rres.OldDir)
+	if rres.OldDir == "" { // in place: nothing of the failed version is kept
+		return res, fmt.Errorf("%s failed and was rolled back in place to snapshot %s: %w", c.name, shortID(res.Snapshot), failure)
+	}
 	return res, fmt.Errorf("%s failed and was rolled back to snapshot %s (the failed version is kept at %s): %w",
 		c.name, shortID(res.Snapshot), rres.OldDir, failure)
 }

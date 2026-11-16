@@ -103,6 +103,10 @@ type Spec struct {
 	// explicit choice of the manager, so missing repository settings in
 	// the worker can never silently turn off the backup of an update.
 	NoBackup bool `json:"no_backup,omitempty"`
+	// OnlyIfNew (update): see UpdateOptions.OnlyIfNew.
+	OnlyIfNew bool `json:"only_if_new,omitempty"`
+	// RollbackInPlace (update, compose-apply): see UpdateOptions.RollbackInPlace.
+	RollbackInPlace bool `json:"rollback_in_place,omitempty"`
 
 	// Compose-apply options: SHA-256 (hex) of the new content (in
 	// ComposeNewFile) and of the file the editor started from.
@@ -134,6 +138,12 @@ func (s Spec) Validate() error {
 	}
 	if s.Type != TypeComposeApply && (s.ComposeSHA256 != "" || s.ComposeBaseSHA256 != "") {
 		return errors.New("compose options set on a job that does not apply a compose file")
+	}
+	if s.OnlyIfNew && s.Type != TypeUpdate {
+		return fmt.Errorf("only_if_new set on a job of type %s", s.Type)
+	}
+	if s.RollbackInPlace && (s.Type != TypeUpdate && s.Type != TypeComposeApply || s.NoBackup) {
+		return errors.New("rollback_in_place set on a job without rollback")
 	}
 	switch s.Type {
 	case TypeBackup:
@@ -187,6 +197,7 @@ type Status struct {
 	SafetySnapshot  string `json:"safety_snapshot,omitempty"`   // restore
 	PreviousDir     string `json:"previous_dir,omitempty"`      // restore, rolled-back update: kept for manual rollback
 	RolledBack      bool   `json:"rolled_back,omitempty"`       // update: failed and restored to Snapshot
+	Unchanged       bool   `json:"unchanged,omitempty"`         // update "only if new": no new image, nothing done
 }
 
 // WriteSpec writes spec.json into dir (manager side).
