@@ -1,4 +1,6 @@
-// Command worker executes a single backup, restore or update job and exits.
+// Command worker executes a single backup, restore, update or compose-apply
+// job and exits (compose-apply only through "run": its new compose file is
+// in the job directory).
 //
 // Usage:
 //
@@ -116,7 +118,7 @@ func run(args []string, getenv func(string) string, stderr io.Writer) int {
 		Host:   cfg.Hostname,
 		Logger: log,
 	}
-	err = execute(ctx, p, cfg, spec, &status, log)
+	err = execute(ctx, p, cfg, spec, jobDir, &status, log)
 
 	finished := time.Now().UTC()
 	status.FinishedAt = &finished
@@ -205,13 +207,15 @@ func parseArgs(args []string) (jobs.Spec, string, error) {
 }
 
 // execute runs the job and records its results in status.
-func execute(ctx context.Context, p *jobs.Pipeline, cfg config.Worker, spec jobs.Spec, status *jobs.Status, log *slog.Logger) error {
+func execute(ctx context.Context, p *jobs.Pipeline, cfg config.Worker, spec jobs.Spec, jobDir string, status *jobs.Status, log *slog.Logger) error {
 	stack, err := stacks.Lookup(cfg.StacksRoot, spec.Stack)
 	if err != nil {
 		return err
 	}
-	// Only an update explicitly marked "no backup" runs without repository.
-	if needsRepo := spec.Type != jobs.TypeUpdate || !spec.NoBackup; needsRepo && !cfg.HasRepo() {
+	// Only an update or compose apply explicitly marked "no backup" runs
+	// without repository.
+	changes := spec.Type == jobs.TypeUpdate || spec.Type == jobs.TypeComposeApply
+	if needsRepo := !changes || !spec.NoBackup; needsRepo && !cfg.HasRepo() {
 		return errors.New("no repository configured (RESTIC_REPOSITORY and RESTIC_PASSWORD(_FILE) are required for this job)")
 	}
 	switch spec.Type {
@@ -231,12 +235,49 @@ func execute(ctx context.Context, p *jobs.Pipeline, cfg config.Worker, spec jobs
 		return err
 	case jobs.TypeUpdate:
 		res, err := p.Update(ctx, stack, jobs.UpdateOptions{Backup: !spec.NoBackup, CarryOver: spec.CarryOverJobs})
-		status.Snapshot, status.PreStopSnapshot = res.Snapshot, res.PreStopSnapshot
-		status.PreviousDir, status.RolledBack = res.OldDir, res.RolledBack
+		recordChange(status, res)
+		return err
+	case jobs.TypeComposeApply:
+		if jobDir == "" {
+			return errors.New("compose-apply only runs from a job directory (worker run)")
+		}
+		content, err := readComposeNew(jobDir, spec.ComposeSHA256)
+		if err != nil {
+			return err
+		}
+		res, err := p.ComposeApply(ctx, stack, jobs.ComposeApplyOptions{
+			Content: content, BaseSHA256: spec.ComposeBaseSHA256, Backup: !spec.NoBackup, CarryOver: spec.CarryOverJobs,
+			PreviousCopy: filepath.Join(jobDir, jobs.ComposePreviousFile),
+		})
+		recordChange(status, res)
 		return err
 	default:
 		return fmt.Errorf("unknown job type %q", spec.Type)
 	}
+}
+
+// recordChange stores the result of an update or compose apply in status.
+func recordChange(status *jobs.Status, res jobs.ChangeResult) {
+	status.Snapshot, status.PreStopSnapshot = res.Snapshot, res.PreStopSnapshot
+	status.PreviousDir, status.RolledBack = res.OldDir, res.RolledBack
+}
+
+// readComposeNew reads the new compose file of a compose-apply job from its
+// job directory and checks it against the checksum in the spec.
+func readComposeNew(jobDir, wantSHA256 string) ([]byte, error) {
+	f, err := os.Open(filepath.Join(jobDir, jobs.ComposeNewFile)) //nolint:gosec // G304: fixed name in the job directory
+	if err != nil {
+		return nil, fmt.Errorf("reading the new compose file: %w", err)
+	}
+	defer f.Close()
+	content, err := io.ReadAll(io.LimitReader(f, jobs.MaxComposeBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("reading the new compose file: %w", err)
+	}
+	if len(content) > jobs.MaxComposeBytes || jobs.SHA256Hex(content) != wantSHA256 {
+		return nil, errors.New("the new compose file does not match the job (size or checksum)")
+	}
+	return content, nil
 }
 
 // writeFinalStatus writes the final status; failures are reported on log

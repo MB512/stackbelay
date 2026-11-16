@@ -25,6 +25,11 @@ const (
 	SpecFile   = "spec.json"
 	StatusFile = "status.json"
 	LogFile    = "log.txt"
+	// ComposeNewFile is the new compose file of a compose-apply job
+	// (written by the manager); ComposePreviousFile the replaced one
+	// (written by the worker, for a manual revert).
+	ComposeNewFile      = "compose.new"
+	ComposePreviousFile = "compose.previous"
 )
 
 const (
@@ -65,6 +70,9 @@ func (s State) Final() bool {
 // jobIDPattern matches a ULID (Crockford base32, 26 characters).
 var jobIDPattern = regexp.MustCompile(`^[0-9A-HJKMNP-TV-Z]{26}$`)
 
+// sha256Pattern matches a SHA-256 in lowercase hex.
+var sha256Pattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
+
 // ValidJobID reports whether id is a well-formed job id.
 func ValidJobID(id string) bool { return jobIDPattern.MatchString(id) }
 
@@ -95,6 +103,11 @@ type Spec struct {
 	// the worker can never silently turn off the backup of an update.
 	NoBackup bool `json:"no_backup,omitempty"`
 
+	// Compose-apply options: SHA-256 (hex) of the new content (in
+	// ComposeNewFile) and of the file the editor started from.
+	ComposeSHA256     string `json:"compose_sha256,omitempty"`
+	ComposeBaseSHA256 string `json:"compose_base_sha256,omitempty"`
+
 	// Informational, for a manager that has to rebuild its job list from
 	// the job directories (after restoring its own stack). The worker
 	// ignores them.
@@ -118,6 +131,9 @@ func (s Spec) Validate() error {
 	case len(s.Requester) > 64 || strings.ContainsFunc(s.Requester, func(r rune) bool { return r < ' ' }):
 		return errors.New("invalid requester")
 	}
+	if s.Type != TypeComposeApply && (s.ComposeSHA256 != "" || s.ComposeBaseSHA256 != "") {
+		return errors.New("compose options set on a job that does not apply a compose file")
+	}
 	switch s.Type {
 	case TypeBackup:
 		if s.SnapshotID != "" || s.SkipSafetySnapshot || s.NoStart || s.PinImages || s.CarryOverJobs != "" {
@@ -139,13 +155,16 @@ func (s Spec) Validate() error {
 		if s.NoBackup {
 			return errors.New("update options set on a restore job")
 		}
-	case TypeUpdate:
+	case TypeUpdate, TypeComposeApply:
 		// The pre-stop snapshot is always taken (with a repository).
 		if s.PreStop || s.SnapshotID != "" || s.SkipSafetySnapshot || s.NoStart || s.PinImages {
-			return errors.New("backup or restore options set on an update job")
+			return fmt.Errorf("backup or restore options set on a job of type %s", s.Type)
 		}
 		if s.CarryOverJobs != "" && !ValidCarryOver(s.CarryOverJobs) {
 			return fmt.Errorf("invalid carry-over directory %q", truncate(s.CarryOverJobs))
+		}
+		if s.Type == TypeComposeApply && (!sha256Pattern.MatchString(s.ComposeSHA256) || !sha256Pattern.MatchString(s.ComposeBaseSHA256)) {
+			return errors.New("invalid compose checksums")
 		}
 	default:
 		return fmt.Errorf("unknown job type %q", truncate(string(s.Type)))

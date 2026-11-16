@@ -46,6 +46,23 @@ func TestUpdateSpecRoundTrip(t *testing.T) {
 	}
 }
 
+func TestComposeApplySpecRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	want := Spec{ID: testJobID, Type: TypeComposeApply, Stack: "web", ComposeSHA256: strings.Repeat("a", 64),
+		ComposeBaseSHA256: strings.Repeat("b", 64), NoBackup: true}
+	if err := WriteSpec(dir, want); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ReadSpec(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want.Version = 1
+	if got != want {
+		t.Fatalf("got %+v, want %+v", got, want)
+	}
+}
+
 func TestReadSpecRejects(t *testing.T) {
 	tests := []struct {
 		name string
@@ -70,6 +87,9 @@ func TestReadSpecRejects(t *testing.T) {
 		{"update with bad carry-over", `{"version":1,"id":"` + testJobID + `","type":"update","stack":"web","carry_over_jobs":"../x"}`},
 		{"no-backup on a backup", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"web","no_backup":true}`},
 		{"no-backup on a restore", `{"version":1,"id":"` + testJobID + `","type":"restore","stack":"web","snapshot_id":"0123abcd","no_backup":true}`},
+		{"compose-apply without checksums", `{"version":1,"id":"` + testJobID + `","type":"compose-apply","stack":"web"}`},
+		{"compose checksum on an update", `{"version":1,"id":"` + testJobID + `","type":"update","stack":"web","compose_sha256":"` + strings.Repeat("a", 64) + `"}`},
+		{"compose-apply with bad checksum", `{"version":1,"id":"` + testJobID + `","type":"compose-apply","stack":"web","compose_sha256":"../x","compose_base_sha256":"` + strings.Repeat("a", 64) + `"}`},
 		{"carry-over on a backup", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"web","carry_over_jobs":"data/jobs"}`},
 		{"bad trigger", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"web","trigger":"cron"}`},
 		{"control chars in requester", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"web","requester":"a\nb"}`},

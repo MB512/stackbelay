@@ -49,12 +49,20 @@ type fakeDocker struct {
 	upOverride string
 	// upFailures makes the next n Up calls fail with errBoom (besides failOn).
 	upFailures int
+	// servicesAfter, if set, is returned by Services from the second call
+	// on (the services of an edited compose file).
+	servicesAfter []docker.ServiceState
+	servicesCalls int
 }
 
 func (f *fakeDocker) fail(m string) error { return f.failOn[m] }
 
 func (f *fakeDocker) Services(ctx context.Context, dir string) ([]docker.ServiceState, error) {
 	f.calls.add("docker.Services")
+	f.servicesCalls++
+	if f.servicesAfter != nil && f.servicesCalls > 1 {
+		return f.servicesAfter, f.fail("Services")
+	}
 	return f.services, f.fail("Services")
 }
 

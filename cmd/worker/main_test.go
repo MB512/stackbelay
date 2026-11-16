@@ -142,3 +142,20 @@ func TestRunWithoutRepository(t *testing.T) {
 		}
 	}
 }
+
+func TestReadComposeNew(t *testing.T) {
+	dir := t.TempDir()
+	content := []byte("services: {}\n")
+	if err := os.WriteFile(filepath.Join(dir, jobs.ComposeNewFile), content, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := readComposeNew(dir, jobs.SHA256Hex(content)); err != nil || string(got) != string(content) {
+		t.Fatalf("got %q, %v", got, err)
+	}
+	if _, err := readComposeNew(dir, jobs.SHA256Hex([]byte("other"))); err == nil {
+		t.Fatal("checksum mismatch accepted")
+	}
+	if _, err := readComposeNew(t.TempDir(), jobs.SHA256Hex(content)); err == nil {
+		t.Fatal("missing file accepted")
+	}
+}
