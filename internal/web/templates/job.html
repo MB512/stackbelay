@@ -38,10 +38,13 @@
       {{- if .PreStop}}<tr><th>Options</th><td>snapshot before stopping</td></tr>{{end}}
       {{- if .ComposeFile}}<tr><th>Compose file</th><td><code>{{.ComposeFile}}</code>, new content <code>{{printf "%.12s" .ComposeSHA256}}</code> (SHA-256); the replaced file is kept in the job directory as <code>compose.previous</code></td></tr>{{end}}
       {{- if .NoBackup}}<tr><th>Options</th><td>without backup if the stack has no repository: no rollback on failure</td></tr>{{end}}
+      {{- if .OnlyIfNew}}<tr><th>Options</th><td>only if there is a new image</td></tr>{{end}}
+      {{- if .RollbackInPlace}}<tr><th>Rollback</th><td>in place (if needed)</td></tr>{{end}}
       {{- end}}
       {{- with .Job.Snapshot}}<tr><th>Snapshot</th><td><code>{{printf "%.8s" .}}</code></td></tr>{{end}}
       {{- with .Job.Result.PreStopSnapshot}}<tr><th>Pre-stop snapshot</th><td><code>{{printf "%.8s" .}}</code></td></tr>{{end}}
       {{- with .Job.Result.SafetySnapshot}}<tr><th>Safety snapshot</th><td><code>{{printf "%.8s" .}}</code></td></tr>{{end}}
+      {{- if .Job.Result.Unchanged}}<tr><th>Result</th><td>no new image: nothing was backed up, stopped or recreated</td></tr>{{end}}
       {{- if .Job.Result.RolledBack}}<tr><th>Rollback</th><td>the update failed; restored to snapshot <code>{{printf "%.8s" .Job.Snapshot}}</code> with the previous image versions</td></tr>{{end}}
       {{- with .Job.Result.PreviousDir}}<tr><th>{{if $.Job.Result.RolledBack}}Failed version{{else}}Previous directory{{end}}</th><td><code>{{.}}</code> (kept for a manual {{if $.Job.Result.RolledBack}}inspection{{else}}rollback{{end}})</td></tr>{{end}}
     </tbody>

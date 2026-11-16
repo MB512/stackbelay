@@ -22,7 +22,11 @@
     <textarea class="code" name="content" aria-label="{{.FileName}}" spellcheck="false" autocomplete="off"
               autocapitalize="off" wrap="off" rows="30">
 {{.Content}}</textarea>
-    {{- if not .HasRepo}}
+    {{- if .HasRepo}}
+    <label class="check"><input type="checkbox" name="rollback_in_place"{{if .RollbackInPlace}} checked{{end}}>
+      Roll back in place (only files changed since the backup are restored; for large stacks; nothing of the failed
+      version is kept)</label>
+    {{- else}}
     <label class="check"><input type="checkbox" name="confirm_no_backup" required>
       I understand: no backup and no rollback.</label>
     {{- end}}

@@ -167,59 +167,6 @@ func (s *Server) startRestore(w http.ResponseWriter, r *http.Request) {
 			sn.ShortID, !opts.SkipSafetySnapshot, !opts.NoStart, opts.PinImages, opts.InPlace), true)
 }
 
-// updatePage is the data of the update confirmation page.
-type updatePage struct {
-	Stack       store.Stack
-	HasRepo     bool
-	Unavailable string // why jobs cannot be started, or ""
-}
-
-// loadUpdatePage checks the update right and whether the stack has a
-// repository. On failure the response has been written and ok is false.
-func (s *Server) loadUpdatePage(w http.ResponseWriter, r *http.Request) (updatePage, bool) {
-	st, _, ok := s.loadStack(w, r, auth.ActionUpdate)
-	if !ok {
-		return updatePage{}, false
-	}
-	_, err := s.Store.RepositoryInfoForStack(r.Context(), st.ID)
-	if err != nil && !errors.Is(err, store.ErrNotFound) {
-		s.internalError(w, r, "loading repository", err)
-		return updatePage{}, false
-	}
-	return updatePage{Stack: st, HasRepo: err == nil, Unavailable: s.jobsUnavailable()}, true
-}
-
-// updateForm explains what an update does and asks for confirmation;
-// without repository it states that there is no backup and no rollback.
-func (s *Server) updateForm(w http.ResponseWriter, r *http.Request) {
-	page, ok := s.loadUpdatePage(w, r)
-	if !ok {
-		return
-	}
-	s.render(w, r, http.StatusOK, "update.html", pageData{Title: "Update " + page.Stack.Name,
-		Error: s.jobsUnavailable(), Data: page})
-}
-
-// startUpdate queues an update. A stack without repository is only
-// updated if the user explicitly confirmed that there is no backup and no
-// rollback.
-func (s *Server) startUpdate(w http.ResponseWriter, r *http.Request) {
-	page, ok := s.loadUpdatePage(w, r)
-	if !ok {
-		return
-	}
-	var opts store.JobOptions
-	if !page.HasRepo {
-		if r.PostFormValue("confirm_no_backup") != "on" {
-			s.render(w, r, http.StatusBadRequest, "update.html", pageData{Title: "Update " + page.Stack.Name,
-				Error: "Confirm that the stack is updated without backup and without rollback.", Data: page})
-			return
-		}
-		opts.NoBackup = true
-	}
-	s.submitJob(w, r, page.Stack, store.Job{Type: jobs.TypeUpdate, Options: opts}, fmt.Sprintf("update, backup: %t", page.HasRepo), page.HasRepo)
-}
-
 // loadJob resolves the job in the URL and checks that the user may view
 // its stack. Jobs of stacks the user may not see answer 404.
 func (s *Server) loadJob(w http.ResponseWriter, r *http.Request) (store.Job, store.Permission, bool) {

@@ -97,8 +97,11 @@ func run(ctx context.Context, getenv func(string) string, readFile func(string) 
 		// Container shells (admins, opt-in): "docker exec -it" in a
 		// pseudo-terminal, see docs/security.md.
 		EnableShell: cfg.EnableShell,
-		Shells:      &docker.CLI{},
-		Hostname:    cfg.Hostname,
+		// Update checks: read-only "docker buildx imagetools inspect"
+		// (asks the registry, pulls nothing) and "docker image inspect".
+		Updates:  &docker.CLI{},
+		Shells:   &docker.CLI{},
+		Hostname: cfg.Hostname,
 		// On SIGTERM open live streams end at once (clients reconnect)
 		// instead of holding up the graceful shutdown.
 		Stopping: ctx.Done(),

@@ -7,9 +7,11 @@ import (
 	"html/template"
 	"io/fs"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/MB512/stackvault/internal/buildinfo"
+	"github.com/MB512/stackvault/internal/docker"
 	"github.com/MB512/stackvault/internal/store"
 )
 
@@ -21,7 +23,7 @@ var staticFS embed.FS
 
 // pages are the page templates; each is combined with base.html and
 // partials.html.
-var pages = []string{"login.html", "password.html", "error.html", "stacks.html", "stack.html", "stack_settings.html", "users.html", "job.html", "restore.html", "stack_logs.html", "update.html", "stack_compose.html", "stack_shell.html"}
+var pages = []string{"login.html", "password.html", "error.html", "stacks.html", "stack.html", "stack_settings.html", "users.html", "job.html", "restore.html", "stack_logs.html", "stack_update.html", "stack_compose.html", "stack_shell.html"}
 
 // templateFuncs are available in all templates.
 var templateFuncs = template.FuncMap{
@@ -29,6 +31,9 @@ var templateFuncs = template.FuncMap{
 	"logTail": func() int { return logTailLines },
 	// version is the build version, shown in the page footer.
 	"version": func() string { return buildinfo.Version },
+	// imageVersion formats an image version for the update check: the
+	// version label if the image has one, else build date and short digest.
+	"imageVersion": imageVersion,
 	// when formats a timestamp for display; the zero time is shown as "never".
 	"when": func(t time.Time) string {
 		if t.IsZero() {
@@ -128,4 +133,24 @@ func staticHandler() http.Handler {
 		w.Header().Set("Cache-Control", "public, max-age=3600")
 		files.ServeHTTP(w, r)
 	})
+}
+
+// imageVersion formats v for display: "1.2.3 (2026-01-02, sha256:abcdef12)".
+// Unknown parts are left out; nothing known gives "".
+func imageVersion(v docker.ImageVersion) string {
+	var parts []string
+	if !v.Created.IsZero() {
+		parts = append(parts, v.Created.UTC().Format("2006-01-02"))
+	}
+	if d := strings.TrimPrefix(v.Digest, "sha256:"); d != "" {
+		parts = append(parts, "sha256:"+d[:min(len(d), 12)])
+	}
+	switch {
+	case v.Version != "" && len(parts) > 0:
+		return v.Version + " (" + strings.Join(parts, ", ") + ")"
+	case v.Version != "":
+		return v.Version
+	default:
+		return strings.Join(parts, ", ")
+	}
 }

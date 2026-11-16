@@ -56,6 +56,9 @@ type Server struct {
 	EnableShell bool
 	// Shells opens shells in stack containers. Required with EnableShell.
 	Shells ShellStarter
+	// Updates checks for newer images (Update tab). If nil, the tab offers
+	// no check.
+	Updates UpdateChecker
 	// Stopping is closed when the manager shuts down; open live streams
 	// then end at once instead of delaying the shutdown (clients
 	// reconnect). nil: streams only end with their client.
@@ -72,7 +75,9 @@ type Server struct {
 	templates  map[string]*template.Template
 	logStreams streamLimiter // open log streams
 	shells     streamLimiter // open shell sessions
-	shellCheck time.Duration // session re-check of open shells; default shellSessionCheck (tests shorten it)
+	// running update checks (not streams, but limited the same way)
+	updateChecks streamLimiter
+	shellCheck   time.Duration // session re-check of open shells; default shellSessionCheck (tests shorten it)
 }
 
 func (s *Server) now() time.Time {
@@ -128,8 +133,9 @@ func (s *Server) Handler() (http.Handler, error) {
 			r.Get("/stacks/{name}/logs/events", s.stackLogEvents)
 			r.Get("/stacks/{name}/restore", s.restoreForm)
 			r.Post("/stacks/{name}/restore", s.startRestore)
-			r.Get("/stacks/{name}/update", s.updateForm)
+			r.Get("/stacks/{name}/update", s.stackUpdate)
 			r.Post("/stacks/{name}/update", s.startUpdate)
+			r.Post("/stacks/{name}/update/check", s.checkUpdates)
 			r.Get("/jobs/{id}", s.jobDetail)
 			r.Get("/jobs/{id}/events", s.jobEvents)
 			r.Post("/jobs/{id}/cancel", s.cancelJob)

@@ -30,18 +30,6 @@
 </section>
 {{- end}}
 
-{{- if .CanUpdate}}
-<section>
-  <h2>Update</h2>
-  <form method="get" action="/stacks/{{.Stack.Name}}/update" class="inline">
-    <button type="submit" class="secondary"{{if .JobsUnavailable}} disabled{{end}}>Update…</button>
-  </form>
-  {{- with .JobsUnavailable}}<p class="hint">{{.}}</p>{{end}}
-  <p class="hint">Pulls newer images and recreates the running services{{if .Repo}}, with a backup before and an
-    automatic rollback if the update fails{{else}}. The stack has no repository: <strong>no backup, no rollback</strong>{{end}}.</p>
-</section>
-{{- end}}
-
 {{- if .Jobs}}
 <section>
   <h2>Recent jobs</h2>

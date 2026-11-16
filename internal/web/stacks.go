@@ -77,6 +77,7 @@ type stackHeader struct {
 const (
 	tabBackups  = ""
 	tabLogs     = "logs"
+	tabUpdate   = "update"
 	tabCompose  = "compose"
 	tabShell    = "shell"
 	tabSettings = "settings"
@@ -90,6 +91,9 @@ func (s *Server) newStackHeader(user store.User, perm store.Permission, st store
 	tabs := []stackTab{{Label: "Backups", URL: base, Active: active == tabBackups}}
 	if auth.Allowed(user, perm, auth.ActionLogs) {
 		tabs = append(tabs, stackTab{Label: "Logs", URL: base + "/" + tabLogs, Active: active == tabLogs})
+	}
+	if auth.Allowed(user, perm, auth.ActionUpdate) {
+		tabs = append(tabs, stackTab{Label: "Update", URL: base + "/" + tabUpdate, Active: active == tabUpdate})
 	}
 	if user.IsAdmin {
 		// Editing the compose file is admin-only: it is equivalent to root
@@ -110,7 +114,6 @@ func (s *Server) newStackHeader(user store.User, perm store.Permission, st store
 type backupsTab struct {
 	stackHeader           // embedded: .Stack and .Tabs are available directly
 	CanBackup, CanRestore bool
-	CanUpdate             bool
 	Repo                  *store.RepositoryInfo // nil = no repository configured
 	Snapshots             []store.CachedSnapshot
 	// CSRF and the refresh result, for the "snapshots" partial, which is
@@ -206,7 +209,6 @@ func (s *Server) loadBackupsTab(r *http.Request, st store.Stack, perm store.Perm
 		stackHeader:     s.newStackHeader(a.User, perm, st, tabBackups),
 		CanBackup:       auth.Allowed(a.User, perm, auth.ActionBackup),
 		CanRestore:      auth.Allowed(a.User, perm, auth.ActionRestore),
-		CanUpdate:       auth.Allowed(a.User, perm, auth.ActionUpdate),
 		CSRF:            a.Session.CSRFToken,
 		JobsUnavailable: s.jobsUnavailable(),
 	}

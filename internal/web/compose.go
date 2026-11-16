@@ -37,6 +37,8 @@ type composeTab struct {
 	Content    string // the editor's text
 	BaseSHA256 string // SHA-256 of the file the editor started from
 	HasRepo    bool
+	// RollbackInPlace keeps the form's rollback choice after an error.
+	RollbackInPlace bool
 	// Unavailable says why the file cannot be edited here; the editor is
 	// then not shown.
 	Unavailable string
@@ -140,6 +142,7 @@ func (s *Server) applyCompose(w http.ResponseWriter, r *http.Request) {
 	content := strings.ReplaceAll(r.PostFormValue("content"), "\r\n", "\n")
 	base := r.PostFormValue("base_sha256")
 	page.Content = content
+	page.RollbackInPlace = page.HasRepo && r.PostFormValue("rollback_in_place") == "on"
 	retry := func(status int, problem string) {
 		page.Problem = problem
 		page.BaseSHA256 = base // a conflict stays a conflict until the page is reloaded
@@ -185,7 +188,8 @@ func (s *Server) applyCompose(w http.ResponseWriter, r *http.Request) {
 	sum := jobs.SHA256Hex([]byte(content))
 	job := store.Job{Type: jobs.TypeComposeApply, ComposeContent: []byte(content), Options: store.JobOptions{
 		ComposeFile: page.FileName, ComposeBaseSHA256: base, ComposeSHA256: sum, NoBackup: !page.HasRepo,
+		RollbackInPlace: page.RollbackInPlace,
 	}}
-	s.submitJob(w, r, st, job, fmt.Sprintf("compose-apply of %s: sha256 %s, %d bytes, backup: %t",
-		page.FileName, sum, len(content), page.HasRepo), page.HasRepo)
+	s.submitJob(w, r, st, job, fmt.Sprintf("compose-apply of %s: sha256 %s, %d bytes, backup: %t, rollback in place: %t",
+		page.FileName, sum, len(content), page.HasRepo, page.RollbackInPlace), page.HasRepo)
 }

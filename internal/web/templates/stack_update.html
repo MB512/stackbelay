@@ -1,0 +1,98 @@
+{{define "content"}}
+{{- with .Data}}
+{{template "stack-header" .}}
+
+<section>
+  <div class="section-head">
+    <h2>Check for updates</h2>
+    {{- if .CanCheck}}
+    <form method="post" action="/stacks/{{.Stack.Name}}/update/check">
+      <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+      <button type="submit" class="secondary">Check now</button>
+    </form>
+    {{- end}}
+  </div>
+  <p class="hint">Asks the registries which images their tags point to now and compares them with the running containers.
+    Nothing is pulled or changed. Versions come from the image label <code>org.opencontainers.image.version</code> if the
+    image has one, otherwise build date and digest are shown.</p>
+  {{- if not .CanCheck}}<p class="hint">Update checks are not available in this installation.</p>{{end}}
+  {{- with .CheckError}}<p class="error" role="alert">{{.}}</p>{{end}}
+  {{- if and .Checked (not .CheckError)}}
+  <p>Checked {{when .CheckedAt}}:
+    {{if .NewImages}}<strong>{{.NewImages}} running service{{if ne .NewImages 1}}s{{end}} can be updated.</strong>
+    {{- else}}no running service has a newer image.{{end}}</p>
+  <table>
+    <thead><tr><th>Service</th><th>Image</th><th>Running</th><th>Available</th><th>Status</th></tr></thead>
+    <tbody>
+      {{- range .Checks}}
+      <tr>
+        <td>{{.Service}}</td>
+        <td><code>{{.Image}}</code></td>
+        <td>{{with imageVersion .Current}}{{.}}{{else}}<span class="muted">–</span>{{end}}</td>
+        <td>{{with imageVersion .Available}}{{.}}{{else}}<span class="muted">–</span>{{end}}</td>
+        <td>
+          {{- if eq .Status "up-to-date"}}<span class="badge ok">up to date</span>
+          {{- else if eq .Status "available"}}<span class="badge warn">update available</span>
+          {{- else if eq .Status "unknown"}}<span class="badge err">unknown</span>
+          {{- else}}<span class="badge">not checked</span>{{end}}
+          {{- with .Note}} <span class="hint">{{.}}</span>{{end}}</td>
+      </tr>
+      {{- end}}
+    </tbody>
+  </table>
+  {{- end}}
+</section>
+
+<section>
+  <h2>Update</h2>
+  <div class="card wide">
+    <p>The update recreates the running services with the newest images of their tags:</p>
+    <ol>
+      <li>Pull the images (<code>docker compose pull</code>) while the stack keeps running. If that fails, nothing is changed.</li>
+      {{- if .HasRepo}}
+      <li>Back up the stack: a snapshot while it runs, then stop it and take the final snapshot.</li>
+      {{- else}}
+      <li>Stop the stack. <strong>No backup is taken</strong>: the stack has no repository.</li>
+      {{- end}}
+      <li>Recreate the services with the new images (<code>docker compose up</code>) and wait up to 5 minutes until they
+        run and, if they have a healthcheck, are healthy.</li>
+    </ol>
+    {{- if .HasRepo}}
+    <p>If the services do not come up, the update is <strong>rolled back</strong>: the final snapshot is restored and the
+      stack starts with the image versions it had before.</p>
+    {{- else}}
+    <p class="warning">Without repository a failed update is <strong>not rolled back</strong>. The stack is left as it is,
+      not even the old images are started (a new version may already have converted data, which the old one could
+      damage). Configure a repository to update with backup and rollback.</p>
+    {{- end}}
+    <p class="hint">Services built locally (<code>build:</code>) are not pulled. The stack must be running: an update only
+      recreates running services.</p>
+  </div>
+
+  <form method="post" action="/stacks/{{.Stack.Name}}/update" class="card wide">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+    {{- with .Problem}}<p class="error" role="alert">{{.}}</p>{{end}}
+    <label class="check"><input type="checkbox" name="only_if_new" checked>
+      Only if there is something new: after the pull, stop without backup and without restarting anything if every
+      running service already runs the newest image of its tag</label>
+    {{- if .HasRepo}}
+    <fieldset>
+      <legend>Rollback</legend>
+      <label class="check"><input type="radio" name="rollback" value="swap" checked>
+        Into a new directory, then switch over (the failed version is kept as <code>{{.Stack.Name}}.old-…</code>)</label>
+      <label class="check"><input type="radio" name="rollback" value="in-place">
+        In place (only files changed since the backup are restored; for large stacks)</label>
+      <p class="hint">The rollback restores the final snapshot taken just before the update. In place it rewrites only the
+        few files that changed since then instead of downloading and copying the whole stack, but nothing of the failed
+        version is kept, and if the rollback itself fails half-way the stack stays stopped and partly restored.</p>
+    </fieldset>
+    {{- else}}
+    <label class="check"><input type="checkbox" name="confirm_no_backup" required>
+      I understand: no backup and no rollback.</label>
+    {{- end}}
+    <div><button type="submit"{{if .Unavailable}} disabled{{end}}>Update now</button></div>
+    {{- with .Unavailable}}<p class="hint">{{.}}</p>{{end}}
+  </form>
+</section>
+{{- end}}
+{{end}}
