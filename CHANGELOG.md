@@ -33,6 +33,12 @@ All notable changes to StackVault. The format is based on
 
 ### Added
 
+- **Logs tab**: live logs of all containers of a stack, mixed in the order
+  `docker compose logs` prints them, with one checkbox per container to show
+  or hide its lines. Viewing logs is a new per-stack permission ("Logs" in
+  the stack settings; admins always have it), because application logs are
+  not redacted and may contain secrets. The manager runs `docker compose
+  logs` itself, read-only, at most 4 open views per user and 20 in total.
 - Key check at startup: the database stores a check value, and the manager
   refuses to start if the configured secret key does not match the database
   ("the secret key does not match this database"), instead of failing later
