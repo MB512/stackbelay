@@ -26,14 +26,14 @@ func TestUpdate(t *testing.T) {
 		opts      UpdateOptions
 		setup     func(e *env)
 		wantCalls []string
-		wantRes   UpdateResult
+		wantRes   ChangeResult
 		wantErr   string // substring; "" = success
 	}{
 		{
 			name:      "with backup",
 			opts:      UpdateOptions{Backup: true},
 			wantCalls: []string{check, svcs, pull, prestop, stop, final, up, healthy},
-			wantRes:   UpdateResult{PreStopSnapshot: "snap-pre-stop", Snapshot: "snap-final"},
+			wantRes:   ChangeResult{PreStopSnapshot: "snap-pre-stop", Snapshot: "snap-final"},
 		},
 		{
 			name:      "without repository: no snapshots",
@@ -58,15 +58,15 @@ func TestUpdate(t *testing.T) {
 			opts:      UpdateOptions{Backup: true},
 			setup:     func(e *env) { e.restic.failOn["Backup:pre-stop"] = errBoom },
 			wantCalls: []string{check, svcs, pull, prestop, stop, "restic.Backup tag=final parent= host=host-a", up, healthy},
-			wantRes:   UpdateResult{Snapshot: "snap-final"},
+			wantRes:   ChangeResult{Snapshot: "snap-final"},
 		},
 		{
 			name:      "final snapshot fails after stop: old containers restart, no up",
 			opts:      UpdateOptions{Backup: true},
 			setup:     func(e *env) { e.restic.failOn["Backup:final"] = errBoom },
 			wantCalls: []string{check, svcs, pull, prestop, stop, final, start, healthy},
-			wantRes:   UpdateResult{PreStopSnapshot: "snap-pre-stop"},
-			wantErr:   "final snapshot (the stack was not updated)",
+			wantRes:   ChangeResult{PreStopSnapshot: "snap-pre-stop"},
+			wantErr:   "final snapshot (the stack was not changed)",
 		},
 		{
 			name:      "stop fails: old containers restart",
