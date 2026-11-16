@@ -112,3 +112,28 @@ func TestJobQueueAndPerStackLock(t *testing.T) {
 		t.Fatalf("unknown stack: %v", err)
 	}
 }
+
+func TestJobComposeContent(t *testing.T) {
+	s := openTest(t)
+	ctx := context.Background()
+	web := stackID(t, s, "web")
+	content := []byte("services:\n  app:\n    image: nginx:1.27\n")
+	j := Job{ID: "01AAAAAAAAAAAAAAAAAAAAAAA1", StackID: web, Type: jobs.TypeComposeApply, Trigger: TriggerManual,
+		QueuedAt: time.Now(), ComposeContent: content,
+		Options: JobOptions{ComposeFile: "compose.yml", ComposeSHA256: "abc", ComposeBaseSHA256: "def"}}
+	if err := s.CreateJob(ctx, j); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.JobComposeContent(ctx, j.ID)
+	if err != nil || string(got) != string(content) {
+		t.Fatalf("content %q, %v", got, err)
+	}
+	loaded, err := s.JobByID(ctx, j.ID)
+	if err != nil || loaded.Options.ComposeFile != "compose.yml" || loaded.ComposeContent != nil {
+		t.Fatalf("job %+v, %v", loaded, err)
+	}
+	newJob(t, s, "01AAAAAAAAAAAAAAAAAAAAAAA2", web, jobs.TypeBackup, time.Now())
+	if _, err := s.JobComposeContent(ctx, "01AAAAAAAAAAAAAAAAAAAAAAA2"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("job without content: %v", err)
+	}
+}

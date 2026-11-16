@@ -41,6 +41,8 @@ const (
 	TypeBackup  Type = "backup"
 	TypeRestore Type = "restore"
 	TypeUpdate  Type = "update"
+	// TypeComposeApply applies an edited compose file (compose editor).
+	TypeComposeApply Type = "compose-apply"
 )
 
 // State is the state of a job.

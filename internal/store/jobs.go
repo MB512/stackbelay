@@ -29,6 +29,12 @@ type JobOptions struct {
 	// repository, i.e. without backup and without rollback. It only takes
 	// effect if the stack still has no repository when the job starts.
 	NoBackup bool `json:"no_backup,omitempty"`
+	// Compose editor (compose-apply): the stack's main compose file (base
+	// name), the SHA-256 (hex) of the content the editor started from and
+	// of the new content (stored in job_compose, see Job.ComposeContent).
+	ComposeFile       string `json:"compose_file,omitempty"`
+	ComposeBaseSHA256 string `json:"compose_base_sha256,omitempty"`
+	ComposeSHA256     string `json:"compose_sha256,omitempty"`
 }
 
 // JobResult holds results besides the main snapshot, stored as JSON.
@@ -57,6 +63,9 @@ type Job struct {
 	QueuedAt    time.Time
 	StartedAt   time.Time // zero until running
 	FinishedAt  time.Time // zero until final
+	// ComposeContent is the new compose file of a compose-apply job. Only
+	// written by CreateJob; reading it needs JobComposeContent.
+	ComposeContent []byte
 }
 
 // ErrJobQueued is returned by CreateJob when the stack already has a queued
@@ -87,12 +96,29 @@ func (s *Store) CreateJob(ctx context.Context, j Job) error {
 		if err != nil && isForeignKeyError(err) {
 			return fmt.Errorf("stack %d or user %d: %w", j.StackID, j.RequestedBy, ErrNotFound)
 		}
+		if err != nil || j.ComposeContent == nil {
+			return err
+		}
+		_, err = tx.ExecContext(ctx, `INSERT INTO job_compose (job_id, content) VALUES (?, ?)`, j.ID, j.ComposeContent)
 		return err
 	})
 	if err != nil {
 		return fmt.Errorf("creating job: %w", err)
 	}
 	return nil
+}
+
+// JobComposeContent returns the new compose file of a compose-apply job.
+func (s *Store) JobComposeContent(ctx context.Context, jobID string) ([]byte, error) {
+	var content []byte
+	err := s.db.QueryRowContext(ctx, `SELECT content FROM job_compose WHERE job_id = ?`, jobID).Scan(&content)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, fmt.Errorf("compose content of job %s: %w", jobID, ErrNotFound)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("loading compose content of job %s: %w", jobID, err)
+	}
+	return content, nil
 }
 
 const jobColumns = `j.id, j.stack_id, s.name, j.type, j.trigger, j.requested_by, COALESCE(u.username, ''), j.state,
