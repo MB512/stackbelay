@@ -25,6 +25,10 @@ type JobOptions struct {
 	SkipSafetySnapshot bool   `json:"skip_safety_snapshot,omitempty"` // restore
 	NoStart            bool   `json:"no_start,omitempty"`             // restore
 	PinImages          bool   `json:"pin_images,omitempty"`           // restore: image versions from metadata.txt
+	// NoBackup (update): the user confirmed updating a stack without
+	// repository, i.e. without backup and without rollback. It only takes
+	// effect if the stack still has no repository when the job starts.
+	NoBackup bool `json:"no_backup,omitempty"`
 }
 
 // JobResult holds results besides the main snapshot, stored as JSON.
@@ -32,6 +36,7 @@ type JobResult struct {
 	PreStopSnapshot string `json:"pre_stop_snapshot,omitempty"`
 	SafetySnapshot  string `json:"safety_snapshot,omitempty"`
 	PreviousDir     string `json:"previous_dir,omitempty"`
+	RolledBack      bool   `json:"rolled_back,omitempty"` // update: failed and restored to the job's snapshot
 }
 
 // Job is a backup or restore job. State follows jobs.State: queued ->

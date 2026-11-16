@@ -13,6 +13,7 @@ import (
 
 	"github.com/MB512/stackvault/internal/docker"
 	"github.com/MB512/stackvault/internal/jobs"
+	"github.com/MB512/stackvault/internal/restic"
 	"github.com/MB512/stackvault/internal/store"
 )
 
@@ -210,7 +211,8 @@ func (d *Dispatcher) reconcileDir(ctx context.Context, id string, importing bool
 	j := store.Job{
 		ID: id, StackID: st.ID, StackName: st.Name, Type: spec.Type, Trigger: spec.Trigger, QueuedAt: queued,
 		Options: store.JobOptions{PreStop: spec.PreStop, SnapshotID: spec.SnapshotID,
-			SkipSafetySnapshot: spec.SkipSafetySnapshot, NoStart: spec.NoStart, PinImages: spec.PinImages},
+			SkipSafetySnapshot: spec.SkipSafetySnapshot, NoStart: spec.NoStart, PinImages: spec.PinImages,
+			NoBackup: spec.NoBackup},
 	}
 	if j.Trigger == "" {
 		j.Trigger = store.TriggerManual
@@ -219,7 +221,7 @@ func (d *Dispatcher) reconcileDir(ctx context.Context, id string, importing bool
 	case statusErr == nil && status.ID == id:
 		j.State, j.Snapshot, j.Error = status.State, status.Snapshot, status.Error
 		j.Result = store.JobResult{PreStopSnapshot: status.PreStopSnapshot, SafetySnapshot: status.SafetySnapshot,
-			PreviousDir: status.PreviousDir}
+			PreviousDir: status.PreviousDir, RolledBack: status.RolledBack}
 		if status.StartedAt != nil {
 			j.StartedAt = *status.StartedAt
 		}
@@ -289,12 +291,22 @@ func (d *Dispatcher) start(ctx context.Context, j store.Job) {
 		fail("starting job", fmt.Errorf("invalid job id %q", j.ID))
 		return
 	}
+	// Every job needs the repository, except an update the user confirmed
+	// to run without backup. An update of a stack that has a repository
+	// always backs up, even if it had none when the job was queued.
+	var resticRepo restic.Repo
+	noBackup := false
 	repo, err := d.Store.RepositoryForStack(ctx, j.StackID)
-	if errors.Is(err, store.ErrNotFound) {
+	switch {
+	case err == nil:
+		resticRepo = repo.Restic()
+	case errors.Is(err, store.ErrNotFound) && j.Type == jobs.TypeUpdate && j.Options.NoBackup:
+		noBackup = true
+		log.Warn("updating without backup: the stack has no repository (confirmed when the job was queued)")
+	case errors.Is(err, store.ErrNotFound):
 		fail("starting job", errors.New("the stack has no repository"))
 		return
-	}
-	if err != nil {
+	default:
 		fail("loading repository", err)
 		return
 	}
@@ -307,17 +319,18 @@ func (d *Dispatcher) start(ctx context.Context, j store.Job) {
 		ID: j.ID, Type: j.Type, Stack: j.StackName,
 		PreStop: j.Options.PreStop, SnapshotID: j.Options.SnapshotID,
 		SkipSafetySnapshot: j.Options.SkipSafetySnapshot, NoStart: j.Options.NoStart, PinImages: j.Options.PinImages,
-		Trigger: j.Trigger, Requester: j.Requester,
+		Trigger: j.Trigger, Requester: j.Requester, NoBackup: noBackup,
 	}
-	if j.Type == jobs.TypeRestore {
-		// Restoring the manager's own stack: keep the job files.
+	if j.Type == jobs.TypeRestore || (j.Type == jobs.TypeUpdate && !noBackup) {
+		// Restoring the manager's own stack (also as an update's
+		// rollback): keep the job files.
 		spec.CarryOverJobs = d.Template.JobsDirInStack(j.StackName)
 	}
 	if err := jobs.WriteSpec(dir, spec); err != nil {
 		fail("writing job spec", err)
 		return
 	}
-	cs, err := d.Template.Spec(j.ID, repo.Restic())
+	cs, err := d.Template.Spec(j.ID, resticRepo)
 	if err != nil {
 		fail("building worker container", err)
 		return
@@ -385,6 +398,7 @@ func (d *Dispatcher) finalStatus(j store.Job) (st jobs.Status, ok bool, err erro
 func (d *Dispatcher) finishWithStatus(ctx context.Context, j store.Job, st jobs.Status) {
 	d.finish(ctx, j, st.State, st.Snapshot, st.Error, store.JobResult{
 		PreStopSnapshot: st.PreStopSnapshot, SafetySnapshot: st.SafetySnapshot, PreviousDir: st.PreviousDir,
+		RolledBack: st.RolledBack,
 	})
 }
 

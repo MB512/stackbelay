@@ -100,6 +100,7 @@ func newStackHeader(user store.User, perm store.Permission, st store.Stack, acti
 type backupsTab struct {
 	stackHeader           // embedded: .Stack and .Tabs are available directly
 	CanBackup, CanRestore bool
+	CanUpdate             bool
 	Repo                  *store.RepositoryInfo // nil = no repository configured
 	Snapshots             []store.CachedSnapshot
 	// CSRF and the refresh result, for the "snapshots" partial, which is
@@ -195,6 +196,7 @@ func (s *Server) loadBackupsTab(r *http.Request, st store.Stack, perm store.Perm
 		stackHeader:     newStackHeader(a.User, perm, st, tabBackups),
 		CanBackup:       auth.Allowed(a.User, perm, auth.ActionBackup),
 		CanRestore:      auth.Allowed(a.User, perm, auth.ActionRestore),
+		CanUpdate:       auth.Allowed(a.User, perm, auth.ActionUpdate),
 		CSRF:            a.Session.CSRFToken,
 		JobsUnavailable: s.jobsUnavailable(),
 	}

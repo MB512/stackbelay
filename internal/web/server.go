@@ -118,6 +118,8 @@ func (s *Server) Handler() (http.Handler, error) {
 			r.Get("/stacks/{name}/logs/events", s.stackLogEvents)
 			r.Get("/stacks/{name}/restore", s.restoreForm)
 			r.Post("/stacks/{name}/restore", s.startRestore)
+			r.Get("/stacks/{name}/update", s.updateForm)
+			r.Post("/stacks/{name}/update", s.startUpdate)
 			r.Get("/jobs/{id}", s.jobDetail)
 			r.Get("/jobs/{id}/events", s.jobEvents)
 			r.Post("/jobs/{id}/cancel", s.cancelJob)

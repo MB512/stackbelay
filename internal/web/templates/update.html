@@ -1,0 +1,41 @@
+{{define "content"}}
+{{- with .Data}}
+<h1>Update {{.Stack.Name}}</h1>
+<p><a href="/stacks/{{.Stack.Name}}">Back to the stack</a></p>
+
+<div class="card wide">
+  <p>The update recreates the running services with the newest images of their tags:</p>
+  <ol>
+    <li>Pull the images (<code>docker compose pull</code>) while the stack keeps running. If that fails, nothing is changed.</li>
+    {{- if .HasRepo}}
+    <li>Back up the stack: a snapshot while it runs, then stop it and take the final snapshot.</li>
+    {{- else}}
+    <li>Stop the stack. <strong>No backup is taken</strong>: the stack has no repository.</li>
+    {{- end}}
+    <li>Recreate the services with the new images (<code>docker compose up</code>) and wait up to 5 minutes until they
+      run and, if they have a healthcheck, are healthy.</li>
+  </ol>
+  {{- if .HasRepo}}
+  <p>If the services do not come up, the update is <strong>rolled back</strong>: the final snapshot is restored and the
+    stack starts with the image versions it had before. The failed version's directory is kept
+    (<code>{{.Stack.Name}}.old-…</code>).</p>
+  {{- else}}
+  <p class="warning">Without repository a failed update is <strong>not rolled back</strong>. The stack is left as it is,
+    not even the old images are started (a new version may already have converted data, which the old one could
+    damage). Configure a repository to update with backup and rollback.</p>
+  {{- end}}
+  <p class="hint">Services built locally (<code>build:</code>) are not pulled. The stack must be running: an update only
+    recreates running services.</p>
+</div>
+
+<form method="post" action="/stacks/{{.Stack.Name}}/update" class="card wide">
+  <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+  {{- if not .HasRepo}}
+  <label class="check"><input type="checkbox" name="confirm_no_backup" required>
+    I understand: no backup and no rollback.</label>
+  {{- end}}
+  <div><button type="submit"{{if .Unavailable}} disabled{{end}}>Update now</button></div>
+  {{- with .Unavailable}}<p class="hint">{{.}}</p>{{end}}
+</form>
+{{- end}}
+{{end}}

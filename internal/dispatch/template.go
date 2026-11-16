@@ -68,8 +68,10 @@ func (t Template) Spec(jobID string, repo restic.Repo) (docker.ContainerSpec, er
 	env := map[string]string{
 		"STACKS_ROOT":         t.StacksRoot,
 		"STACKVAULT_HOSTNAME": t.Hostname,
-		"RESTIC_REPOSITORY":   repo.Location,
 		"RESTIC_CACHE_DIR":    workerCacheDir,
+	}
+	if repo.Location != "" { // empty: an update without backup (no repository)
+		env["RESTIC_REPOSITORY"] = repo.Location
 	}
 	if t.LogLevel != "" {
 		env["STACKVAULT_LOG_LEVEL"] = t.LogLevel

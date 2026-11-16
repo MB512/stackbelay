@@ -22,7 +22,7 @@
        "details" event of the live stream. */}}
 {{define "job-details"}}
 <section id="job-details">
-  <h1>{{if eq (print .Job.Type) "restore"}}Restore{{else}}Backup{{end}} of
+  <h1>{{if eq (print .Job.Type) "restore"}}Restore{{else if eq (print .Job.Type) "update"}}Update{{else}}Backup{{end}} of
     <a href="/stacks/{{.Job.StackName}}">{{.Job.StackName}}</a> {{template "job-state" .Job.State}}</h1>
 
   <table class="details">
@@ -36,11 +36,13 @@
       {{- if .SnapshotID}}<tr><th>Restoring</th><td><code>{{printf "%.8s" .SnapshotID}}</code>
         {{- if .SkipSafetySnapshot}}, without safety snapshot{{end}}{{if .NoStart}}, stack not started afterwards{{end}}{{if .PinImages}}, image versions pinned{{end}}</td></tr>{{end}}
       {{- if .PreStop}}<tr><th>Options</th><td>snapshot before stopping</td></tr>{{end}}
+      {{- if .NoBackup}}<tr><th>Options</th><td>without backup if the stack has no repository: no rollback on failure</td></tr>{{end}}
       {{- end}}
       {{- with .Job.Snapshot}}<tr><th>Snapshot</th><td><code>{{printf "%.8s" .}}</code></td></tr>{{end}}
       {{- with .Job.Result.PreStopSnapshot}}<tr><th>Pre-stop snapshot</th><td><code>{{printf "%.8s" .}}</code></td></tr>{{end}}
       {{- with .Job.Result.SafetySnapshot}}<tr><th>Safety snapshot</th><td><code>{{printf "%.8s" .}}</code></td></tr>{{end}}
-      {{- with .Job.Result.PreviousDir}}<tr><th>Previous directory</th><td><code>{{.}}</code> (kept for a manual rollback)</td></tr>{{end}}
+      {{- if .Job.Result.RolledBack}}<tr><th>Rollback</th><td>the update failed; restored to snapshot <code>{{printf "%.8s" .Job.Snapshot}}</code> with the previous image versions</td></tr>{{end}}
+      {{- with .Job.Result.PreviousDir}}<tr><th>{{if $.Job.Result.RolledBack}}Failed version{{else}}Previous directory{{end}}</th><td><code>{{.}}</code> (kept for a manual {{if $.Job.Result.RolledBack}}inspection{{else}}rollback{{end}})</td></tr>{{end}}
     </tbody>
   </table>
   {{- with .Job.Error}}<p class="error" role="alert">{{.}}</p>{{end}}

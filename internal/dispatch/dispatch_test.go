@@ -534,3 +534,58 @@ func TestReconcileImportRemovesExitedContainer(t *testing.T) {
 		t.Fatalf("removed: %v", e.docker.removed)
 	}
 }
+
+// An update needs the repository unless the user confirmed an update
+// without backup; a stack with repository is always backed up.
+func TestUpdateRepositoryHandling(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	e.d.Template.Jobs = docker.Mount{Type: "bind", Source: "/home/docker/web/data/jobs"} // the manager lives in "web"
+
+	unconfirmed := e.submit("norepo", jobs.TypeUpdate, store.JobOptions{})
+	e.d.Step(ctx)
+	if got := e.job(unconfirmed.ID); got.State != jobs.StateFailed || !strings.Contains(got.Error, "no repository") {
+		t.Fatalf("update without repository and confirmation: %+v", got)
+	}
+
+	confirmed := e.submit("norepo", jobs.TypeUpdate, store.JobOptions{NoBackup: true})
+	withRepo := e.submit("web", jobs.TypeUpdate, store.JobOptions{NoBackup: true}) // repository wins
+	e.d.Step(ctx)
+	for _, tc := range []struct {
+		id           string
+		wantNoBackup bool
+		wantCarry    string
+		wantRepoEnv  bool
+	}{
+		{confirmed.ID, true, "", false},
+		{withRepo.ID, false, "data/jobs", true},
+	} {
+		if got := e.job(tc.id).State; got != jobs.StateRunning {
+			t.Fatalf("job %s: %s", tc.id, got)
+		}
+		spec, err := jobs.ReadSpec(filepath.Join(e.jobsDir, tc.id))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if spec.NoBackup != tc.wantNoBackup || spec.CarryOverJobs != tc.wantCarry {
+			t.Errorf("spec of %s: no_backup %v, carry-over %q", spec.Stack, spec.NoBackup, spec.CarryOverJobs)
+		}
+		var env map[string]string
+		for _, cs := range e.docker.started {
+			if cs.Name == ContainerName(tc.id) {
+				env = cs.Env
+			}
+		}
+		if _, ok := env["RESTIC_REPOSITORY"]; ok != tc.wantRepoEnv {
+			t.Errorf("spec of %s: RESTIC_REPOSITORY set = %v", spec.Stack, ok)
+		}
+	}
+
+	// A rolled-back update keeps its result.
+	e.workerDone(withRepo.ID, jobs.Status{State: jobs.StateFailed, Snapshot: "aaaaaaaa11111111",
+		PreviousDir: "/home/docker/web.old-x", RolledBack: true, Error: "update failed and was rolled back"})
+	e.d.Step(ctx)
+	if got := e.job(withRepo.ID); !got.Result.RolledBack || got.Result.PreviousDir == "" || got.Snapshot == "" {
+		t.Fatalf("rolled-back update: %+v", got)
+	}
+}
