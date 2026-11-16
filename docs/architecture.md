@@ -143,7 +143,8 @@ carries trigger and requester for this; a directory without status becomes
 **Self-restore.** The manager's jobs directory lies inside its own stack
 (`/data` is part of it). Restoring that stack would move the job files away
 with the previous version and bring back an older database. So for a
-restore of the stack that contains the jobs directory, the spec carries
+restore of the stack that contains the jobs directory (and for an update
+with backup, whose rollback is such a restore), the spec carries
 `carry_over_jobs` (the jobs directory relative to the stack, e.g.
 `data/jobs`): right after the swap, before the stack starts, the worker
 copies it from the previous version into the restored stack, and at the
@@ -365,6 +366,51 @@ Notes and limits (show them in the UI):
 - Also applies to cross-host migration: pinned is the recommended mode there.
 - Without `metadata.txt` (very old snapshots) a pinned restore fails before the swap (the UI cannot know in advance without reading the snapshot).
 
+## Update pipeline
+
+Job type `update` (`jobs.Pipeline.Update`), started by users with the update
+right (`can_update`) after a confirmation page. It runs in a worker like
+backup and restore (same queue, per-stack lock, live log, cancel):
+
+1. With a repository: check it. Record the stack state; the stack must have
+   running services (an update recreates the running services; a stopped
+   stack is refused before anything happens). Write `metadata.txt`: its
+   image digests come from the running containers, i.e. the versions
+   **before** the update.
+2. `docker compose pull --ignore-buildable --quiet -- <running services>`
+   while the stack keeps running. Failure: the job fails, nothing changed.
+3. With a repository: pre-stop snapshot (always; failure only warns).
+4. `compose stop`.
+5. With a repository: final snapshot (parent = pre-stop): the state the
+   rollback returns to. Failure in 4–5 (or cancellation before 6): `compose
+   start` of the old containers (still the old images), job fails.
+6. `compose up --detach --force-recreate -- <running services>`, then wait
+   until every service runs and, with a healthcheck, is healthy (5 min;
+   a service that exits or turns unhealthy fails at once).
+7. Failure in 6:
+   - with repository: **automatic rollback** = the restore pipeline on the
+     final snapshot without safety snapshot (the final snapshot already is
+     the state before the update), with image pinning (old digests from its
+     `metadata.txt`), carrying the manager's job files over if it is the
+     manager's own stack. The failed version's directory is kept as
+     `<stack>.old-<time>`. The rollback also runs if the job was cancelled
+     during step 6 (own timeout, 2 h). The job ends `failed` with
+     `result.rolled_back`.
+   - without repository: **no rollback at all**, not even starting the old
+     images (they could damage data a new version already migrated). The
+     job fails and the stack stays as it is.
+
+Without a repository the update is only possible after explicit
+confirmation on the confirmation page ("no backup and no rollback";
+`JobOptions.NoBackup`). The dispatcher decides when the job starts: a stack
+that has a repository by then is always backed up; one without repository
+and without confirmation fails. The worker gets `no_backup` in the spec
+explicitly; without it, missing repository settings fail the job instead of
+silently skipping the backup.
+
+Not covered: images built locally (`build:`) are not rebuilt; a service
+that starts, passes the check and fails later is not detected.
+
 ## Snapshot cache
 
 Listing snapshots on a remote repository can be slow, so the manager keeps a
@@ -446,11 +492,13 @@ with a light and a dark set; the job log is a dark panel in both modes.
 | `POST /stacks/{name}/backup` | backup right | queue a backup (option: pre-stop snapshot) |
 | `GET /stacks/{name}/logs` | logs right | "Logs" tab: container checkboxes and live log panel |
 | `GET /stacks/{name}/logs/events` | logs right | live container logs (SSE), see "Container logs" |
+| `GET /stacks/{name}/update` | update right | confirmation page; without repository it requires confirming "no backup, no rollback" |
+| `POST /stacks/{name}/update` | update right | queue an update, see "Update pipeline" |
 | `GET /stacks/{name}/restore?snapshot=<id>` | restore right | confirmation page with options |
 | `POST /stacks/{name}/restore` | restore right | queue a restore of a cached, not removed snapshot; only admins may skip the safety snapshot |
 | `GET /jobs/{id}` | view right on the job's stack | job details and log; followed live by `static/joblog.js` while not final |
 | `GET /jobs/{id}/events` | view right on the job's stack | live stream of the job (SSE), see "Live logs" |
-| `POST /jobs/{id}/cancel` | backup/restore right (by job type) | cancel a queued or running job |
+| `POST /jobs/{id}/cancel` | backup/restore/update right (by job type) | cancel a queued or running job |
 | `POST /stacks/{name}/snapshots/refresh` | view right | refresh the snapshot cache (read-only restic; at most once per 10 s per stack; HTMX: returns the snapshot section) |
 | `GET /stacks/{name}/settings` | admin | "Settings" tab: repository, schedules with next run, enable/disable, per-user permissions |
 | `POST /stacks/{name}/repository` | admin | create/update the repository, then refresh the snapshot cache as an access check |
@@ -648,10 +696,13 @@ requires restic >= 0.17.
 worker run <job-dir>
 worker backup  [--pre-stop] <stack>
 worker restore [--no-safety-snapshot] [--no-start] [--pin-images] <stack> <snapshot-id>
+worker update  [--no-backup] <stack>
 ```
 
-`run` is the manager's interface (see "Job handoff"); `backup` and `restore`
-are for manual use and tests.
+`run` is the manager's interface (see "Job handoff"); `backup`, `restore`
+and `update` are for manual use and tests. The repository settings
+(`RESTIC_REPOSITORY`, `RESTIC_PASSWORD(_FILE)`) are optional in the worker's
+configuration, but every job needs them except `update --no-backup`.
 
 Flags go before positional arguments. Exit codes: 0 success, 1 job failed,
 2 usage/configuration error. Logs are JSON lines (`log/slog`) on stderr.
@@ -679,6 +730,9 @@ containers for inspection). `scripts/e2e-dispatch.sh` tests the manager
 with real worker containers through the web UI (repository init, backup,
 queueing, scheduled backup, restore, pinned restore); it builds the release
 image from `deploy/Dockerfile`, as does `scripts/e2e-self.sh`.
+`scripts/e2e-update.sh` runs the update job on the host: a successful
+update, a failed one with automatic rollback, and a failed one without
+backup (no rollback).
 
 Not yet implemented: restore into a not-yet-existing stack (import), see
 "Restore from another host" and "Planned features".
@@ -743,42 +797,16 @@ Agreed on 2026-11-16, implemented in this order (each one step towards the
 "More stack tabs" idea; a Status tab with restart remains open). Each
 feature moves into the main sections when it is implemented.
 
-**Permissions.** `permissions.can_logs` exists (migration 0005,
-`auth.ActionLogs`); the update adds `permissions.can_update`
-(`auth.ActionUpdate`). Admins have both. A row with all flags 0 is still deleted. Having any flag gives
+**Permissions.** `permissions.can_logs` (migration 0005,
+`auth.ActionLogs`) and `permissions.can_update` (migration 0006,
+`auth.ActionUpdate`); admins have both. A row with all flags 0 is still deleted. Having any flag gives
 the view right. The compose editor is admin-only: editing a compose file
 is equivalent to root on the host (privileged containers, host mounts), so
 it gets no per-stack permission.
 
 #### 1. Log view: implemented, see "Container logs".
 
-#### 2. Update (job type `update`, `can_update`)
-
-A worker job like backup/restore (same queue, per-stack lock, live log):
-
-1. `metadata.txt`; `docker compose pull --ignore-buildable` while the stack
-   is running. Failure: the job fails, nothing was changed.
-2. If a repository is configured: pre-stop snapshot (always, not optional).
-3. `compose stop`.
-4. If a repository is configured: final snapshot (parent = pre-stop). Its
-   `metadata.txt` records the digests of the **old** images, because they
-   are read from the containers, not from the (already pulled) tags.
-   Failure in 3–4: `compose start` (old containers, old images), job fails.
-5. `compose up -d --force-recreate`, then wait until every service runs
-   and, with a healthcheck, is healthy (timeout, default 5 min).
-6. Failure in 5:
-   - with repository: **automatic rollback** = the restore pipeline on the
-     final snapshot (files and data, directory swap, previous directory
-     kept as `.old-<time>`), started with image pinning (old digests from
-     its `metadata.txt`). No extra safety snapshot: the final snapshot is
-     the state before the update.
-   - without repository: **no rollback at all**, not even starting the old
-     images (they could damage data a new version already migrated). The
-     job fails and the stack stays as it is; the UI says so before the
-     update is started.
-
-Without a repository the update is allowed, with a warning in the
-confirmation page that no backup and no rollback will happen.
+#### 2. Update: implemented, see "Update pipeline".
 
 #### 3. Compose editor (tab "Compose", admin only)
 

@@ -13,7 +13,7 @@ attackers reaching the UI, a leaked database file.
 ## Rules
 
 1. **No free-form execution.** Users can only trigger predefined job types
-   (`backup`, `restore`; planned: `update`, `compose-apply`) on discovered
+   (`backup`, `restore`, `update`; planned: `compose-apply`) on discovered
    stacks. All external
    commands use `exec.CommandContext` with argument lists, never a shell.
 2. **Input validation.** Stack names must match the discovered set. Snapshot IDs

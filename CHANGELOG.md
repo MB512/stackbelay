@@ -33,6 +33,14 @@ All notable changes to StackVault. The format is based on
 
 ### Added
 
+- **Update** of a stack (new per-stack permission "Update"): pulls the newest
+  images of the running services while the stack keeps running, backs it up
+  (snapshot while running, then stopped), recreates the services and waits
+  up to 5 minutes until they run and are healthy. If they do not come up,
+  the update is **rolled back automatically**: the snapshot taken just before
+  is restored and the stack starts with its previous image versions. A stack
+  without repository can be updated after an explicit confirmation, but then
+  without backup and **without rollback**.
 - **Logs tab**: live logs of all containers of a stack, mixed in the order
   `docker compose logs` prints them, with one checkbox per container to show
   or hide its lines, optional line wrapping (off = horizontal scrolling) and
