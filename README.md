@@ -119,6 +119,7 @@ Environment variables only:
 | `STACKVAULT_ALLOW_INSECURE_HTTP` | accept logins over plain HTTP (testing only), default `false` |
 | `STACKVAULT_WORKER_IMAGE` | image for worker containers, default: the manager's own image |
 | `STACKVAULT_MAX_JOBS` | jobs running at the same time across all stacks, default `1` |
+| `STACKVAULT_ENABLE_SHELL` | `true` gives admins a shell in stack containers ("Shell" tab), default `false` |
 | `STACKVAULT_LOG_LEVEL` | `debug`, `info`, `warn`, `error` |
 | `TZ` | time zone of the schedules, e.g. `Europe/Berlin` (default UTC) |
 

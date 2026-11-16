@@ -43,6 +43,8 @@ services:
       TZ: Europe/Berlin
       # Only for a first test without a TLS proxy:
       # STACKVAULT_ALLOW_INSECURE_HTTP: "true"
+      # Shells in stack containers for admins ("Shell" tab), off by default:
+      # STACKVAULT_ENABLE_SHELL: "true"
     ports:
       - "127.0.0.1:8080:8080"
     volumes:

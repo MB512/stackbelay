@@ -69,6 +69,7 @@ compose, so they are never affected by stopping a stack.
 | `STACKVAULT_ALLOW_INSECURE_HTTP` | accept logins over plain HTTP (testing without TLS proxy), default `false` |
 | `STACKVAULT_WORKER_IMAGE` | image for worker containers, default: the manager's own image |
 | `STACKVAULT_MAX_JOBS` | jobs running at the same time across all stacks, default `1` |
+| `STACKVAULT_ENABLE_SHELL` | admin-only container shells ("Shell" tab), default `false`; see "Container shell" |
 | `STACKVAULT_LOG_LEVEL` | `debug`, `info`, `warn`, `error` |
 | `TZ` | time zone of the cron schedules (e.g. `Europe/Berlin`), default UTC in most images; the zone database is built into the binary |
 
@@ -551,6 +552,8 @@ with a light and a dark set; the job log is a dark panel in both modes.
 | `GET /jobs/{id}/events` | view right on the job's stack | live stream of the job (SSE), see "Live logs" |
 | `POST /jobs/{id}/cancel` | backup/restore/update right (by job type; compose-apply: admin) | cancel a queued or running job |
 | `POST /stacks/{name}/snapshots/refresh` | view right | refresh the snapshot cache (read-only restic; at most once per 10 s per stack; HTMX: returns the snapshot section) |
+| `GET /stacks/{name}/shell` | admin, opt-in | "Shell" tab: containers, terminal of `?container=<id>` |
+| `GET /stacks/{name}/shell/ws` | admin, opt-in | WebSocket of a shell session, see "Container shell" |
 | `GET /stacks/{name}/compose` | admin | "Compose" tab: editor for the main compose file |
 | `POST /stacks/{name}/compose` | admin | validate and queue a compose-apply job, see "Compose editor" |
 | `GET /stacks/{name}/settings` | admin | "Settings" tab: repository, schedules with next run, enable/disable, per-user permissions |
@@ -584,8 +587,8 @@ keeping repositories and their indexes small.
 Stack pages share a header with tabs (`stack-header` in `partials.html`).
 The tab list is built per user in `newStackHeader`; a tab is only shown if
 the user may open it, and its handler checks the permission again. Tabs:
-"Backups" (view right), "Logs" (logs right), "Compose" and "Settings"
-(admin). A planned "Status" tab (restart) is added there with its own
+"Backups" (view right), "Logs" (logs right), "Compose", "Shell" (only with
+`STACKVAULT_ENABLE_SHELL`) and "Settings" (admin). A planned "Status" tab (restart) is added there with its own
 permission.
 
 Stacks a user may not view answer 404 (not 403), so stack names are not
@@ -599,6 +602,11 @@ update, replace the file, keep the version in the file name (cache busting)
 and update `base.html`. HTMX is configured in `base.html` (`htmx-config`
 meta) to work with the strict CSP: no injected indicator styles, no
 `eval`, no scripts from responses, requests to the own origin only.
+`xterm-6.0.0.js`, `xterm-6.0.0.css` and `xterm-addon-fit-0.11.0.js` (MIT,
+`xterm-LICENSE.txt`, `xterm-addon-fit-LICENSE.txt`; the prebuilt files of
+the npm packages `@xterm/xterm@6.0.0` and `@xterm/addon-fit@0.11.0`,
+tarball integrity checked against the registry) are loaded only by the
+shell page.
 
 ## Live logs
 
@@ -664,6 +672,42 @@ too.
 - Logs are **not** redacted: applications may log secrets, hence the
   separate right. A new stream (without `since`) is audited as
   `stack.logs`; reconnects are not.
+
+## Container shell
+
+Opt-in (`STACKVAULT_ENABLE_SHELL=true`, default off) and admin-only: the
+"Shell" tab opens an interactive shell in a running container of the
+stack. Without the setting the tab and its routes do not exist (an
+exception to "disabled, not hidden": the feature is meant to be invisible
+where it is not wanted).
+
+- `GET /stacks/{name}/shell` lists the stack's containers
+  (`docker.CLI.StackContainers`: `compose ps --all` after the project owner
+  check). `?container=<id>` shows the terminal of a running container of
+  that list (xterm.js, `static/shell.js`).
+- `GET /stacks/{name}/shell/ws?container=<id>&csrf=<token>&cols=&rows=` is
+  the WebSocket (`github.com/coder/websocket`). It requires an admin
+  session, the session's CSRF token (the upgrade is a GET, so the token is
+  a query parameter) and a same-origin request (`websocket.Accept` rejects
+  other origins). The container id must belong to the stack's container
+  list and be running.
+- The manager runs `docker exec --interactive --tty --env
+  TERM=xterm-256color <id> /bin/bash` (or `/bin/sh` if `test -x
+  /bin/bash` fails) in a pseudo-terminal (`github.com/creack/pty`), as the
+  container's default user. Binary WebSocket messages carry terminal data
+  in both directions; a text message `{"type":"resize","cols":..,"rows":..}`
+  resizes the terminal (the docker CLI passes it on).
+- The session ends when the shell exits, the browser closes it, the manager
+  shuts down, or at the next check (every 30 s) after the login is no
+  longer valid (logout, expiry, disabled, admin flag removed). The server
+  then sends a normal close with the reason. There is no reconnect: a new
+  shell is a new session.
+- Limits: 2 shells per admin, 10 in total. `shell.start` and `shell.end`
+  (container, duration, reason) are audited; keystrokes and output are not
+  recorded.
+- CSP: the shell page alone allows inline styles (`style-src 'self'
+  'unsafe-inline'`), because xterm.js adds `<style>` elements; scripts stay
+  same-origin only.
 
 ## Scheduler
 

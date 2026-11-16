@@ -94,7 +94,9 @@ Run `go vet` and `go test ./... -race` before every commit.
 ## Hard rules (security-critical)
 
 - Never build shell commands from user input. Use `exec.CommandContext` with an
-  argument list, never `sh -c`.
+  argument list, never `sh -c`. The only interactive execution is the
+  opt-in, admin-only container shell (`STACKVAULT_ENABLE_SHELL`, see
+  `docs/security.md` rule 13); never widen it without discussion.
 - Stack names come only from discovery (directory scan), never free-form paths.
   Reject anything not in the discovered set; guard against path traversal.
 - Repository passwords/credentials: encrypted in DB, passed to restic only via
@@ -110,8 +112,9 @@ Run `go vet` and `go test ./... -race` before every commit.
   pinning must match the digest syntax `^[a-z0-9./_-]+@sha256:[0-9a-f]{64}$`.
 - The web process gets no direct Docker access beyond creating worker
   containers from a fixed template and read-only compose commands for
-  discovered stacks (`ps`, `logs`, `config --quiet` for validation), always
-  with fixed argument lists. Anything that changes a stack (stop, up, pull,
+  discovered stacks (`ps`, `logs`, `config --quiet` for validation), plus
+  `docker exec -it` for the opt-in admin shell, always with fixed argument
+  lists. Anything that changes a stack (stop, up, pull,
   writing compose files) runs in a worker job. See `docs/security.md`.
 
 ## Milestones

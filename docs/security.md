@@ -6,6 +6,12 @@ Access to `/var/run/docker.sock` is equivalent to root on the host. The goal is
 not to make that safe, but to ensure a compromised or malicious *web user*
 cannot turn the app into a root shell.
 
+Administrators are trusted with root-equivalent power: they can edit compose
+files and, if the operator enables it (`STACKVAULT_ENABLE_SHELL`), open
+shells in containers, including StackVault's own container with the Docker
+socket. Protecting admin accounts (strong passwords, few admins, TLS) is
+therefore part of protecting the host.
+
 Assets: host root, stack data, repository credentials, backups themselves.
 Attackers considered: authenticated low-privilege users, unauthenticated network
 attackers reaching the UI, a leaked database file.
@@ -13,7 +19,8 @@ attackers reaching the UI, a leaked database file.
 ## Rules
 
 1. **No free-form execution.** Users can only trigger predefined job types
-   (`backup`, `restore`, `update`, `compose-apply`) on discovered stacks. All external
+   (`backup`, `restore`, `update`, `compose-apply`) on discovered stacks.
+   The one exception is the container shell (rule 13). All external
    commands use `exec.CommandContext` with argument lists, never a shell.
 2. **Input validation.** Stack names must match the discovered set. Snapshot IDs
    must match `^[0-9a-f]{8,64}$` and are verified against `restic snapshots`.
@@ -104,6 +111,18 @@ attackers reaching the UI, a leaked database file.
     no backup at all set `STACKVAULT_SECRET_KEY_FILE` to a file outside
     `STACKS_ROOT` (optional hardening, documented in the README). Either
     way the README tells users to keep a copy of the key elsewhere.
+
+13. **Container shell.** Off unless the operator sets
+    `STACKVAULT_ENABLE_SHELL=true`; then the tab and routes exist for admins
+    only (otherwise they do not exist at all). A session needs an admin
+    session, the CSRF token and a same-origin WebSocket upgrade, and targets
+    only a running container from the stack's own container list (after the
+    compose project owner check), by validated id. The manager runs `docker
+    exec -it` with a fixed argument list (no shell syntax on our side; the
+    shell is probed with `test -x`). Sessions end within 30 s after the
+    login becomes invalid. Start and end are audited; keystrokes are not
+    recorded (they may contain secrets). At most 2 sessions per admin, 10
+    in total.
 
 ## Reporting vulnerabilities
 

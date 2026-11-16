@@ -33,6 +33,12 @@ All notable changes to StackVault. The format is based on
 
 ### Added
 
+- **Container shell** (opt-in, administrators only): with
+  `STACKVAULT_ENABLE_SHELL=true` a "Shell" tab opens a terminal in the browser
+  for any running container of a stack (`bash`, or `sh`, as the container's
+  user). Off by default, because it is free command execution; when off the
+  tab does not exist. Opening and closing a shell is audited, the commands are
+  not.
 - **Compose editor** (administrators only): a "Compose" tab to edit a stack's
   main compose file. Applying validates the file with `docker compose config`,
   backs the stack up, writes the file, starts the services and rolls back to
