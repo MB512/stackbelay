@@ -1,4 +1,4 @@
-// Package scheduler queues scheduled backups. It only creates queued jobs;
+// Package scheduler queues scheduled backups and updates. It only creates queued jobs;
 // they run through the same queue and worker containers as manual jobs
 // (internal/dispatch). Runs missed while the manager was down are not
 // replayed.
@@ -135,10 +135,15 @@ func (s *Scheduler) Reload(ctx context.Context) error {
 	return nil
 }
 
-// Fire queues the backup of one schedule. It re-reads the schedule and its
-// stack, so a schedule or stack disabled in the meantime is skipped. A
-// backup that is already queued for the stack is not queued twice.
-// Problems are logged; the queued job itself reports its result.
+// Fire queues the job of one schedule: a backup, or an update. It
+// re-reads the schedule and its stack, so a schedule or stack disabled in
+// the meantime is skipped. A job of the same type that is already queued
+// for the stack is not queued twice. Problems are logged; the queued job
+// itself reports its result.
+//
+// Scheduled updates always run "only if new": a schedule never stops or
+// backs up a stack when no image changed. Without a repository they fail
+// (there is no one to confirm an update without backup).
 func (s *Scheduler) Fire(ctx context.Context, scheduleID int64) {
 	log := s.Logger.With("schedule_id", scheduleID)
 	sc, err := s.Store.ScheduleByID(ctx, scheduleID)
@@ -146,36 +151,48 @@ func (s *Scheduler) Fire(ctx context.Context, scheduleID int64) {
 		return // deleted since the last reload
 	}
 	if err != nil {
-		log.Error("scheduled backup: loading schedule", "error", err)
+		log.Error("scheduled job: loading schedule", "error", err)
 		return
 	}
 	if !sc.Enabled {
 		return // disabled since the last reload
 	}
-	log = log.With("stack", sc.StackName)
+	what := "scheduled " + string(sc.Type) // "scheduled backup", "scheduled update"
+	log = log.With("stack", sc.StackName, "type", sc.Type)
 	st, err := s.Store.StackByName(ctx, sc.StackName)
 	if err != nil {
-		log.Error("scheduled backup: loading stack", "error", err)
+		log.Error(what+": loading stack", "error", err)
 		return
 	}
 	if !st.Enabled {
-		log.Info("scheduled backup skipped: the stack is disabled")
+		log.Info(what + " skipped: the stack is disabled")
 		return
 	}
-	j, err := s.Queue.Submit(ctx, store.Job{StackID: st.ID, Type: jobs.TypeBackup, Trigger: store.TriggerSchedule,
-		Options: store.JobOptions{PreStop: sc.PreStop}})
+	job := store.Job{StackID: st.ID, Type: sc.Type, Trigger: store.TriggerSchedule}
+	var detail string
+	switch sc.Type {
+	case jobs.TypeBackup:
+		job.Options = store.JobOptions{PreStop: sc.PreStop}
+		detail = fmt.Sprintf("pre-stop snapshot: %t", sc.PreStop)
+	case jobs.TypeUpdate:
+		job.Options = store.JobOptions{OnlyIfNew: true, NoPreStop: !sc.PreStop, RollbackInPlace: sc.RollbackInPlace}
+		detail = fmt.Sprintf("only if new, pre-stop snapshot: %t, rollback in place: %t", sc.PreStop, sc.RollbackInPlace)
+	default:
+		log.Error("skipping schedule with unknown job type")
+		return
+	}
+	j, err := s.Queue.Submit(ctx, job)
 	if errors.Is(err, store.ErrJobQueued) {
-		log.Warn("scheduled backup skipped: a backup of the stack is already waiting to run")
+		log.Warn(what + " skipped: a job of this type is already waiting to run for the stack")
 		return
 	}
 	if err != nil {
-		log.Error("scheduled backup: queueing job", "error", err)
+		log.Error(what+": queueing job", "error", err)
 		return
 	}
-	log.Info("scheduled backup queued", "job_id", j.ID)
+	log.Info(what+" queued", "job_id", j.ID)
 	if err := s.Store.AddAudit(ctx, store.AuditEntry{Action: "job.create", StackID: st.ID,
-		Detail: fmt.Sprintf("job %s: scheduled backup (schedule %d: %s), pre-stop snapshot: %t",
-			j.ID, sc.ID, sc.CronExpr, sc.PreStop)}); err != nil {
+		Detail: fmt.Sprintf("job %s: %s (schedule %d: %s), %s", j.ID, what, sc.ID, sc.CronExpr, detail)}); err != nil {
 		log.Error("writing audit log", "error", err)
 	}
 }

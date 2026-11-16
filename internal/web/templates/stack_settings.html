@@ -53,31 +53,33 @@
 </section>
 
 <section>
-  <h2>Scheduled backups</h2>
+  <h2>Schedules</h2>
   <form method="post" action="/stacks/{{.Stack.Name}}/enabled" class="inline">
     <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
     {{- if .Stack.Enabled}}
     <input type="hidden" name="enabled" value="false">
     <button type="submit" class="secondary">Disable stack</button>
-    <span class="hint">Disabled stacks are skipped by scheduled backups.</span>
+    <span class="hint">Disabled stacks are skipped by scheduled backups and updates.</span>
     {{- else}}
     <input type="hidden" name="enabled" value="true">
     <button type="submit">Enable stack</button>
-    <span class="hint">The stack is disabled and skipped by scheduled backups.</span>
+    <span class="hint">The stack is disabled and skipped by scheduled backups and updates.</span>
     {{- end}}
   </form>
 
   {{- if and .Schedules (not .Repo.Exists)}}
-  <p class="warning">This stack has no repository: scheduled backups will fail until one is added.</p>
+  <p class="warning">This stack has no repository: scheduled backups and updates will fail until one is added.</p>
   {{- end}}
   {{- if .Schedules}}
   <table>
-    <thead><tr><th>Schedule</th><th>Pre-stop snapshot</th><th>Next run</th><th></th></tr></thead>
+    <thead><tr><th>Schedule</th><th>Job</th><th>Options</th><th>Next run</th><th></th></tr></thead>
     <tbody>
       {{- range .Schedules}}
       <tr>
         <td><code>{{.CronExpr}}</code>{{if not .Enabled}} <span class="badge">disabled</span>{{end}}</td>
-        <td>{{if .PreStop}}yes{{else}}no{{end}}</td>
+        <td>{{if eq .Type "update"}}Update{{else}}Backup{{end}}</td>
+        <td>{{if eq .Type "update"}}only if new{{if .PreStop}}, pre-stop snapshot{{end}}{{if .RollbackInPlace}}, rollback in place{{end}}
+          {{- else}}{{if .PreStop}}pre-stop snapshot{{else}}<span class="muted">–</span>{{end}}{{end}}</td>
         <td>{{if .Next.IsZero}}<span class="muted">—</span>{{else}}{{when .Next}}{{end}}</td>
         <td class="actions">
           <form method="post" action="/stacks/{{$.Data.Stack.Name}}/schedules/{{.ID}}/enabled" class="inline">
@@ -100,7 +102,7 @@
     </tbody>
   </table>
   {{- else}}
-  <p class="hint">No schedules: this stack is only backed up manually.</p>
+  <p class="hint">No schedules: this stack is only backed up and updated manually.</p>
   {{- end}}
 
   <form method="post" action="/stacks/{{.Stack.Name}}/schedules" class="card wide" autocomplete="off">
@@ -112,8 +114,20 @@
     <p class="hint">Five fields: minute, hour, day of month, month, day of week (e.g. <code>0 3 * * *</code> = daily at 03:00,
       <code>30 1 * * 1-5</code> = weekdays at 01:30), or <code>@daily</code>, <code>@weekly</code>, <code>@every 6h</code>.
       Times are in the manager's time zone, {{.TimeZone}} (set with <code>TZ</code>). Runs missed while the manager is down are not repeated.</p>
+    <fieldset>
+      <legend>Job</legend>
+      <label class="check"><input type="radio" name="job_type" value="backup"{{if not .NewSchedule.Update}} checked{{end}}>
+        Backup</label>
+      <label class="check"><input type="radio" name="job_type" value="update"{{if .NewSchedule.Update}} checked{{end}}>
+        Update (only if there is a new image; with backup and automatic rollback)</label>
+      <p class="hint">A scheduled update pulls the images of the running services and only continues if one of them is
+        new (or runs a version pinned by a restore): then it backs up, recreates and verifies the services and rolls back
+        if they do not come up. It needs a repository and a running stack.</p>
+    </fieldset>
     <label class="check"><input type="checkbox" name="pre_stop"{{if .NewSchedule.PreStop}} checked{{end}}>
       Snapshot before stopping (shorter downtime for large stacks)</label>
+    <label class="check"><input type="checkbox" name="rollback_in_place"{{if .NewSchedule.RollbackInPlace}} checked{{end}}>
+      Updates: roll back in place (only files changed since the backup are restored; for large stacks)</label>
     <div><button type="submit">Add schedule</button></div>
   </form>
 </section>

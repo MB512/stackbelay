@@ -8,6 +8,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/MB512/stackvault/internal/jobs"
 	"github.com/MB512/stackvault/internal/store"
 )
 
@@ -123,6 +124,32 @@ func TestSchedules(t *testing.T) {
 		t.Errorf("reloads = %d, want 4 (create, disable, enable, delete)", reloader.count())
 	}
 
+	// An update schedule with its options; rollback in place is ignored for
+	// backups. An update schedule is not a "next scheduled backup".
+	expect(t, post("/stacks/web/schedules", url.Values{"cron_expr": {"@weekly"}, "job_type": {"update"},
+		"rollback_in_place": {"on"}}), http.StatusSeeOther, "/stacks/web/settings")
+	expect(t, post("/stacks/web/schedules", url.Values{"cron_expr": {"@daily"}, "job_type": {"backup"},
+		"rollback_in_place": {"on"}}), http.StatusSeeOther, "/stacks/web/settings")
+	list, _ = e.st.ListSchedules(ctx, web.ID)
+	if len(list) != 2 || list[0].Type != jobs.TypeUpdate || !list[0].RollbackInPlace || list[0].PreStop ||
+		list[1].Type != jobs.TypeBackup || list[1].RollbackInPlace {
+		t.Fatalf("schedules = %+v", list)
+	}
+	r = e.get("/stacks/web/settings")
+	if !strings.Contains(r.body, "<td>Update</td>") || !strings.Contains(r.body, "only if new, rollback in place") {
+		t.Errorf("update schedule not listed:\n%s", r.body)
+	}
+	expect(t, post("/stacks/web/schedules/"+itoa(list[1].ID)+"/delete", url.Values{}), http.StatusSeeOther, "/stacks/web/settings")
+	if r := e.get("/stacks/web"); strings.Contains(r.body, "Next scheduled backup") {
+		t.Error("update schedule shown as next scheduled backup")
+	}
+	r = post("/stacks/web/schedules", url.Values{"cron_expr": {"@daily"}, "job_type": {"restore"}})
+	expect(t, r, http.StatusBadRequest, "")
+	r = post("/stacks/web/schedules", url.Values{"cron_expr": {"nope"}, "job_type": {"update"}, "rollback_in_place": {"on"}})
+	if !strings.Contains(r.body, `name="job_type" value="update" checked`) || !strings.Contains(r.body, `name="rollback_in_place" checked`) {
+		t.Errorf("update input not kept:\n%s", r.body)
+	}
+
 	audit, err := e.st.ListAudit(ctx, 50)
 	if err != nil {
 		t.Fatal(err)
@@ -133,7 +160,7 @@ func TestSchedules(t *testing.T) {
 			actions = append(actions, a.Action)
 		}
 	}
-	if got := strings.Join(actions, ","); got != "schedule.delete,schedule.enable,schedule.disable,schedule.create" {
+	if got := strings.Join(actions, ","); got != "schedule.delete,schedule.create,schedule.create,schedule.delete,schedule.enable,schedule.disable,schedule.create" {
 		t.Errorf("schedule audit entries = %s", got)
 	}
 }
@@ -146,7 +173,7 @@ func TestScheduleLimit(t *testing.T) {
 	}
 	web, _ := e.st.StackByName(ctx, "web")
 	for range maxSchedulesPerStack {
-		if _, err := e.st.CreateSchedule(ctx, web.ID, "@daily", false); err != nil {
+		if _, err := e.st.CreateSchedule(ctx, store.Schedule{StackID: web.ID, CronExpr: "@daily", Type: jobs.TypeBackup}); err != nil {
 			t.Fatal(err)
 		}
 	}

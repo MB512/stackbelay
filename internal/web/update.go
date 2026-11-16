@@ -150,6 +150,7 @@ func (s *Server) startUpdate(w http.ResponseWriter, r *http.Request) {
 	opts := store.JobOptions{OnlyIfNew: r.PostFormValue("only_if_new") == "on"}
 	if page.HasRepo {
 		opts.RollbackInPlace = r.PostFormValue("rollback") == "in-place"
+		opts.NoPreStop = r.PostFormValue("pre_stop") != "on"
 	} else {
 		if r.PostFormValue("confirm_no_backup") != "on" {
 			page.Problem = "Confirm that the stack is updated without backup and without rollback."
@@ -159,6 +160,7 @@ func (s *Server) startUpdate(w http.ResponseWriter, r *http.Request) {
 		opts.NoBackup = true
 	}
 	s.submitJob(w, r, st, store.Job{Type: jobs.TypeUpdate, Options: opts},
-		fmt.Sprintf("update, backup: %t, only if new: %t, rollback in place: %t", page.HasRepo, opts.OnlyIfNew, opts.RollbackInPlace),
+		fmt.Sprintf("update, backup: %t, only if new: %t, pre-stop snapshot: %t, rollback in place: %t",
+			page.HasRepo, opts.OnlyIfNew, page.HasRepo && !opts.NoPreStop, opts.RollbackInPlace),
 		page.HasRepo)
 }

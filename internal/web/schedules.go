@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/MB512/stackvault/internal/auth"
+	"github.com/MB512/stackvault/internal/jobs"
 	"github.com/MB512/stackvault/internal/scheduler"
 	"github.com/MB512/stackvault/internal/store"
 )
@@ -50,11 +51,12 @@ func (s *Server) scheduleRows(ctx context.Context, st store.Stack) ([]scheduleRo
 	return rows, nil
 }
 
-// nextScheduled returns the earliest next run of rows (zero if none).
-func nextScheduled(rows []scheduleRow) time.Time {
+// nextScheduled returns the earliest next run of the rows of job type t
+// (zero if none).
+func nextScheduled(rows []scheduleRow, t jobs.Type) time.Time {
 	var next time.Time
 	for _, r := range rows {
-		if !r.Next.IsZero() && (next.IsZero() || r.Next.Before(next)) {
+		if r.Type == t && !r.Next.IsZero() && (next.IsZero() || r.Next.Before(next)) {
 			next = r.Next
 		}
 	}
@@ -68,10 +70,19 @@ func (s *Server) createSchedule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	expr := scheduler.Normalize(r.PostFormValue("cron_expr"))
-	preStop := r.PostFormValue("pre_stop") == "on"
+	in := newSchedule{
+		CronExpr: scheduler.Normalize(r.PostFormValue("cron_expr")),
+		Update:   r.PostFormValue("job_type") == string(jobs.TypeUpdate),
+		PreStop:  r.PostFormValue("pre_stop") == "on",
+	}
+	in.RollbackInPlace = in.Update && r.PostFormValue("rollback_in_place") == "on" // updates only
+	expr := in.CronExpr
 	fail := func(msg string) {
-		s.renderSettings(w, r, st, settingsView{Status: http.StatusBadRequest, Error: msg, CronExpr: expr, PreStop: preStop})
+		s.renderSettings(w, r, st, settingsView{Status: http.StatusBadRequest, Error: msg, NewSchedule: in})
+	}
+	if t := r.PostFormValue("job_type"); t != "" && t != string(jobs.TypeBackup) && t != string(jobs.TypeUpdate) {
+		fail("Unknown job type.")
+		return
 	}
 	if _, err := scheduler.Parse(expr); err != nil {
 		fail(err.Error())
@@ -86,13 +97,19 @@ func (s *Server) createSchedule(w http.ResponseWriter, r *http.Request) {
 		fail(fmt.Sprintf("A stack can have at most %d schedules.", maxSchedulesPerStack))
 		return
 	}
-	id, err := s.Store.CreateSchedule(ctx, st.ID, expr, preStop)
+	sc := store.Schedule{StackID: st.ID, CronExpr: expr, Type: jobs.TypeBackup, PreStop: in.PreStop,
+		RollbackInPlace: in.RollbackInPlace}
+	if in.Update {
+		sc.Type = jobs.TypeUpdate
+	}
+	id, err := s.Store.CreateSchedule(ctx, sc)
 	if err != nil {
 		s.internalError(w, r, "creating schedule", err)
 		return
 	}
 	s.audit(r, store.AuditEntry{UserID: authFrom(ctx).User.ID, Action: "schedule.create", StackID: st.ID,
-		Detail: fmt.Sprintf("schedule %d: %s, pre-stop snapshot: %t", id, expr, preStop)})
+		Detail: fmt.Sprintf("schedule %d: %s %s, pre-stop snapshot: %t, rollback in place: %t",
+			id, sc.Type, expr, sc.PreStop, sc.RollbackInPlace)})
 	s.reloadSchedules(ctx)
 	http.Redirect(w, r, settingsURL(st), http.StatusSeeOther) //nolint:gosec // G710: same-site path, see settingsURL
 }

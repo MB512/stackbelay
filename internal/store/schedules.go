@@ -5,30 +5,49 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+
+	"github.com/MB512/stackvault/internal/jobs"
 )
 
-// Schedule is a cron schedule that queues backups of one stack. The cron
-// expression is validated by the caller (internal/scheduler) before saving.
+// Schedule is a cron schedule that queues backups or updates of one stack.
+// The cron expression is validated by the caller (internal/scheduler)
+// before saving.
 type Schedule struct {
 	ID        int64
 	StackID   int64
 	StackName string // filled when reading
 	CronExpr  string
-	PreStop   bool // take a pre-stop snapshot first
-	Enabled   bool
+	// Type is the job it queues: jobs.TypeBackup or jobs.TypeUpdate.
+	Type    jobs.Type
+	PreStop bool // take a pre-stop snapshot first
+	// RollbackInPlace (updates): restore the final snapshot in place if
+	// the update is rolled back.
+	RollbackInPlace bool
+	Enabled         bool
 }
 
-const scheduleSelect = `SELECT sc.id, sc.stack_id, s.name, sc.cron_expr, sc.pre_stop, sc.enabled
+const scheduleSelect = `SELECT sc.id, sc.stack_id, s.name, sc.cron_expr, sc.job_type, sc.pre_stop, sc.rollback_in_place, sc.enabled
 	FROM schedules sc JOIN stacks s ON s.id = sc.stack_id `
 
-// CreateSchedule inserts an enabled schedule and returns its id.
-func (s *Store) CreateSchedule(ctx context.Context, stackID int64, cronExpr string, preStop bool) (int64, error) {
+func scanSchedule(row interface{ Scan(...any) error }, sc *Schedule) error {
+	return row.Scan(&sc.ID, &sc.StackID, &sc.StackName, &sc.CronExpr, &sc.Type, &sc.PreStop, &sc.RollbackInPlace, &sc.Enabled)
+}
+
+// CreateSchedule inserts sc (StackID, CronExpr, Type, PreStop,
+// RollbackInPlace) as an enabled schedule and returns its id.
+func (s *Store) CreateSchedule(ctx context.Context, sc Schedule) (int64, error) {
+	switch {
+	case sc.Type != jobs.TypeBackup && sc.Type != jobs.TypeUpdate:
+		return 0, fmt.Errorf("creating schedule: invalid job type %q", sc.Type)
+	case sc.RollbackInPlace && sc.Type != jobs.TypeUpdate:
+		return 0, errors.New("creating schedule: rollback_in_place is only for updates")
+	}
 	res, err := s.db.ExecContext(ctx,
-		`INSERT INTO schedules (stack_id, cron_expr, pre_stop, enabled) VALUES (?, ?, ?, 1)`,
-		stackID, cronExpr, preStop)
+		`INSERT INTO schedules (stack_id, cron_expr, job_type, pre_stop, rollback_in_place, enabled) VALUES (?, ?, ?, ?, ?, 1)`,
+		sc.StackID, sc.CronExpr, sc.Type, sc.PreStop, sc.RollbackInPlace)
 	if err != nil {
 		if isForeignKeyError(err) {
-			return 0, fmt.Errorf("stack %d: %w", stackID, ErrNotFound)
+			return 0, fmt.Errorf("stack %d: %w", sc.StackID, ErrNotFound)
 		}
 		return 0, fmt.Errorf("creating schedule: %w", err)
 	}
@@ -47,7 +66,7 @@ func (s *Store) ListSchedules(ctx context.Context, stackID int64) ([]Schedule, e
 	var out []Schedule
 	for rows.Next() {
 		var sc Schedule
-		if err := rows.Scan(&sc.ID, &sc.StackID, &sc.StackName, &sc.CronExpr, &sc.PreStop, &sc.Enabled); err != nil {
+		if err := scanSchedule(rows, &sc); err != nil {
 			return nil, fmt.Errorf("listing schedules: %w", err)
 		}
 		out = append(out, sc)
@@ -58,8 +77,7 @@ func (s *Store) ListSchedules(ctx context.Context, stackID int64) ([]Schedule, e
 // ScheduleByID returns a schedule or ErrNotFound.
 func (s *Store) ScheduleByID(ctx context.Context, id int64) (Schedule, error) {
 	var sc Schedule
-	err := s.db.QueryRowContext(ctx, scheduleSelect+`WHERE sc.id = ?`, id).
-		Scan(&sc.ID, &sc.StackID, &sc.StackName, &sc.CronExpr, &sc.PreStop, &sc.Enabled)
+	err := scanSchedule(s.db.QueryRowContext(ctx, scheduleSelect+`WHERE sc.id = ?`, id), &sc)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Schedule{}, fmt.Errorf("schedule %d: %w", id, ErrNotFound)
 	}

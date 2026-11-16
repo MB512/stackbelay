@@ -53,6 +53,7 @@
       <input type="hidden" name="csrf_token" value="{{$.Data.CSRF}}">
       <input type="hidden" name="only_if_new" value="on">
       <input type="hidden" name="rollback" value="swap">
+      <input type="hidden" name="pre_stop" value="on">
       <button type="submit"{{if $.Data.Unavailable}} disabled{{end}}>Unpin now</button>
     </form>
     {{- else}}
@@ -70,7 +71,7 @@
     <ol>
       <li>Pull the images (<code>docker compose pull</code>) while the stack keeps running. If that fails, nothing is changed.</li>
       {{- if .HasRepo}}
-      <li>Back up the stack: a snapshot while it runs, then stop it and take the final snapshot.</li>
+      <li>Back up the stack: a snapshot while it runs (optional), then stop it and take the final snapshot.</li>
       {{- else}}
       <li>Stop the stack. <strong>No backup is taken</strong>: the stack has no repository.</li>
       {{- end}}
@@ -97,6 +98,8 @@
       running service already runs the newest image of its tag (a version pinned by a restore counts as new: the
       update switches it back to the tag)</label>
     {{- if .HasRepo}}
+    <label class="check"><input type="checkbox" name="pre_stop" checked>
+      Snapshot before stopping (shorter downtime for large stacks)</label>
     <fieldset>
       <legend>Rollback</legend>
       <label class="check"><input type="radio" name="rollback" value="swap" checked>

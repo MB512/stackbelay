@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/MB512/stackvault/internal/auth"
+	"github.com/MB512/stackvault/internal/jobs"
 	"github.com/MB512/stackvault/internal/stacks"
 	"github.com/MB512/stackvault/internal/store"
 )
@@ -135,11 +136,8 @@ type settingsTab struct {
 	Permissions []permRow
 	Schedules   []scheduleRow
 	// NewSchedule holds the input of the "add schedule" form after an error.
-	NewSchedule struct {
-		CronExpr string
-		PreStop  bool
-	}
-	TimeZone string // the manager's time zone, in which schedules run
+	NewSchedule newSchedule
+	TimeZone    string // the manager's time zone, in which schedules run
 }
 
 // permRow is one user in the permission table of a stack (admin view). It
@@ -220,7 +218,7 @@ func (s *Server) loadBackupsTab(r *http.Request, st store.Stack, perm store.Perm
 	if err != nil {
 		return page, err
 	}
-	page.NextScheduled = nextScheduled(scheds)
+	page.NextScheduled = nextScheduled(scheds, jobs.TypeBackup)
 	repo, err := s.Store.RepositoryInfoForStack(r.Context(), st.ID)
 	if errors.Is(err, store.ErrNotFound) {
 		return page, nil
@@ -306,10 +304,17 @@ type settingsView struct {
 	// OfferInit shows the "Initialize repository" button (restic reported
 	// that no repository exists at the stored location).
 	OfferInit bool
-	// CronExpr and PreStop keep the input of the "add schedule" form after
-	// an error.
-	CronExpr string
-	PreStop  bool
+	// NewSchedule keeps the input of the "add schedule" form after an
+	// error.
+	NewSchedule newSchedule
+}
+
+// newSchedule is the input of the "add schedule" form.
+type newSchedule struct {
+	CronExpr        string
+	Update          bool // job type update (default: backup)
+	PreStop         bool
+	RollbackInPlace bool
 }
 
 // renderSettings renders the Settings tab.
@@ -343,7 +348,7 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, st store
 		Schedules:   scheds,
 		TimeZone:    s.now().Local().Format("MST (-07:00)"),
 	}
-	page.NewSchedule.CronExpr, page.NewSchedule.PreStop = v.CronExpr, v.PreStop
+	page.NewSchedule = v.NewSchedule
 	s.render(w, r, v.Status, "stack_settings.html",
 		pageData{Title: st.Name + " settings", Info: v.Info, Error: v.Error, Data: page})
 }

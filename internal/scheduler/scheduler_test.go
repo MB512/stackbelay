@@ -115,7 +115,12 @@ func newEnv(t *testing.T) *env {
 
 func (e *env) schedule(t *testing.T, st store.Stack, expr string, preStop bool) int64 {
 	t.Helper()
-	id, err := e.st.CreateSchedule(context.Background(), st.ID, expr, preStop)
+	return e.scheduleOf(t, store.Schedule{StackID: st.ID, CronExpr: expr, Type: jobs.TypeBackup, PreStop: preStop})
+}
+
+func (e *env) scheduleOf(t *testing.T, sc store.Schedule) int64 {
+	t.Helper()
+	id, err := e.st.CreateSchedule(context.Background(), sc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,6 +149,30 @@ func TestFire(t *testing.T) {
 		}
 		if len(audit) != 1 || audit[0].Action != "job.create" || audit[0].StackID != e.web.ID || audit[0].UserID != 0 ||
 			!strings.Contains(audit[0].Detail, "scheduled backup") {
+			t.Errorf("audit = %+v", audit)
+		}
+	})
+
+	t.Run("queues a scheduled update: only if new, with its options", func(t *testing.T) {
+		e := newEnv(t)
+		for _, sc := range []store.Schedule{
+			{StackID: e.web.ID, CronExpr: "@daily", Type: jobs.TypeUpdate, PreStop: false, RollbackInPlace: true},
+			{StackID: e.db.ID, CronExpr: "@daily", Type: jobs.TypeUpdate, PreStop: true},
+		} {
+			e.s.Fire(ctx, e.scheduleOf(t, sc))
+		}
+		got := e.queue.submitted()
+		if len(got) != 2 {
+			t.Fatalf("submitted %d jobs, want 2", len(got))
+		}
+		want := []store.JobOptions{{OnlyIfNew: true, NoPreStop: true, RollbackInPlace: true}, {OnlyIfNew: true}}
+		for i, j := range got {
+			if j.Type != jobs.TypeUpdate || j.Trigger != store.TriggerSchedule || j.Options != want[i] {
+				t.Errorf("job %d = %+v, options want %+v", i, j, want[i])
+			}
+		}
+		audit, _ := e.st.ListAudit(ctx, 10)
+		if len(audit) != 2 || !strings.Contains(audit[0].Detail+audit[1].Detail, "scheduled update") {
 			t.Errorf("audit = %+v", audit)
 		}
 	})

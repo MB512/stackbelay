@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"testing"
+
+	"github.com/MB512/stackvault/internal/jobs"
 )
 
 func TestSchedules(t *testing.T) {
@@ -21,15 +23,24 @@ func TestSchedules(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	w1, err := s.CreateSchedule(ctx, web.ID, "0 3 * * *", true)
+	w1, err := s.CreateSchedule(ctx, Schedule{StackID: web.ID, CronExpr: "0 3 * * *", Type: jobs.TypeUpdate, PreStop: true, RollbackInPlace: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.CreateSchedule(ctx, db.ID, "@hourly", false); err != nil {
+	if _, err := s.CreateSchedule(ctx, Schedule{StackID: db.ID, CronExpr: "@hourly", Type: jobs.TypeBackup}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.CreateSchedule(ctx, 999, "@daily", false); !errors.Is(err, ErrNotFound) {
+	if _, err := s.CreateSchedule(ctx, Schedule{StackID: 999, CronExpr: "@daily", Type: jobs.TypeBackup}); !errors.Is(err, ErrNotFound) {
 		t.Errorf("unknown stack: err = %v, want ErrNotFound", err)
+	}
+	for _, bad := range []Schedule{
+		{StackID: db.ID, CronExpr: "@daily", Type: jobs.TypeRestore},
+		{StackID: db.ID, CronExpr: "@daily"},
+		{StackID: db.ID, CronExpr: "@daily", Type: jobs.TypeBackup, RollbackInPlace: true},
+	} {
+		if _, err := s.CreateSchedule(ctx, bad); err == nil {
+			t.Errorf("accepted %+v", bad)
+		}
 	}
 
 	all, err := s.ListSchedules(ctx, 0)
@@ -40,7 +51,8 @@ func TestSchedules(t *testing.T) {
 		t.Fatalf("all schedules = %+v, want db then web", all)
 	}
 	got := all[1]
-	want := Schedule{ID: w1, StackID: web.ID, StackName: "web", CronExpr: "0 3 * * *", PreStop: true, Enabled: true}
+	want := Schedule{ID: w1, StackID: web.ID, StackName: "web", CronExpr: "0 3 * * *", Type: jobs.TypeUpdate, PreStop: true,
+		RollbackInPlace: true, Enabled: true}
 	if got != want {
 		t.Errorf("schedule = %+v, want %+v", got, want)
 	}
