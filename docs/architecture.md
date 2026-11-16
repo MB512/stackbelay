@@ -646,7 +646,7 @@ Not yet implemented: restore into a not-yet-existing stack (import), see
 Ideas agreed on for later releases. Design notes are a starting point, not
 a commitment.
 
-### First after 0.1: restore from a different host
+### Restore from a different host
 
 Stack migration as described in "Restore from another host (stack
 migration)" together with "Source host for migration" below: import a
@@ -695,11 +695,85 @@ per-repository (or per-import) setting **source host** (default: this host)
 selects whose snapshots are listed and restored. Restoring another host's
 snapshot is an admin action; new backups always use this host's name.
 
-### More stack tabs
+### Next: log view, update, compose editor
 
-Besides "Backups" and "Settings" (admin): **Logs** (container logs of the
-stack), **Status** (running services, restart), **compose.yml** (view and
-edit). Each tab gets its own permission (new columns in `permissions`,
-checked in `auth.Allowed` and in `newStackHeader`). Restarting and editing
-change the running stack and must be audited; editing `compose.yml` needs
-validation (`docker compose config`) and a backup of the previous file.
+Agreed on 2026-11-16, implemented in this order (each one step towards the
+"More stack tabs" idea; a Status tab with restart remains open). Each
+feature moves into the main sections when it is implemented.
+
+**Permissions.** Migration adds `permissions.can_logs` and
+`permissions.can_update` (`auth.ActionLogs`, `auth.ActionUpdate`; admins
+have both). A row with all flags 0 is still deleted. Having any flag gives
+the view right. The compose editor is admin-only: editing a compose file
+is equivalent to root on the host (privileged containers, host mounts), so
+it gets no per-stack permission.
+
+#### 1. Log view (tab "Logs", `can_logs`)
+
+- Live logs of all containers of the stack, mixed, in the order
+  `docker compose logs` prints them. One checkbox per container shows or
+  hides its lines (client side, no new request).
+- The manager reads the logs itself (decision: no log worker container):
+  `docker compose --project-directory <stack dir> logs --follow
+  --timestamps --no-color --tail 500` via `exec.CommandContext` with a
+  fixed argument list, for discovered stacks only. The process ends when
+  the client disconnects or the manager shuts down (context). This extends
+  security rule 3: besides creating workers, the manager may run read-only
+  compose commands (`logs`, `ps`) and `config` (validation, see 3).
+- Transport: SSE like job logs (`GET /stacks/{name}/logs/events`), one
+  event per line with container name, timestamp and text, rendered as
+  escaped HTML. Reconnect resumes with `--since <last timestamp>` (a line
+  at the boundary may repeat). Lines are cut at 16 KiB.
+- Limits: a few concurrent streams per user and a global maximum (both
+  constants first), so open tabs cannot start unlimited processes.
+- Logs are not redacted: applications may log secrets, which is why
+  viewing them is a separate right. Opening the stream is audited
+  (`stack.logs`).
+
+#### 2. Update (job type `update`, `can_update`)
+
+A worker job like backup/restore (same queue, per-stack lock, live log):
+
+1. `metadata.txt`; `docker compose pull --ignore-buildable` while the stack
+   is running. Failure: the job fails, nothing was changed.
+2. If a repository is configured: pre-stop snapshot (always, not optional).
+3. `compose stop`.
+4. If a repository is configured: final snapshot (parent = pre-stop). Its
+   `metadata.txt` records the digests of the **old** images, because they
+   are read from the containers, not from the (already pulled) tags.
+   Failure in 3–4: `compose start` (old containers, old images), job fails.
+5. `compose up -d --force-recreate`, then wait until every service runs
+   and, with a healthcheck, is healthy (timeout, default 5 min).
+6. Failure in 5:
+   - with repository: **automatic rollback** = the restore pipeline on the
+     final snapshot (files and data, directory swap, previous directory
+     kept as `.old-<time>`), started with image pinning (old digests from
+     its `metadata.txt`). No extra safety snapshot: the final snapshot is
+     the state before the update.
+   - without repository: **no rollback at all**, not even starting the old
+     images (they could damage data a new version already migrated). The
+     job fails and the stack stays as it is; the UI says so before the
+     update is started.
+
+Without a repository the update is allowed, with a warning in the
+confirmation page that no backup and no rollback will happen.
+
+#### 3. Compose editor (tab "Compose", admin only)
+
+- Edits the stack's main compose file (`stacks.MainFileNames()`), not
+  override files or `.env`. Plain `<textarea>` first (no editor library),
+  size limit 256 KiB.
+- Save: CSRF, admin, audit (`compose.apply` with SHA-256 and size, never
+  the content). The form carries the SHA-256 of the file it was loaded
+  from; if the file changed meanwhile, saving is refused (no lost
+  updates).
+- Validation in the manager before anything is queued: the new content in
+  a temporary file outside the stack, `docker compose --project-directory
+  <stack dir> --file <tmp> config --quiet`. Errors are shown in the form.
+- Save queues a job `compose-apply` (content in the job spec, mode 0600):
+  backup like 2.2–2.4 if a repository is configured, write the file
+  atomically (temp file + rename, same mode and owner), then 2.5–2.6
+  (`up`, health wait, rollback with repository, no rollback without). The
+  previous content is kept in the job directory for a manual revert.
+- Later option (not now): skip the backup when the same stack was edited
+  and backed up a short time ago, for quick fix-up edits.

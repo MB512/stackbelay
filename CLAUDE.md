@@ -109,7 +109,10 @@ Run `go vet` and `go test ./... -race` before every commit.
   untrusted input (it lives inside a snapshot). Image references used for
   pinning must match the digest syntax `^[a-z0-9./_-]+@sha256:[0-9a-f]{64}$`.
 - The web process gets no direct Docker access beyond creating worker
-  containers from a fixed template. See `docs/security.md`.
+  containers from a fixed template and read-only compose commands for
+  discovered stacks (`ps`, `logs`, `config --quiet` for validation), always
+  with fixed argument lists. Anything that changes a stack (stop, up, pull,
+  writing compose files) runs in a worker job. See `docs/security.md`.
 
 ## Milestones
 
@@ -125,7 +128,9 @@ Run `go vet` and `go test ./... -race` before every commit.
    snapshot browser are not part of 0.1.
 6. **M6 Release 0.1**: Dockerfile, GHCR publish via GitHub Actions, README, LICENSE.
 
-After 0.1, the first planned feature is **restore from a different host**
+After 0.1, the next features are **log view, update and compose editor**
+(design in "Planned features" in `docs/architecture.md`, in that order).
+Then **restore from a different host**
 (stack migration: import of stacks from other hosts, restore into a
 not-yet-existing stack, stack name must stay identical, source host
 selection). See "Planned features" in `docs/architecture.md`.

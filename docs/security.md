@@ -13,7 +13,8 @@ attackers reaching the UI, a leaked database file.
 ## Rules
 
 1. **No free-form execution.** Users can only trigger predefined job types
-   (`backup`, `restore`) on discovered stacks. All external
+   (`backup`, `restore`; planned: `update`, `compose-apply`) on discovered
+   stacks. All external
    commands use `exec.CommandContext` with argument lists, never a shell.
 2. **Input validation.** Stack names must match the discovered set. Snapshot IDs
    must match `^[0-9a-f]{8,64}$` and are verified against `restic snapshots`.
@@ -24,7 +25,13 @@ attackers reaching the UI, a leaked database file.
    entrypoint or environment (see "Dispatcher" in architecture.md). Job
    requests carry only the stack (from the database), the job type and
    validated options; the snapshot id must be in the stack's snapshot cache.
-   Only admins may skip the pre-restore safety snapshot. Optional hardening: put a socket proxy between
+   Only admins may skip the pre-restore safety snapshot. Besides creating
+   workers, the manager may run only read-only compose commands for
+   discovered stacks, with fixed argument lists (planned: `logs` and `ps`
+   for the log view, `config --quiet` to validate an edited compose file).
+   Everything that changes a stack runs in a worker job.
+   Editing a compose file (planned) is admin-only: it is equivalent to root
+   on the host. Optional hardening: put a socket proxy between
    manager and Docker that allows only container create/start/inspect/logs and
    the calls the manager itself needs.
 4. **Secrets at rest.** Repo passwords and backend credentials are encrypted
