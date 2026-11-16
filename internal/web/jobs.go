@@ -44,14 +44,15 @@ func (s *Server) startBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	opts := store.JobOptions{PreStop: r.PostFormValue("pre_stop") == "on"}
-	s.submitJob(w, r, st, jobs.TypeBackup, opts, fmt.Sprintf("backup, pre-stop snapshot: %t", opts.PreStop), true)
+	s.submitJob(w, r, st, store.Job{Type: jobs.TypeBackup, Options: opts}, fmt.Sprintf("backup, pre-stop snapshot: %t", opts.PreStop), true)
 }
 
 // submitJob checks the preconditions shared by all job types, queues the
-// job and redirects to its page. needRepo: the job needs the stack's
-// repository (all but an update confirmed to run without backup).
-func (s *Server) submitJob(w http.ResponseWriter, r *http.Request, st store.Stack, typ jobs.Type, opts store.JobOptions,
-	detail string, needRepo bool) {
+// job and redirects to its page. job carries the type, options and (for
+// compose-apply) the new compose file; stack, trigger and requester are set
+// here. needRepo: the job needs the stack's repository (all but a change
+// confirmed to run without backup).
+func (s *Server) submitJob(w http.ResponseWriter, r *http.Request, st store.Stack, job store.Job, detail string, needRepo bool) {
 	ctx := r.Context()
 	if reason := s.jobsUnavailable(); reason != "" {
 		s.renderError(w, r, http.StatusServiceUnavailable, reason)
@@ -71,9 +72,10 @@ func (s *Server) submitJob(w http.ResponseWriter, r *http.Request, st store.Stac
 		}
 	}
 	a := authFrom(ctx)
-	j, err := s.Jobs.Submit(ctx, store.Job{StackID: st.ID, Type: typ, Trigger: store.TriggerManual, RequestedBy: a.User.ID, Options: opts})
+	job.StackID, job.Trigger, job.RequestedBy = st.ID, store.TriggerManual, a.User.ID
+	j, err := s.Jobs.Submit(ctx, job)
 	if errors.Is(err, store.ErrJobQueued) {
-		s.renderError(w, r, http.StatusConflict, fmt.Sprintf("A %s of this stack is already waiting to run.", typ))
+		s.renderError(w, r, http.StatusConflict, fmt.Sprintf("A %s of this stack is already waiting to run.", job.Type))
 		return
 	}
 	if err != nil {
@@ -159,7 +161,7 @@ func (s *Server) startRestore(w http.ResponseWriter, r *http.Request) {
 		// The safety snapshot is the way back if the restore was a mistake.
 		SkipSafetySnapshot: authFrom(r.Context()).User.IsAdmin && r.PostFormValue("safety_snapshot") != "on",
 	}
-	s.submitJob(w, r, st, jobs.TypeRestore, opts, fmt.Sprintf("restore of snapshot %s, safety snapshot: %t, start: %t, pinned images: %t",
+	s.submitJob(w, r, st, store.Job{Type: jobs.TypeRestore, Options: opts}, fmt.Sprintf("restore of snapshot %s, safety snapshot: %t, start: %t, pinned images: %t",
 		sn.ShortID, !opts.SkipSafetySnapshot, !opts.NoStart, opts.PinImages), true)
 }
 
@@ -213,7 +215,7 @@ func (s *Server) startUpdate(w http.ResponseWriter, r *http.Request) {
 		}
 		opts.NoBackup = true
 	}
-	s.submitJob(w, r, page.Stack, jobs.TypeUpdate, opts, fmt.Sprintf("update, backup: %t", page.HasRepo), page.HasRepo)
+	s.submitJob(w, r, page.Stack, store.Job{Type: jobs.TypeUpdate, Options: opts}, fmt.Sprintf("update, backup: %t", page.HasRepo), page.HasRepo)
 }
 
 // loadJob resolves the job in the URL and checks that the user may view
@@ -246,7 +248,18 @@ func (s *Server) loadJob(w http.ResponseWriter, r *http.Request) (store.Job, sto
 	return j, perm, true
 }
 
-// jobAction is the right needed to start (and cancel) a job of this type.
+// mayRunJob reports whether user may start (and cancel) a job of type t on
+// a stack where the user has perm. Applying a compose file is admin-only:
+// it is equivalent to root on the host.
+func mayRunJob(user store.User, perm store.Permission, t jobs.Type) bool {
+	if t == jobs.TypeComposeApply {
+		return user.IsAdmin && !user.Disabled
+	}
+	return auth.Allowed(user, perm, jobAction(t))
+}
+
+// jobAction is the right needed to start (and cancel) a job of this type
+// (compose-apply: see mayRunJob).
 func jobAction(t jobs.Type) auth.Action {
 	switch t {
 	case jobs.TypeRestore:
@@ -289,7 +302,7 @@ func (s *Server) jobDetail(w http.ResponseWriter, r *http.Request) {
 func (s *Server) newJobPage(ctx context.Context, j store.Job, perm store.Permission) jobPage {
 	a := authFrom(ctx)
 	return jobPage{Job: j, CSRF: a.Session.CSRFToken,
-		CanCancel: !j.State.Final() && s.Jobs != nil && auth.Allowed(a.User, perm, jobAction(j.Type))}
+		CanCancel: !j.State.Final() && s.Jobs != nil && mayRunJob(a.User, perm, j.Type)}
 }
 
 // cancelJob cancels a queued or running job. It needs the same right as
@@ -300,7 +313,7 @@ func (s *Server) cancelJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a := authFrom(r.Context())
-	if !auth.Allowed(a.User, perm, jobAction(j.Type)) {
+	if !mayRunJob(a.User, perm, j.Type) {
 		s.renderError(w, r, http.StatusForbidden, "You are not allowed to do this.")
 		return
 	}

@@ -91,7 +91,10 @@ func run(ctx context.Context, getenv func(string) string, readFile func(string) 
 		// discovered stacks (see docs/security.md, rule 3).
 		StacksRoot: cfg.StacksRoot,
 		Logs:       &docker.CLI{},
-		Hostname:   cfg.Hostname,
+		// Compose editor: "docker compose config --quiet" on a temporary
+		// copy; applying runs in a worker job.
+		Compose:  &docker.CLI{},
+		Hostname: cfg.Hostname,
 		// On SIGTERM open live streams end at once (clients reconnect)
 		// instead of holding up the graceful shutdown.
 		Stopping: ctx.Done(),

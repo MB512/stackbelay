@@ -48,6 +48,9 @@ type Server struct {
 	// Logs reads container logs for the Logs tab. If nil, the tab says
 	// that logs are unavailable.
 	Logs StackLogs
+	// Compose validates edited compose files. If nil, the compose editor
+	// cannot apply changes.
+	Compose ComposeValidator
 	// Stopping is closed when the manager shuts down; open live streams
 	// then end at once instead of delaying the shutdown (clients
 	// reconnect). nil: streams only end with their client.
@@ -127,6 +130,8 @@ func (s *Server) Handler() (http.Handler, error) {
 			// Admin only.
 			r.Group(func(r chi.Router) {
 				r.Use(s.requireAdmin)
+				r.Get("/stacks/{name}/compose", s.stackCompose)
+				r.Post("/stacks/{name}/compose", s.applyCompose)
 				r.Get("/stacks/{name}/settings", s.stackSettings)
 				r.Post("/stacks/{name}/repository", s.saveRepository)
 				r.Post("/stacks/{name}/repository/init", s.initRepository)

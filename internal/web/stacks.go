@@ -77,6 +77,7 @@ type stackHeader struct {
 const (
 	tabBackups  = ""
 	tabLogs     = "logs"
+	tabCompose  = "compose"
 	tabSettings = "settings"
 )
 
@@ -90,6 +91,9 @@ func newStackHeader(user store.User, perm store.Permission, st store.Stack, acti
 		tabs = append(tabs, stackTab{Label: "Logs", URL: base + "/" + tabLogs, Active: active == tabLogs})
 	}
 	if user.IsAdmin {
+		// Editing the compose file is admin-only: it is equivalent to root
+		// on the host.
+		tabs = append(tabs, stackTab{Label: "Compose", URL: base + "/" + tabCompose, Active: active == tabCompose})
 		tabs = append(tabs, stackTab{Label: "Settings", URL: base + "/" + tabSettings, Active: active == tabSettings})
 	}
 	return stackHeader{Stack: st, Tabs: tabs}

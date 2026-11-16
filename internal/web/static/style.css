@@ -87,6 +87,8 @@ textarea {
   padding: .45rem .55rem; border: 1px solid var(--border); border-radius: 5px;
   font: .9rem ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; resize: vertical;
 }
+/* The compose editor: wide, tall, no wrapping (YAML indentation matters). */
+textarea.code { width: 100%; box-sizing: border-box; min-height: 60vh; white-space: pre; overflow-x: auto; tab-size: 2; }
 fieldset { display: grid; gap: .4rem; margin: 0; padding: .6rem .8rem; border: 1px solid var(--border); border-radius: 5px; }
 legend { font-size: .95rem; padding: 0 .3rem; }
 .card.wide p.hint { margin: -.5rem 0 0; }

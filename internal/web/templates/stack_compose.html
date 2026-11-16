@@ -1,0 +1,35 @@
+{{define "content"}}
+{{- with .Data}}
+{{template "stack-header" .}}
+
+{{- with .Unavailable}}
+<p class="error">{{.}}</p>
+{{- else}}
+<section>
+  <p class="hint">Editing <code>{{.FileName}}</code>, the stack's main compose file. A compose file can mount any host path
+    and run privileged containers, so this is equivalent to root on the host: only administrators may change it.</p>
+  <p class="hint">Applying validates the file with <code>docker compose config</code>, then runs a job:
+    {{- if .HasRepo}} back up the stack, write the file, start the services that were running (and new ones), and
+    <strong>roll back</strong> to the backup if they do not come up within 5 minutes.
+    {{- else}} write the file and start the services. The stack has no repository: <strong>no backup and no rollback</strong>.
+    {{- end}} A stopped stack only gets the new file.</p>
+  {{- with .Problem}}<p class="error" role="alert">{{.}}</p>{{end}}
+  {{- /* The line break after <textarea> is dropped by the browser, so a
+         file that starts with an empty line keeps it. */}}
+  <form method="post" action="/stacks/{{.Stack.Name}}/compose">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+    <input type="hidden" name="base_sha256" value="{{.BaseSHA256}}">
+    <textarea class="code" name="content" aria-label="{{.FileName}}" spellcheck="false" autocomplete="off"
+              autocapitalize="off" wrap="off" rows="30">
+{{.Content}}</textarea>
+    {{- if not .HasRepo}}
+    <label class="check"><input type="checkbox" name="confirm_no_backup" required>
+      I understand: no backup and no rollback.</label>
+    {{- end}}
+    <div><button type="submit"{{if .JobsUnavailable}} disabled{{end}}>Validate and apply</button></div>
+    {{- with .JobsUnavailable}}<p class="hint">{{.}}</p>{{end}}
+  </form>
+</section>
+{{- end}}
+{{- end}}
+{{end}}

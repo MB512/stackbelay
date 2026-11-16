@@ -20,8 +20,22 @@ const (
 	cookieInsecure = "stackvault_session"
 )
 
-// maxFormBytes limits request bodies of form posts.
-const maxFormBytes = 64 << 10
+// maxFormBytes limits request bodies of form posts. The compose editor
+// posts a whole compose file (up to jobs.MaxComposeBytes), which URL
+// encoding can triple (every line break becomes "%0A"), so its route gets
+// maxComposeFormBytes.
+const (
+	maxFormBytes        = 64 << 10
+	maxComposeFormBytes = 1 << 20
+)
+
+// formLimit returns the body limit for a state-changing request.
+func formLimit(r *http.Request) int64 {
+	if strings.HasPrefix(r.URL.Path, "/stacks/") && strings.HasSuffix(r.URL.Path, "/"+tabCompose) {
+		return maxComposeFormBytes
+	}
+	return maxFormBytes
+}
 
 // authInfo is attached to the request context for logged-in requests.
 type authInfo struct {
@@ -128,7 +142,16 @@ func (s *Server) checkCSRF(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		r.Body = http.MaxBytesReader(w, r.Body, maxFormBytes)
+		r.Body = http.MaxBytesReader(w, r.Body, formLimit(r))
+		if err := r.ParseForm(); err != nil {
+			var tooLarge *http.MaxBytesError
+			if errors.As(err, &tooLarge) {
+				s.renderError(w, r, http.StatusRequestEntityTooLarge, "The form is too large.")
+				return
+			}
+			s.renderError(w, r, http.StatusBadRequest, "Invalid form.")
+			return
+		}
 		a := authFrom(r.Context())
 		token := r.Header.Get("X-CSRF-Token")
 		if token == "" {
