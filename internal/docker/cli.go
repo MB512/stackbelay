@@ -321,6 +321,7 @@ func healthStatus(containers []psEntry, services []string) (pending []string, er
 // psEntry is one container from "docker compose ps --format json".
 type psEntry struct {
 	ID      string `json:"ID"`
+	Name    string `json:"Name"`
 	Service string `json:"Service"`
 	State   string `json:"State"`
 	Health  string `json:"Health"`
