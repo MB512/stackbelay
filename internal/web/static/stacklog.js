@@ -65,6 +65,55 @@
 	document.getElementById("log-show-all").addEventListener("click", function () { setAll(true); });
 	document.getElementById("log-hide-all").addEventListener("click", function () { setAll(false); });
 
+	// keepBottom runs a layout change and keeps the log scrolled to the end
+	// if it was there before.
+	function keepBottom(change) {
+		var atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 8;
+		change();
+		if (atBottom) {
+			log.scrollTop = log.scrollHeight;
+		}
+	}
+
+	// Line wrapping. The choice is remembered in this browser only; storage
+	// may be unavailable (private mode), which is fine.
+	var wrapKey = "stackvault.logs.wrap";
+	var wrap = document.getElementById("log-wrap");
+	function setWrap(on) {
+		wrap.checked = on;
+		keepBottom(function () { log.classList.toggle("nowrap", !on); });
+		try {
+			window.localStorage.setItem(wrapKey, on ? "1" : "0");
+		} catch (e) { /* not remembered */ }
+	}
+	try {
+		if (window.localStorage.getItem(wrapKey) === "0") {
+			setWrap(false);
+		}
+	} catch (e) { /* default: wrap */ }
+	wrap.addEventListener("change", function () { setWrap(wrap.checked); });
+
+	// Full screen inside the browser window (not the browser's own full
+	// screen mode): the frame covers the page, only the exit button shows.
+	var frame = document.getElementById("stack-log-frame");
+	var enter = document.getElementById("log-fullscreen");
+	var exit = document.getElementById("log-exit-fullscreen");
+	function setFullscreen(on) {
+		keepBottom(function () {
+			frame.classList.toggle("fullscreen", on);
+			document.body.classList.toggle("log-fullscreen", on);
+			exit.hidden = !on;
+		});
+		(on ? exit : enter).focus();
+	}
+	enter.addEventListener("click", function () { setFullscreen(true); });
+	exit.addEventListener("click", function () { setFullscreen(false); });
+	document.addEventListener("keydown", function (e) {
+		if (e.key === "Escape" && frame.classList.contains("fullscreen")) {
+			setFullscreen(false);
+		}
+	});
+
 	// addCheckbox adds a container that appeared after the page was loaded.
 	function addCheckbox(name) {
 		var all = checkboxes();

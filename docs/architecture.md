@@ -531,7 +531,11 @@ The "Logs" tab (`can_logs`, admins always) shows the live output of all
 containers of a stack, mixed in the order `docker compose logs` prints
 them. One checkbox per container shows or hides its lines; filtering
 happens in the browser only (`static/stacklog.js`), the stream always
-carries all containers.
+carries all containers. "Wrap lines" (on by default, remembered per
+browser in `localStorage`) can be turned off for horizontal scrolling.
+"Full screen" makes the log cover the browser window (not the browser's
+own full-screen mode) with only an "Exit full screen" button; Esc exits
+too.
 
 - The manager runs the logs itself (no worker): `docker compose
   --project-directory <stack dir> logs --follow --timestamps --no-color

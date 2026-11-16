@@ -96,7 +96,8 @@ func TestStackLogsAccess(t *testing.T) {
 	r = e.do(alice, http.MethodGet, "/stacks/web/logs", nil, nil)
 	expect(t, r, http.StatusOK, "")
 	for _, want := range []string{`value="web-app-1" checked`, `value="web-db-1" checked`,
-		`data-events="/stacks/web/logs/events"`, `/static/stacklog.js`, `aria-current="page">Logs`} {
+		`data-events="/stacks/web/logs/events"`, `/static/stacklog.js`, `aria-current="page">Logs`,
+		`id="log-wrap" checked`, `id="log-fullscreen"`, `id="log-exit-fullscreen" hidden`} {
 		if !strings.Contains(r.body, want) {
 			t.Errorf("logs page lacks %s", want)
 		}

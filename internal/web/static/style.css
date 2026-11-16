@@ -118,5 +118,16 @@ table.details th { width: 10rem; }
 .log .line[hidden] { display: none; }
 fieldset.containers { display: flex; flex-wrap: wrap; gap: .3rem 1.2rem; align-items: center; }
 fieldset.containers .actions { margin-left: auto; display: flex; gap: .5rem; }
+.log-controls { display: flex; gap: 1.2rem; align-items: center; margin: .6rem 0; }
+/* Line wrapping off: long lines scroll horizontally (.log has overflow-x). */
+.log.nowrap .line { white-space: pre; word-break: normal; }
+/* Full screen inside the browser window: only the log and the exit button. */
+.log-frame.fullscreen {
+  position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column;
+  gap: .4rem; padding: .4rem; background: #11151b;
+}
+.log-frame.fullscreen .log { flex: 1; max-height: none; margin: 0; border-radius: 4px; }
+.log-frame.fullscreen .log-exit { align-self: flex-end; color: #d7dde5; border-color: #3a4350; }
+body.log-fullscreen { overflow: hidden; }
 button[disabled] { opacity: .5; cursor: not-allowed; }
 .log:empty { display: none; }

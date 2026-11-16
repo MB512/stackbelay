@@ -35,7 +35,8 @@ All notable changes to StackVault. The format is based on
 
 - **Logs tab**: live logs of all containers of a stack, mixed in the order
   `docker compose logs` prints them, with one checkbox per container to show
-  or hide its lines. Viewing logs is a new per-stack permission ("Logs" in
+  or hide its lines, optional line wrapping (off = horizontal scrolling) and
+  a full-window mode that shows only the log. Viewing logs is a new per-stack permission ("Logs" in
   the stack settings; admins always have it), because application logs are
   not redacted and may contain secrets. The manager runs `docker compose
   logs` itself, read-only, at most 4 open views per user and 20 in total.
