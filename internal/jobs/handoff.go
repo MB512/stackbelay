@@ -40,6 +40,7 @@ type Type string
 const (
 	TypeBackup  Type = "backup"
 	TypeRestore Type = "restore"
+	TypeUpdate  Type = "update"
 )
 
 // State is the state of a job.
@@ -81,10 +82,16 @@ type Spec struct {
 	SkipSafetySnapshot bool   `json:"skip_safety_snapshot,omitempty"`
 	NoStart            bool   `json:"no_start,omitempty"`
 	PinImages          bool   `json:"pin_images,omitempty"` // see RestoreOptions.PinImages
-	// CarryOverJobs is set when the manager restores its own stack: the
-	// manager's jobs directory, relative to the stack directory (e.g.
-	// "data/jobs"). See RestoreOptions.CarryOver.
+	// CarryOverJobs is set when the manager restores (or updates, for the
+	// rollback) its own stack: the manager's jobs directory, relative to
+	// the stack directory (e.g. "data/jobs"). See RestoreOptions.CarryOver.
 	CarryOverJobs string `json:"carry_over_jobs,omitempty"`
+
+	// Update options. NoBackup is set when the stack has no repository:
+	// no snapshots and no rollback (see UpdateOptions.Backup). It is an
+	// explicit choice of the manager, so missing repository settings in
+	// the worker can never silently turn off the backup of an update.
+	NoBackup bool `json:"no_backup,omitempty"`
 
 	// Informational, for a manager that has to rebuild its job list from
 	// the job directories (after restoring its own stack). The worker
@@ -114,6 +121,9 @@ func (s Spec) Validate() error {
 		if s.SnapshotID != "" || s.SkipSafetySnapshot || s.NoStart || s.PinImages || s.CarryOverJobs != "" {
 			return errors.New("restore options set on a backup job")
 		}
+		if s.NoBackup {
+			return errors.New("update options set on a backup job")
+		}
 	case TypeRestore:
 		if !restic.SnapshotIDPattern.MatchString(s.SnapshotID) {
 			return fmt.Errorf("invalid snapshot id %q", truncate(s.SnapshotID))
@@ -123,6 +133,17 @@ func (s Spec) Validate() error {
 		}
 		if s.PreStop {
 			return errors.New("backup options set on a restore job")
+		}
+		if s.NoBackup {
+			return errors.New("update options set on a restore job")
+		}
+	case TypeUpdate:
+		// The pre-stop snapshot is always taken (with a repository).
+		if s.PreStop || s.SnapshotID != "" || s.SkipSafetySnapshot || s.NoStart || s.PinImages {
+			return errors.New("backup or restore options set on an update job")
+		}
+		if s.CarryOverJobs != "" && !ValidCarryOver(s.CarryOverJobs) {
+			return fmt.Errorf("invalid carry-over directory %q", truncate(s.CarryOverJobs))
 		}
 	default:
 		return fmt.Errorf("unknown job type %q", truncate(string(s.Type)))
@@ -139,10 +160,11 @@ type Status struct {
 	FinishedAt *time.Time `json:"finished_at,omitempty"`
 	Error      string     `json:"error,omitempty"`
 
-	Snapshot        string `json:"snapshot,omitempty"`          // backup: final snapshot; restore: restored snapshot
-	PreStopSnapshot string `json:"pre_stop_snapshot,omitempty"` // backup
+	Snapshot        string `json:"snapshot,omitempty"`          // backup, update: final snapshot; restore: restored snapshot
+	PreStopSnapshot string `json:"pre_stop_snapshot,omitempty"` // backup, update
 	SafetySnapshot  string `json:"safety_snapshot,omitempty"`   // restore
-	PreviousDir     string `json:"previous_dir,omitempty"`      // restore: kept for manual rollback
+	PreviousDir     string `json:"previous_dir,omitempty"`      // restore, rolled-back update: kept for manual rollback
+	RolledBack      bool   `json:"rolled_back,omitempty"`       // update: failed and restored to Snapshot
 }
 
 // WriteSpec writes spec.json into dir (manager side).

@@ -41,6 +41,7 @@ func TestRunUsageAndConfigErrors(t *testing.T) {
 		{"backup without stack", []string{"backup"}, getenv, 2, "backup expects"},
 		{"restore without snapshot", []string{"restore", "web"}, getenv, 2, "restore expects"},
 		{"run without dir", []string{"run"}, getenv, 2, "run expects"},
+		{"update without stack", []string{"update", "--no-backup"}, getenv, 2, "update expects"},
 		{"unknown stack", []string{"backup", "../etc"}, getenv, 1, "stack not found"},
 	}
 	for _, tt := range tests {
@@ -119,5 +120,25 @@ func TestRedact(t *testing.T) {
 	got := redact("pw=super-secret-repo-pw", restic.SecretValues([]string{"RESTIC_PASSWORD=super-secret-repo-pw", "X=ab"}))
 	if got != "pw=[REDACTED]" {
 		t.Fatalf("got %q", got)
+	}
+}
+
+// Without repository settings only an update marked --no-backup may run;
+// everything else fails before touching the stack.
+func TestRunWithoutRepository(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "web"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "web", "compose.yaml"), []byte("services: {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	env := map[string]string{"STACKS_ROOT": root, "STACKVAULT_HOSTNAME": "h"}
+	getenv := func(k string) string { return env[k] }
+	for _, args := range [][]string{{"backup", "web"}, {"update", "web"}, {"restore", "web", "0123abcd"}} {
+		var out bytes.Buffer
+		if code := run(args, getenv, &out); code != 1 || !strings.Contains(out.String(), "no repository configured") {
+			t.Errorf("%v: code %d, output %s", args, code, out.String())
+		}
 	}
 }

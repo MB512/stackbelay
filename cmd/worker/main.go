@@ -1,14 +1,15 @@
-// Command worker executes a single backup or restore job and exits.
+// Command worker executes a single backup, restore or update job and exits.
 //
 // Usage:
 //
 //	worker run <job-dir>
 //	worker backup  [--pre-stop] <stack>
 //	worker restore [--no-safety-snapshot] [--no-start] [--pin-images] <stack> <snapshot-id>
+//	worker update  [--no-backup] <stack>
 //
 // "run" is how the manager starts a job: the job is described by
 // <job-dir>/spec.json, and the worker writes status.json and log.txt there.
-// "backup" and "restore" are for manual use and tests.
+// "backup", "restore" and "update" are for manual use and tests.
 //
 // Flags must come before positional arguments. Configuration and repository
 // credentials are read from the environment (see internal/config). Exit
@@ -41,6 +42,7 @@ const usage = `usage:
   worker run <job-dir>
   worker backup  [--pre-stop] <stack>
   worker restore [--no-safety-snapshot] [--no-start] [--pin-images] <stack> <snapshot-id>
+  worker update  [--no-backup] <stack>
 `
 
 func main() {
@@ -188,6 +190,15 @@ func parseArgs(args []string) (jobs.Spec, string, error) {
 		return jobs.Spec{Type: jobs.TypeRestore, Stack: fs.Arg(0), SnapshotID: fs.Arg(1),
 			SkipSafetySnapshot: *noSafety, NoStart: *noStart, PinImages: *pin}, "", nil
 
+	case "update":
+		fs := flag.NewFlagSet("update", flag.ContinueOnError)
+		fs.SetOutput(io.Discard)
+		noBackup := fs.Bool("no-backup", false, "update without snapshots and without rollback (no repository)")
+		if err := fs.Parse(args[1:]); err != nil || fs.NArg() != 1 {
+			return jobs.Spec{}, "", fmt.Errorf("%w: update expects [--no-backup] <stack>", errUsage)
+		}
+		return jobs.Spec{Type: jobs.TypeUpdate, Stack: fs.Arg(0), NoBackup: *noBackup}, "", nil
+
 	default:
 		return jobs.Spec{}, "", fmt.Errorf("%w: unknown command %q", errUsage, args[0])
 	}
@@ -198,6 +209,10 @@ func execute(ctx context.Context, p *jobs.Pipeline, cfg config.Worker, spec jobs
 	stack, err := stacks.Lookup(cfg.StacksRoot, spec.Stack)
 	if err != nil {
 		return err
+	}
+	// Only an update explicitly marked "no backup" runs without repository.
+	if needsRepo := spec.Type != jobs.TypeUpdate || !spec.NoBackup; needsRepo && !cfg.HasRepo() {
+		return errors.New("no repository configured (RESTIC_REPOSITORY and RESTIC_PASSWORD(_FILE) are required for this job)")
 	}
 	switch spec.Type {
 	case jobs.TypeBackup:
@@ -213,6 +228,11 @@ func execute(ctx context.Context, p *jobs.Pipeline, cfg config.Worker, spec jobs
 		if res.OldDir != "" {
 			log.Info("previous stack directory kept", "dir", res.OldDir)
 		}
+		return err
+	case jobs.TypeUpdate:
+		res, err := p.Update(ctx, stack, jobs.UpdateOptions{Backup: !spec.NoBackup, CarryOver: spec.CarryOverJobs})
+		status.Snapshot, status.PreStopSnapshot = res.Snapshot, res.PreStopSnapshot
+		status.PreviousDir, status.RolledBack = res.OldDir, res.RolledBack
 		return err
 	default:
 		return fmt.Errorf("unknown job type %q", spec.Type)

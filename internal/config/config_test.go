@@ -43,9 +43,48 @@ func TestLoadWorkerErrors(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	for _, want := range []string{"STACKS_ROOT", "RESTIC_REPOSITORY", "RESTIC_PASSWORD", "STACKVAULT_JOB_TIMEOUT", "STACKVAULT_LOG_LEVEL"} {
+	for _, want := range []string{"STACKS_ROOT", "STACKVAULT_JOB_TIMEOUT", "STACKVAULT_LOG_LEVEL"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error does not mention %s: %v", want, err)
 		}
+	}
+}
+
+func TestLoadWorkerRepository(t *testing.T) {
+	base := map[string]string{"STACKS_ROOT": "/home/docker", "STACKVAULT_HOSTNAME": "h"}
+	with := func(kv ...string) map[string]string {
+		m := map[string]string{}
+		for k, v := range base {
+			m[k] = v
+		}
+		for i := 0; i < len(kv); i += 2 {
+			m[kv[i]] = kv[i+1]
+		}
+		return m
+	}
+	tests := []struct {
+		name    string
+		env     map[string]string
+		hasRepo bool
+		wantErr string
+	}{
+		{"no repository (update without backup)", with(), false, ""},
+		{"repository with password file", with("RESTIC_REPOSITORY", "/r", "RESTIC_PASSWORD_FILE", "/pw"), true, ""},
+		{"repository without password", with("RESTIC_REPOSITORY", "/r"), false, "RESTIC_PASSWORD"},
+		{"password without repository", with("RESTIC_PASSWORD", "x"), false, "RESTIC_REPOSITORY"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c, err := LoadWorker(lookup(tt.env))
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("err = %v, want %q", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil || c.HasRepo() != tt.hasRepo {
+				t.Fatalf("HasRepo %v, err %v", c.HasRepo(), err)
+			}
+		})
 	}
 }

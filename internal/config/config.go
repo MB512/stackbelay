@@ -28,6 +28,9 @@ type Worker struct {
 	RepoEnv []string
 }
 
+// HasRepo reports whether a restic repository is configured.
+func (c Worker) HasRepo() bool { return c.RepoLocation != "" }
+
 // LoadWorker reads the worker configuration. getenv is usually os.Getenv;
 // tests pass a map lookup instead.
 func LoadWorker(getenv func(string) string) (Worker, error) {
@@ -49,11 +52,14 @@ func LoadWorker(getenv func(string) string) (Worker, error) {
 		c.Hostname = h
 	}
 
-	if c.RepoLocation == "" {
-		errs = append(errs, errors.New("RESTIC_REPOSITORY is required"))
-	}
-	if getenv("RESTIC_PASSWORD") == "" && getenv("RESTIC_PASSWORD_FILE") == "" {
-		errs = append(errs, errors.New("RESTIC_PASSWORD_FILE or RESTIC_PASSWORD is required"))
+	// The repository is optional here: an update of a stack without
+	// repository runs without one. Jobs that need it check HasRepo.
+	hasPassword := getenv("RESTIC_PASSWORD") != "" || getenv("RESTIC_PASSWORD_FILE") != ""
+	switch {
+	case c.RepoLocation != "" && !hasPassword:
+		errs = append(errs, errors.New("RESTIC_PASSWORD_FILE or RESTIC_PASSWORD is required with RESTIC_REPOSITORY"))
+	case c.RepoLocation == "" && hasPassword:
+		errs = append(errs, errors.New("RESTIC_REPOSITORY is required with RESTIC_PASSWORD(_FILE)"))
 	}
 	for _, k := range restic.BackendEnvVars {
 		if v := getenv(k); v != "" {

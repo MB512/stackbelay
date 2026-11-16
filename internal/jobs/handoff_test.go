@@ -30,6 +30,22 @@ func TestSpecRoundTrip(t *testing.T) {
 	}
 }
 
+func TestUpdateSpecRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	want := Spec{ID: testJobID, Type: TypeUpdate, Stack: "web", NoBackup: true, CarryOverJobs: "data/jobs", Trigger: "manual"}
+	if err := WriteSpec(dir, want); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ReadSpec(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want.Version = 1
+	if got != want {
+		t.Fatalf("got %+v, want %+v", got, want)
+	}
+}
+
 func TestReadSpecRejects(t *testing.T) {
 	tests := []struct {
 		name string
@@ -49,6 +65,11 @@ func TestReadSpecRejects(t *testing.T) {
 		{"restore with backup option", `{"version":1,"id":"` + testJobID + `","type":"restore","stack":"web","snapshot_id":"0123abcd","pre_stop":true}`},
 		{"carry-over outside the stack", `{"version":1,"id":"` + testJobID + `","type":"restore","stack":"web","snapshot_id":"0123abcd","carry_over_jobs":"../manager/data"}`},
 		{"absolute carry-over", `{"version":1,"id":"` + testJobID + `","type":"restore","stack":"web","snapshot_id":"0123abcd","carry_over_jobs":"/data/jobs"}`},
+		{"update with pre-stop option", `{"version":1,"id":"` + testJobID + `","type":"update","stack":"web","pre_stop":true}`},
+		{"update with snapshot", `{"version":1,"id":"` + testJobID + `","type":"update","stack":"web","snapshot_id":"0123abcd"}`},
+		{"update with bad carry-over", `{"version":1,"id":"` + testJobID + `","type":"update","stack":"web","carry_over_jobs":"../x"}`},
+		{"no-backup on a backup", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"web","no_backup":true}`},
+		{"no-backup on a restore", `{"version":1,"id":"` + testJobID + `","type":"restore","stack":"web","snapshot_id":"0123abcd","no_backup":true}`},
 		{"carry-over on a backup", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"web","carry_over_jobs":"data/jobs"}`},
 		{"bad trigger", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"web","trigger":"cron"}`},
 		{"control chars in requester", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"web","requester":"a\nb"}`},

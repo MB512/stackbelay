@@ -1,4 +1,4 @@
-// Package jobs implements the backup and restore pipelines.
+// Package jobs implements the backup, restore and update pipelines.
 package jobs
 
 import (
@@ -38,6 +38,12 @@ type Pipeline struct {
 	StartTimeout time.Duration
 	// HealthTimeout bounds waiting for services to become healthy.
 	HealthTimeout time.Duration
+	// UpdateHealthTimeout bounds the health check after an update; default
+	// DefaultUpdateHealthTimeout. Exceeding it fails (and rolls back) the update.
+	UpdateHealthTimeout time.Duration
+	// RollbackTimeout bounds the rollback of a failed update; default
+	// DefaultRollbackTimeout.
+	RollbackTimeout time.Duration
 }
 
 func (p *Pipeline) logger() *slog.Logger {

@@ -47,6 +47,8 @@ type fakeDocker struct {
 	// after the job).
 	upFiles    []string
 	upOverride string
+	// upFailures makes the next n Up calls fail with errBoom (besides failOn).
+	upFailures int
 }
 
 func (f *fakeDocker) fail(m string) error { return f.failOn[m] }
@@ -87,6 +89,10 @@ func (f *fakeDocker) Up(ctx context.Context, dir string, composeFiles, services 
 	if f.onUp != nil {
 		f.onUp()
 	}
+	if f.upFailures > 0 {
+		f.upFailures--
+		return errBoom
+	}
 	return f.fail("Up")
 }
 
@@ -111,6 +117,9 @@ type fakeRestic struct {
 	// cancel, if set, is called during the final backup to simulate a
 	// cancelled job.
 	cancelOnFinal context.CancelFunc
+	// ids overrides the snapshot id returned by Backup per tag (default
+	// "snap-<tag>").
+	ids map[string]string
 }
 
 func (f *fakeRestic) CheckRepo(ctx context.Context, repo restic.Repo) error {
@@ -127,6 +136,9 @@ func (f *fakeRestic) Backup(ctx context.Context, repo restic.Repo, path string, 
 	}
 	if err := f.failOn["Backup:"+tag]; err != nil {
 		return "", err
+	}
+	if id, ok := f.ids[tag]; ok {
+		return id, nil
 	}
 	return "snap-" + tag, nil
 }
