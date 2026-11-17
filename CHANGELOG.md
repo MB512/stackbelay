@@ -6,6 +6,24 @@ All notable changes to StackVault. The format is based on
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-17
+
+### Upgrading from 0.2
+
+Replace the image tag `0.2` with `0.3` and run `docker compose up -d` in the
+StackVault stack; the database is migrated at startup. Three things to check:
+
+- **`TZ` must be a valid time zone** (e.g. `Europe/Berlin`). An unknown
+  zone now stops the start instead of silently falling back to UTC. All
+  times in the UI are now shown in this zone.
+- **New per-stack right "Operate"** (stop, start, restart). Existing users
+  do not have it; admins grant it on the stack's Settings tab. Admins
+  always have it.
+- **Stacks created with the old docker-compose v1** (Python,
+  `docker-compose`) are now refused by every job with a clear message and
+  shown as "legacy (compose v1)" in the stack list. Recreate such a stack
+  once with `docker compose up -d` in its directory.
+
 ### Added
 
 - **Status tab**, the new home of a stack: its containers with state,
@@ -194,6 +212,7 @@ README).
 
 First release.
 
-[Unreleased]: https://github.com/MB512/stackvault/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/MB512/stackvault/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/MB512/stackvault/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/MB512/stackvault/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/MB512/stackvault/releases/tag/v0.1.0

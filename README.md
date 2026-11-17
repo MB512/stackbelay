@@ -9,9 +9,10 @@ stacks root (e.g. `/home/docker/<stack>/compose.yml`). StackVault backs up the w
 directory, including bind-mounted data inside it, with the stack stopped,
 so the backup is consistent without database-specific dumps.
 
-Status: **0.2**. Use it next to, not instead of, a backup strategy you
-already trust until it has proven itself on your hosts. Upgrading from 0.1:
-see [Upgrading from 0.1](#upgrading-from-01-move-the-secret-key-into-the-data-directory).
+Status: **0.3**. Use it next to, not instead of, a backup strategy you
+already trust until it has proven itself on your hosts. Upgrading from 0.2:
+see the [changelog](CHANGELOG.md#030---2026-11-17); from 0.1 also
+[Upgrading from 0.1](#upgrading-from-01-move-the-secret-key-into-the-data-directory).
 
 ## Features
 
@@ -33,6 +34,8 @@ see [Upgrading from 0.1](#upgrading-from-01-move-the-secret-key-into-the-data-di
   pulling); "only if new" skips everything when nothing changed.
 - **Schedules** (cron expressions) per stack for backups and updates, plus
   manual runs. Jobs are queued; one job per stack at a time.
+- **Stack list** with the state of every stack (started, stopped,
+  degraded, …), its schedules, last backup and last update.
 - **Status page** per stack: containers with state, health and update
   check, recent jobs; **stop, start and restart** a stack (without backup).
 - **Live container logs** per stack, with a filter per container.
@@ -130,7 +133,7 @@ sudo install -m 600 /etc/stackvault/secret.key data/secret.key
 ```
 
 Then remove `STACKVAULT_SECRET_KEY_FILE` (or `STACKVAULT_SECRET_KEY`) and
-the key's volume line from `compose.yml`, set the image to `0.2`, and start
+the key's volume line from `compose.yml`, set the image to `0.3`, and start
 it again (`docker compose up -d`). StackVault checks the key against the
 database at startup and refuses to start if it does not match, so a wrong
 copy cannot damage anything. Run a backup of the StackVault stack

@@ -30,7 +30,7 @@
 
 services:
   stackvault:
-    image: ghcr.io/mb512/stackvault:0.2
+    image: ghcr.io/mb512/stackvault:0.3
     restart: unless-stopped
     environment:
       # Must be the same absolute path as on the host (see the volume below).
