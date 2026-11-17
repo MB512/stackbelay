@@ -44,8 +44,9 @@ see [Upgrading from 0.1](#upgrading-from-01-move-the-secret-key-into-the-data-di
   [rest-server](https://github.com/restic/rest-server) in **append-only**
   mode. Retention (`forget`/`prune`) is left to the repository owner.
 
-Not in 0.2: restoring a stack from another host (migration), retention,
-Windows, Kubernetes. Restore from another host is the next planned feature.
+Not supported: restoring a stack from another host (migration), retention,
+Windows, Kubernetes. Planned features, bugs and design discussions are
+tracked in [GitHub issues](https://github.com/MB512/stackvault/issues).
 
 ## Requirements
 
@@ -172,7 +173,7 @@ Please report vulnerabilities privately, see [SECURITY.md](SECURITY.md).
 ## Documentation
 
 - [`docs/architecture.md`](docs/architecture.md): components, job pipeline,
-  restore, image pinning, scheduler, web routes, planned features
+  restore, image pinning, scheduler, web routes
 - [`docs/data-model.md`](docs/data-model.md): database schema
 - [`docs/security.md`](docs/security.md): threat model and rules
 

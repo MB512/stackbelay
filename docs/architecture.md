@@ -21,8 +21,6 @@ The image contains `restic`, `docker-cli` and the `docker compose` plugin.
 - The manager's own stack can be backed up and restored: the worker is not part
   of any compose project it stops, so it survives.
 - A crashing/restarting manager does not kill a running backup.
-- Least privilege can be split later (manager without socket access, only a
-  thin launcher with it).
 
 ## Repository assumptions
 
@@ -278,8 +276,7 @@ web        exited   -                    -                                sha256
 1. **Preflight**: permission re-checked by the manager, snapshot exists, lock.
 2. **Safety snapshot**: back up the current state with tag `pre-restore`
    (stack is stopped first to keep it consistent; skip only if explicitly
-   disabled by an admin). Skipped if the stack directory does not exist yet
-   (see "Restore from another host").
+   disabled by an admin). Skipped if the stack directory does not exist yet.
 3. **Stop** the stack (skipped if it does not exist yet).
 4. **Restore to staging**: `restic restore <snap>:<snapshot path> --target <root>/<stack>.restore-tmp`
    on the same filesystem (so renames are atomic). The `<snap>:<subfolder>`
@@ -346,9 +343,7 @@ the UI says so next to the option.
 
 Automatic restores (the rollback of an update or a compose apply) use the
 swap unless the user chose "roll back in place" for that job (update form,
-compose editor). Whether that choice should become a per-stack default is
-still open, see "Rollbacks: in place or with swap" under "Planned
-features".
+compose editor).
 
 ## Pinning image versions on restore
 
@@ -403,17 +398,13 @@ Notes and limits (show them in the UI):
   from the restored sources; base images may have changed. Warn per service.
 - The registry must still serve that digest. Registries can delete old
   manifests. If a pull fails the restore is aborted (rolled back); the user
-  can retry with `tags`. A per-service "continue with tags" is a possible
-  later refinement.
+  can retry with `tags`.
 - Private registries: the worker needs registry credentials (mount a Docker
-  `config.json` read-only into the worker if required). Document this.
+  `config.json` read-only into the worker if required).
 - Compose `up -d` later, run manually with only `compose.yml`, will detect an
-  image change and recreate containers with the tag version. To make pinning
-  permanent, offer an explicit second action "write compose.override.yml with
-  pinned images" (never automatic, since an override file may already exist).
+  image change and recreate containers with the tag version.
 - Multi-arch: the repo digest recorded from `docker image inspect` identifies
   the manifest that was pulled; pulling by it yields the same platform content.
-- Also applies to cross-host migration: pinned is the recommended mode there.
 - Without `metadata.txt` (very old snapshots) a pinned restore fails before the swap (the UI cannot know in advance without reading the snapshot).
 
 ## Update pipeline
@@ -592,34 +583,6 @@ summary if available).
   page says how many other snapshots were hidden. The worker checks the
   path again before stopping anything.
 
-## Restore from another host (stack migration)
-
-**Not implemented; planned as the first feature after release 0.1.**
-
-Use case: move a single stack from host A to host B (or rebuild a host).
-
-- Host B is configured with the same repository (location + credentials).
-- The stack name must stay the same. Import refuses a snapshot whose last
-  path component (`paths[0]`) differs from the stack name being imported.
-  Renaming on import is intentionally not supported.
-- Admin action **Import stack**: create a stack record for a name that does not
-  exist on disk yet (`present = 0`), attach the repository, refresh the snapshot
-  cache. Snapshots from other hosts are listed (no `--host` filter); host and
-  original path are shown per snapshot.
-- Restore then runs the normal pipeline minus stop, safety snapshot and swap,
-  because there is nothing to protect: restore into staging, rename to
-  `<STACKS_ROOT>/<stack>`.
-- By default the stack is **not started** automatically. Offer "Restore and
-  start" as an explicit checkbox.
-- After restore, compare `metadata.txt` (image digests of the source) with what
-  is available locally and show a warning if images differ or are missing
-  (`docker compose pull` is a separate, explicit action).
-- Known caveats to surface in the UI: numeric UID/GID are restored as-is (users
-  on host B may differ); host-specific settings in compose files (ports,
-  external networks, absolute paths outside the stack directory) can break;
-  only bind mounts inside the stack directory are covered.
-- Importing/creating stacks is admin-only.
-
 ## Web UI
 
 Server-rendered `html/template` pages (`internal/web/templates`), one file
@@ -691,8 +654,7 @@ Stack pages share a header with tabs (`stack-header` in `partials.html`).
 The tab list is built per user in `newStackHeader`; a tab is only shown if
 the user may open it, and its handler checks the permission again. Tabs:
 "Backups" (view right), "Logs" (logs right), "Compose", "Shell" (only with
-`STACKVAULT_ENABLE_SHELL`) and "Settings" (admin). A planned "Status" tab (restart) is added there with its own
-permission.
+`STACKVAULT_ENABLE_SHELL`) and "Settings" (admin).
 
 Stacks a user may not view answer 404 (not 403), so stack names are not
 revealed. `{name}` must pass `stacks.ValidName` and exist in the database
@@ -735,7 +697,7 @@ redacted before writing).
   delaying the shutdown. The browser keeps reconnecting until the manager is
   back, then receives the missed lines and the final details.
 - Viewing the stream needs the view right on the job's stack (like the job
-  page). Log files are kept per job; cleanup by age is a later option.
+  page). Log files are kept per job.
 
 ## Container logs
 
@@ -899,7 +861,7 @@ anything is stopped. This protects against a stack of the same name
 elsewhere on the host or one started with `docker compose -p`. `restic restore <id>:<subpath>`
 requires restic >= 0.17.
 
-## Worker CLI (M1)
+## Worker CLI
 
 ```
 worker run <job-dir>
@@ -943,204 +905,3 @@ image from `deploy/Dockerfile`, as does `scripts/e2e-self.sh`.
 update, a failed one with automatic rollback, and a failed one without
 backup (no rollback); and the compose-apply job: a valid change and one
 with a missing image (rollback to the previous compose file).
-
-Not yet implemented: restore into a not-yet-existing stack (import), see
-"Restore from another host" and "Planned features".
-
-## Planned features (not implemented)
-
-Ideas agreed on for later releases. Design notes are a starting point, not
-a commitment.
-
-### Restore from a different host
-
-Stack migration as described in "Restore from another host (stack
-migration)" together with "Source host for migration" below: import a
-stack that does not exist on this host yet, list another host's snapshots
-of the same stack name, restore into a new stack directory. Deliberately
-not part of release 0.1.
-
-### Time placeholders in the repository location + auto-init
-
-Goal: a new repository per period (e.g. per year) managed by the scheduled
-backups alone, so repositories and their indexes stay small.
-
-- Placeholders in the location, e.g.
-  `rest:https://backup.example/web-{year}`. Candidates: `{year}`,
-  `{month}` (two digits), maybe `{quarter}`. Only a fixed set of
-  placeholders, no expressions. Validation must run on the expanded
-  location too (no credentials, no leading `-`).
-- Expansion time: when the job is created (manager), stored in the job
-  spec, so a backup running over midnight on Dec 31 uses one location for
-  all its snapshots. Time zone: the manager's configured zone (new setting
-  or `TZ`), documented, since "year" changes at local midnight.
-- Per-repository setting **auto-init if missing** (off by default): if the
-  expanded location has no repository (restic exit code 10), the worker
-  runs `restic init` with the stored password before the backup and logs
-  it; audit entry `repository.init` with trigger `schedule`. Any other
-  error (wrong password, network) never triggers init.
-- Consequences to design:
-  - Snapshot cache and restore must see **all** periods, not only the
-    current one: keep a list of known expanded locations per repository
-    (e.g. a `repository_locations` table filled when a location is first
-    used or initialized), refresh and show snapshots across them, and
-    restore from the location the snapshot belongs to.
-  - The first backup in a new period has no parent snapshot (full upload);
-    the pre-stop/final parent chain only applies within one location.
-  - Same password for all periods (one stored secret); changing it applies
-    to new periods only, old repositories keep their old password. Either
-    keep old secrets per known location or document the limitation.
-  - The manual "Initialize repository" button (current behaviour) stays
-    for locations without placeholders.
-
-### Source host for migration
-
-Snapshots are filtered by this host's `STACKVAULT_HOSTNAME`. To move a stack
-from host A to host B, B must list A's snapshots of the same stack name: a
-per-repository (or per-import) setting **source host** (default: this host)
-selects whose snapshots are listed and restored. Restoring another host's
-snapshot is an admin action; new backups always use this host's name.
-
-### Rollbacks: in place or with swap (open decision)
-
-Since 2026-11-16 the user chooses per job: the update form and the compose
-editor have the option "roll back in place" (default: swap). Still open:
-
-- a per-stack default (a stack setting "large data" that preselects in
-  place on the update, compose and restore forms), useful once scheduled
-  updates exist;
-- what to keep for inspection when an in-place rollback replaces the
-  failed version (nothing today; with a swap it is `<stack>.old-<ts>`).
-
-### Progress and feedback for long operations
-
-Requested 2026-11-16: the UI should show progress (percent, speed,
-remaining time) or at least messages for operations that take long, and a
-spinner where no progress is known. Today a job shows its log lines as they
-come, but nothing between them, and synchronous actions show nothing until
-the page returns.
-
-With real progress (the tools report it):
-
-- **Backup** (pre-stop and final snapshot): `restic backup --json` already
-  prints `message_type: "status"` lines (`percent_done`, `bytes_done`,
-  `total_bytes`, `files_done`, `seconds_remaining`); `restic.CLI` drops
-  them. Idea: the worker writes the latest status (throttled, e.g. every
-  2 s) to a small `progress.json` in the job directory, the job page's
-  live stream sends it as its own SSE event, and the page shows a progress
-  bar with speed and remaining time.
-- **Restore**, also in place and as a rollback: `restic restore --json`
-  prints status lines too (restic >= 0.17: `percent_done`, `bytes_restored`,
-  `total_bytes`); same mechanism.
-- **Pulling images** (update, pinned restore): runs with `--quiet` today.
-  `docker compose --progress json pull` (and `docker pull` without
-  `--quiet`) report per-layer progress; summarize it as "image x: n of m
-  MB".
-
-Synchronous requests that only need a spinner or a message (the page waits
-for the answer):
-
-- **Check for updates** (about 4 s per stack, longer with many images): a
-  spinner and a disabled button while it runs; better, per-service rows
-  that fill in as each registry answers (SSE or HTMX polling).
-- **Saving a repository** (access check by listing snapshots), **Initialize
-  repository** (several seconds) and **Refresh snapshots**: slow with
-  remote repositories.
-- **Validate and apply** in the compose editor (`docker compose config`).
-- **Opening a shell** ("connecting…" exists) and the **log view** before the
-  first lines arrive.
-
-Phases of a job that wait without output and could say what they wait for:
-
-- **Queued** behind another job of the stack, or behind the global limit
-  (`STACKVAULT_MAX_JOBS`): show the position or the blocking job.
-- **Stopping the stack** (`compose stop`, up to the stop timeout of each
-  container) and **waiting until healthy** (up to 5 minutes for updates):
-  show the services still pending.
-- **Rollback** after a failed update: its own phase marker on the job page.
-
-### Sizes and durations in the snapshot and job lists
-
-Requested 2026-11-16. Most of the data already exists:
-
-- **Snapshot list**: add **size** and **duration** per snapshot. Snapshots
-  made with restic >= 0.17 carry a `summary` in `restic snapshots --json`
-  (checked with 0.18): `data_added_packed` is what the snapshot added to
-  the repository after deduplication and compression, i.e. what was
-  transferred and stored (not the size on the source disk);
-  `backup_end - backup_start` is the duration. The snapshot cache
-  (`snapshot_cache`) needs columns for them, filled on refresh; older
-  snapshots without `summary` show "–". Note: a final snapshot after a
-  pre-stop snapshot adds little (only what changed in between), so the
-  list should make clear that the size is "added", not the full size.
-- **Job list on the Backups tab**: a **duration** column
-  (`finished_at - started_at`, "running for …" while it runs). No schema
-  change.
-- **Size of the stack directory**: `total_bytes_processed` of the newest
-  snapshot is the size of the stack directory at backup time (files
-  processed, before deduplication). Show it on the Backups tab ("Stack
-  size at the last backup: 315 MB"), maybe also in the stack list. The
-  manager does not need to walk the directory itself.
-
-### Compose editor: skip repeated backups
-
-The log view, the update and the compose editor (agreed 2026-11-16) are
-implemented, see "Container logs", "Update pipeline" and "Compose editor".
-Open idea for the editor: an option to skip the backup when the same stack
-was edited and backed up a short time ago, for quick fix-up edits (the
-rollback would then return to that earlier backup).
-
-A "Status" tab (running services, restart) remains open.
-
-### Stop, start and restart a stack without backup
-
-Idea (noted 2026-11-16, not designed yet): stop, start and restart a whole
-stack from the UI, deliberately without a backup, for quick operations
-(a hung service, maintenance on the host). Natural home: the open "Status"
-tab above.
-
-Points to settle when it is picked up:
-
-- Anything that changes a stack runs in a worker job, so these are job types
-  (for example `stop`, `start`, `restart`), not manager-side `docker compose`
-  calls. This also lets a stack stop or restart the manager's own stack.
-- Own permission flag per stack (not `can_backup`), because stopping a stack
-  is a different risk than backing it up; admins may always.
-- Per-stack queue/lock like every other job, so it cannot run in the middle
-  of a backup, update or restore of the same stack.
-- Never `docker compose down` (it removes containers and networks); `stop`
-  and `start`, or `restart`, only. No `--remove-orphans`.
-- Audit entry and job log like the other jobs; "restart" is also the place
-  to show the health wait after the start.
-
-### Docker host cleanup (jobs without a stack)
-
-Idea (noted 2026-11-16, not designed yet): host-wide cleanup jobs that can
-run on demand and on a schedule, like the other jobs but not tied to a stack:
-
-- remove orphaned containers (`--remove-orphans` semantics) and
-- delete unused images.
-
-Points to settle when it is picked up:
-
-- **Jobs and schedules without a stack.** `jobs.stack_id` and
-  `schedules.stack_id` are `NOT NULL` today (migrations 0001/0003); they
-  become nullable (`NULL` = the host). The unique index
-  `jobs_one_running_per_stack` then does not serialize host jobs against each
-  other; they need their own lock, and should not run while any stack job is
-  running (an update or rollback needs the old images).
-- **Permissions.** No per-stack flag fits; admin only (or a dedicated
-  host-level flag). Audit entries without `stack_id`.
-- **Rollbacks need old images.** A rollback and the pinned restore
-  (`pull_policy: never`) rely on images that are still on the host. "Unused
-  images" must therefore be conservative: an age threshold (for example
-  older than N days, configurable), and never an image that the last
-  `pre-update` snapshot's `metadata.txt` pins for a discovered stack. Show a
-  dry run (what would be removed, how much space) before the first real run.
-- **Orphans.** Only containers of discovered stacks' compose projects that no
-  longer belong to the compose file; never containers of other projects.
-- **No `system prune`.** Volumes are never removed (stack data), and no
-  blanket `docker system prune`: fixed commands with fixed argument lists,
-  run in a worker job, as for every change to the host.
-- Compose editor and update pipeline currently never remove orphans or prune
-  images on purpose; this feature is the explicit, scheduled opt-in for it.

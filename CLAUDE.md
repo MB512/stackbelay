@@ -118,30 +118,18 @@ Run `go vet` and `go test ./... -race` before every commit.
   lists. Anything that changes a stack (stop, up, pull,
   writing compose files) runs in a worker job. See `docs/security.md`.
 
-## Milestones
+## Planning and decisions
 
-1. **M1 Worker CLI**: `worker backup <stack>` / `worker restore <stack> <snap>`
-   with fakes + tests; real Docker/restic implementation.
-2. **M2 Store + stacks**: SQLite, migrations, stack discovery, repositories,
-   secrets encryption, snapshot cache (refresh via read-only restic).
-3. **M3 Manager**: auth, RBAC, spawn worker container, job status, live logs
-   (SSE, tail of job log files).
-4. **M4 Scheduler**: cron per stack, queue/locking per stack.
-5. **M5 UI polish**: image pinning on restore via `metadata.txt` digests
-   (done), unavailable actions shown disabled (done). Dashboards and a
-   snapshot browser are not part of 0.1.
-6. **M6 Release 0.1**: Dockerfile, GHCR publish via GitHub Actions, README, LICENSE.
+Plans, features, bugs and discussions about architecture live in
+[GitHub issues](https://github.com/MB512/stackvault/issues), not in the repo.
+Repo files (code, `docs/`, README) describe the current state only: no
+milestones, TODO lists, "planned"/"open" sections or roadmaps. Design
+decisions are recorded in `docs/` as the outcome of the issue discussion
+(reference the issue number). When a plan comes up during work, open or
+comment on an issue instead of writing it into a file. `TODO` code comments
+are fine.
 
-After 0.1, the log view, the update job, the compose editor, the container
-shell, the in-place restore and the Update tab (update check, "only if
-new", in-place rollback per job) were added (see `docs/architecture.md`).
-Open: a per-stack default for in-place rollbacks (see "Rollbacks: in place
-or with swap"). Next planned: **restore from a different host**
-(stack migration: import of stacks from other hosts, restore into a
-not-yet-existing stack, stack name must stay identical, source host
-selection). See "Planned features" in `docs/architecture.md`.
-
-## Out of scope (for now)
+## Out of scope
 
 Windows hosts, Kubernetes, non-restic backends, database-native dumps
 (file-level backup with the stack stopped is the consistency model), and

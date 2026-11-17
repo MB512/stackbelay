@@ -48,9 +48,7 @@ attackers reaching the UI, a leaked database file.
    host); the manager only validates it, the file is written by the
    compose-apply job in a worker, after a backup. The new content is
    checked against its SHA-256 in the worker, and an apply is refused if
-   the file changed since it was opened in the editor. Optional hardening: put a socket proxy between
-   manager and Docker that allows only container create/start/inspect/logs and
-   the calls the manager itself needs.
+   the file changed since it was opened in the editor.
 4. **Secrets at rest.** Repo passwords and backend credentials are encrypted
    with AES-256-GCM using the secret key (`STACKVAULT_SECRET_KEY`,
    `STACKVAULT_SECRET_KEY_FILE`, or by default `<data>/secret.key`, mode
@@ -103,8 +101,8 @@ attackers reaching the UI, a leaked database file.
 9. **Audit log.** Login, failed login, job creation (manual and scheduled),
    restore, permission, schedule and repository changes. No secrets in entries.
 10. **TLS.** The app speaks plain HTTP and is meant to run behind a reverse
-    proxy that terminates TLS. Document this prominently. Offer an option to
-    refuse login over non-HTTPS unless explicitly allowed.
+    proxy that terminates TLS; the README says so prominently. Login over
+    plain HTTP is refused unless `STACKVAULT_ALLOW_INSECURE_HTTP=true`.
 11. **Restore safety.** Restore takes a `pre-restore` safety snapshot (only
     admins can skip it) and by default swaps directories, so the current
     directory is untouched until the restored copy is complete. The

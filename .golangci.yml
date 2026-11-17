@@ -7,7 +7,7 @@ linters:
   enable:
     - gosec       # security: exec with variable args, file permissions, ...
     - errorlint   # use errors.Is/As and %w instead of == and %v on errors
-    - bodyclose   # HTTP response bodies are closed (manager, M3)
+    - bodyclose   # HTTP response bodies are closed (manager)
     - noctx       # HTTP requests / exec carry a context
     - misspell
     - unconvert
