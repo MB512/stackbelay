@@ -65,7 +65,7 @@
   {{- with .Unavailable}}<p class="error">{{.}}</p>{{end}}
   {{- if .Containers}}
   <table>
-    <thead><tr><th>Container</th><th>Service</th><th>State</th><th>Image</th>{{if .ShowUpdates}}<th>Update</th>{{end}}</tr></thead>
+    <thead><tr><th>Container</th><th>Service</th><th>State</th><th>Image</th>{{if .ShowUpdates}}<th>Update</th>{{end}}{{if or .CanLogs .CanShell}}<th></th>{{end}}</tr></thead>
     <tbody>
       {{- range $c := .Containers}}
       <tr>
@@ -75,6 +75,14 @@
         <td><code>{{.Image}}</code></td>
         {{- if $.ShowUpdates}}
         <td>{{with $.Check.ForService $c.Service}}{{template "update-state" .}}{{end}}</td>
+        {{- end}}
+        {{- if or $.CanLogs $.CanShell}}
+        <td class="actions">
+          {{- if $.CanLogs}}<a href="/stacks/{{$.StackName}}/logs?container={{.Name}}">Logs</a>{{end}}
+          {{- if $.CanShell}}{{if $.CanLogs}} · {{end}}
+          {{- if .Running}}<a href="/stacks/{{$.StackName}}/shell?container={{.ID}}">Shell</a>
+          {{- else}}<span class="muted" title="The container is not running">Shell</span>{{end}}{{end}}
+        </td>
         {{- end}}
       </tr>
       {{- end}}

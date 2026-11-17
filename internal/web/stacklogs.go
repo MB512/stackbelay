@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"slices"
 	"sync"
 	"time"
 
@@ -72,6 +73,9 @@ type logsTab struct {
 	stackHeader
 	Containers  []string
 	Unavailable string // why logs cannot be shown, or ""
+	// Selected is the only container shown at first (?container=, the
+	// "Logs" link of a container on the Status tab); "" shows all.
+	Selected string
 }
 
 // containerLogLine is one line of the Logs tab; also sent as a "line"
@@ -128,6 +132,9 @@ func (s *Server) stackLogsPage(w http.ResponseWriter, r *http.Request) {
 			page.Unavailable = "Listing the containers failed: " + truncate(err.Error(), 300)
 		}
 		page.Containers = names
+		if c := r.URL.Query().Get("container"); slices.Contains(names, c) {
+			page.Selected = c
+		}
 	}
 	s.render(w, r, http.StatusOK, "stack_logs.html", pageData{Title: st.Name + " logs", Data: page})
 }

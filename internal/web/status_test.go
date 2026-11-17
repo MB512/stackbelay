@@ -136,3 +136,35 @@ func (e *testEnv) loginAdmin2() {
 	e.t.Helper()
 	expect(e.t, e.login(e.client, "admin", adminNewPW), http.StatusSeeOther, "/")
 }
+
+// The Logs link of a container opens the Logs tab with only that
+// container selected; it needs the logs right.
+func TestStatusLogsLink(t *testing.T) {
+	e := newEnv(t, true, true)
+	e.setupStacks()
+	e.setupStatus() // also a fake log reader: web-app-1, web-db-1
+	e.loginAdmin()
+	r := e.get("/stacks/web")
+	if !strings.Contains(r.body, `href="/stacks/web/logs?container=app-1"`) {
+		t.Fatalf("no Logs link:\n%s", r.body)
+	}
+	r = e.get("/stacks/web/logs?container=web-db-1")
+	expect(t, r, http.StatusOK, "")
+	if !strings.Contains(r.body, `value="web-db-1" checked>`) || !strings.Contains(r.body, `value="web-app-1">`) {
+		t.Fatalf("preselection:\n%s", r.body)
+	}
+	// An unknown container selects all.
+	r = e.get("/stacks/web/logs?container=nope")
+	if !strings.Contains(r.body, `value="web-db-1" checked>`) || !strings.Contains(r.body, `value="web-app-1" checked>`) {
+		t.Fatalf("unknown container:\n%s", r.body)
+	}
+
+	alice, aliceID := e.createUser("alice")
+	web, _ := e.st.StackByName(context.Background(), "web")
+	if err := e.st.SetPermission(context.Background(), store.Permission{UserID: aliceID, StackID: web.ID, CanBackup: true}); err != nil {
+		t.Fatal(err)
+	}
+	if r := e.do(alice, http.MethodGet, "/stacks/web", nil, nil); strings.Contains(r.body, "/logs?") {
+		t.Fatal("Logs link without the logs right")
+	}
+}

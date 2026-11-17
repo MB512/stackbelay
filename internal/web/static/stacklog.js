@@ -49,6 +49,17 @@
 		return boxes.querySelectorAll("input[type=checkbox]");
 	}
 
+	// Containers whose checkbox starts unchecked (the page was opened for
+	// one container) are hidden from the start.
+	(function () {
+		var all = checkboxes();
+		for (var i = 0; i < all.length; i++) {
+			if (!all[i].checked) {
+				hidden[all[i].value] = true;
+			}
+		}
+	})();
+
 	boxes.addEventListener("change", function (e) {
 		if (e.target.type === "checkbox") {
 			setShown(e.target.value, e.target.checked);

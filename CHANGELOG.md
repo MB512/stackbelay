@@ -22,6 +22,9 @@ All notable changes to StackVault. The format is based on
   the Status tab.
 - The Update tab is gone: "Update…" on the Status tab opens the update
   form (with the last check and "Unpin now") as its own page.
+- The Shell tab is gone: with `STACKVAULT_ENABLE_SHELL`, admins open a
+  shell from the container's row on the Status tab. Each row also links
+  to the Logs tab with only that container selected.
 
 ## [0.2.0] - 2026-11-16
 

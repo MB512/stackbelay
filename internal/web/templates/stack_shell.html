@@ -9,7 +9,8 @@
 
 {{define "content"}}
 {{- with .Data}}
-{{template "stack-header" .}}
+<h1>Shell{{with .Selected}} in {{.Name}}{{end}} <span class="hint">{{.Stack.Name}}</span></h1>
+<p><a href="/stacks/{{.Stack.Name}}">Back to the stack</a></p>
 
 <p class="hint">A shell in a container of this stack, as the container's user (<code>bash</code>, or <code>sh</code>
   if there is no bash). Everything you type runs in the container. Opening and closing a shell is recorded in the
@@ -22,7 +23,7 @@
     <h2>{{.Name}}</h2>
     <span class="hint" id="shell-status" role="status">connecting…</span>
     <button type="button" class="secondary" id="shell-fullscreen">Full screen</button>
-    <a href="/stacks/{{$.Data.Stack.Name}}/shell">Close</a>
+    <a href="/stacks/{{$.Data.Stack.Name}}">Close</a>
   </div>
   {{- /* In full screen the frame covers the whole browser window and shows
          only the terminal and a bar with the container name and the exit
@@ -36,24 +37,6 @@
   </div>
   <noscript><p class="hint">The shell needs JavaScript.</p></noscript>
 </section>
-{{- else}}
-{{- if .Containers}}
-<table>
-  <thead><tr><th>Container</th><th>Service</th><th>State</th><th></th></tr></thead>
-  <tbody>
-    {{- range .Containers}}
-    <tr>
-      <td>{{.Name}}</td>
-      <td>{{.Service}}</td>
-      <td>{{if .Running}}<span class="badge ok">running</span>{{else}}<span class="badge">{{.State}}</span>{{end}}</td>
-      <td>{{if .Running}}<a href="?container={{.ID}}">Open shell</a>{{else}}<span class="muted">not running</span>{{end}}</td>
-    </tr>
-    {{- end}}
-  </tbody>
-</table>
-{{- else if not .Unavailable}}
-<p class="hint">This stack has no containers yet.</p>
-{{- end}}
 {{- end}}
 {{- end}}
 {{end}}

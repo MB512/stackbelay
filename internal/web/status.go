@@ -47,6 +47,8 @@ type statusLive struct {
 	// to it).
 	CheckMessage string
 	CanUpdate    bool
+	CanLogs      bool // row link to the Logs tab
+	CanShell     bool // row link to a shell (admin, STACKVAULT_ENABLE_SHELL)
 }
 
 // ShowUpdates reports whether the services table has an update column: a
@@ -101,10 +103,13 @@ func (s *Server) stackStatusLive(w http.ResponseWriter, r *http.Request) {
 // shown on the page, not returned as an error.
 func (s *Server) loadStatusLive(r *http.Request, st store.Stack, perm store.Permission) (statusLive, error) {
 	ctx := r.Context()
+	user := authFrom(ctx).User
 	live := statusLive{
 		StackName: st.Name,
 		Check:     s.updateResults.get(st.ID),
-		CanUpdate: auth.Allowed(authFrom(ctx).User, perm, auth.ActionUpdate),
+		CanUpdate: auth.Allowed(user, perm, auth.ActionUpdate),
+		CanLogs:   auth.Allowed(user, perm, auth.ActionLogs),
+		CanShell:  s.EnableShell && user.IsAdmin && !user.Disabled,
 	}
 	var err error
 	if live.Jobs, err = s.Store.ListJobs(ctx, st.ID, recentJobs); err != nil {

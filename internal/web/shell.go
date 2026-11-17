@@ -43,10 +43,10 @@ const (
 // are covered by 'self'.
 const shellCSP = "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
 
-// shellTab is the data of the admin-only "Shell" tab.
-type shellTab struct {
-	stackHeader
-	Containers  []docker.Container
+// shellPage is the data of the admin-only shell page. It has no tab: the
+// Status tab links to it per running container.
+type shellPage struct {
+	Stack       store.Stack
 	Selected    *docker.Container // the container whose terminal is shown
 	SocketURL   string            // WebSocket path of the selected container's session
 	Unavailable string
@@ -82,19 +82,26 @@ func findContainer(list []docker.Container, id string) (docker.Container, bool) 
 	return docker.Container{}, false
 }
 
-// stackShell shows the stack's containers and, with ?container=<id>, the
-// terminal of that container (static/shell.js connects it to shellSocket).
-// Admin only, and only registered with STACKVAULT_ENABLE_SHELL.
+// stackShell shows the terminal of the container ?container=<id>
+// (static/shell.js connects it to shellSocket). Without a container it
+// redirects to the Status tab, which lists the containers. Admin only, and
+// only registered with STACKVAULT_ENABLE_SHELL.
 func (s *Server) stackShell(w http.ResponseWriter, r *http.Request) {
 	st, _, ok := s.loadStack(w, r, auth.ActionView) // the route requires an admin
 	if !ok {
 		return
 	}
+	id := r.URL.Query().Get("container")
+	if id == "" {
+		http.Redirect(w, r, "/stacks/"+url.PathEscape(st.Name), http.StatusSeeOther)
+		return
+	}
 	a := authFrom(r.Context())
-	page := shellTab{stackHeader: s.newStackHeader(a.User, store.Permission{}, st, tabShell)}
-	page.Containers, page.Unavailable = s.shellContainers(r.Context(), st)
-	if id := r.URL.Query().Get("container"); id != "" && page.Unavailable == "" {
-		c, found := findContainer(page.Containers, id)
+	page := shellPage{Stack: st}
+	var list []docker.Container
+	list, page.Unavailable = s.shellContainers(r.Context(), st)
+	if page.Unavailable == "" {
+		c, found := findContainer(list, id)
 		switch {
 		case !found:
 			page.Unavailable = "That container does not belong to this stack (any more)."
@@ -107,7 +114,11 @@ func (s *Server) stackShell(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.Header().Set("Content-Security-Policy", shellCSP)
-	s.render(w, r, http.StatusOK, "stack_shell.html", pageData{Title: st.Name + " shell", Data: page})
+	title := st.Name + " shell"
+	if page.Selected != nil {
+		title = page.Selected.Name + " shell"
+	}
+	s.render(w, r, http.StatusOK, "stack_shell.html", pageData{Title: title, Data: page})
 }
 
 // shellResize is the only text message the browser sends.

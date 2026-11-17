@@ -11,7 +11,7 @@
   <fieldset class="containers" id="log-containers">
     <legend>Containers</legend>
     {{- range .Containers}}
-    <label class="check"><input type="checkbox" value="{{.}}" checked> {{.}}</label>
+    <label class="check"><input type="checkbox" value="{{.}}"{{if or (not $.Data.Selected) (eq . $.Data.Selected)}} checked{{end}}> {{.}}</label>
     {{- else}}
     <p class="hint" id="log-containers-empty">This stack has no containers yet.</p>
     {{- end}}

@@ -67,7 +67,7 @@ compose, so they are never affected by stopping a stack.
 | `STACKVAULT_ALLOW_INSECURE_HTTP` | accept logins over plain HTTP (testing without TLS proxy), default `false` |
 | `STACKVAULT_WORKER_IMAGE` | image for worker containers, default: the manager's own image |
 | `STACKVAULT_MAX_JOBS` | jobs running at the same time across all stacks, default `1` |
-| `STACKVAULT_ENABLE_SHELL` | admin-only container shells ("Shell" tab), default `false`; see "Container shell" |
+| `STACKVAULT_ENABLE_SHELL` | admin-only container shells ("Shell" per container on the Status tab), default `false`; see "Container shell" |
 | `STACKVAULT_LOG_LEVEL` | `debug`, `info`, `warn`, `error` |
 | `TZ` | time zone of the cron schedules (e.g. `Europe/Berlin`), default UTC in most images; the zone database is built into the binary |
 
@@ -625,7 +625,7 @@ with a light and a dark set; the job log is a dark panel in both modes.
 | `GET /jobs/{id}/events` | view right on the job's stack | live stream of the job (SSE), see "Live logs" |
 | `POST /jobs/{id}/cancel` | backup/restore/update right (by job type; compose-apply: admin) | cancel a queued or running job |
 | `POST /stacks/{name}/snapshots/refresh` | view right | refresh the snapshot cache (read-only restic; at most once per 10 s per stack; HTMX: returns the snapshot section) |
-| `GET /stacks/{name}/shell` | admin, opt-in | "Shell" tab: containers, terminal of `?container=<id>` |
+| `GET /stacks/{name}/shell?container=<id>` | admin, opt-in | shell page (no tab, linked per container from Status): terminal of a running container; without `container` a redirect to Status |
 | `GET /stacks/{name}/shell/ws` | admin, opt-in | WebSocket of a shell session, see "Container shell" |
 | `GET /stacks/{name}/compose` | admin | "Compose" tab: editor for the main compose file |
 | `POST /stacks/{name}/compose` | admin | validate and queue a compose-apply job, see "Compose editor" |
@@ -661,8 +661,7 @@ Stack pages share a header with tabs (`stack-header` in `partials.html`).
 The tab list is built per user in `newStackHeader`; a tab is only shown if
 the user may open it, and its handler checks the permission again. Tabs:
 "Status" (view right, the default), "Backups" (view right), "Logs" (logs
-right), "Compose", "Shell" (only with
-`STACKVAULT_ENABLE_SHELL`) and "Settings" (admin).
+right), "Compose" and "Settings" (admin).
 
 ### Status tab
 
@@ -672,7 +671,10 @@ after the project owner check): name, service, state with health and
 docker's status text, image and, after an update check, its result.
 Below them the recent jobs of the stack. Users with the backup right get
 "Back up now" there, users with the update right "Check for updates" and
-"Update…" (the update page); every action checks its own right.
+"Update…" (the update page); every action checks its own right. Each
+container row links to the Logs tab with only that container selected
+(logs right) and, for admins with `STACKVAULT_ENABLE_SHELL`, to a shell in
+it (shown disabled while the container is not running).
 
 Containers and jobs are one fragment (`status-live`) that HTMX reloads
 every 10 seconds from `GET /stacks/{name}/status/live`, so a running job
@@ -729,7 +731,9 @@ redacted before writing).
 
 The "Logs" tab (`can_logs`, admins always) shows the live output of all
 containers of a stack, mixed in the order `docker compose logs` prints
-them. One checkbox per container shows or hides its lines; filtering
+them. One checkbox per container shows or hides its lines (opened with
+`?container=<name>`, the Logs link on the Status tab, only that container
+starts checked; an unknown name selects all); filtering
 happens in the browser only (`static/stacklog.js`), the stream always
 carries all containers. "Wrap lines" (on by default, remembered per
 browser in `localStorage`) can be turned off for horizontal scrolling.
@@ -767,15 +771,15 @@ too.
 ## Container shell
 
 Opt-in (`STACKVAULT_ENABLE_SHELL=true`, default off) and admin-only: the
-"Shell" tab opens an interactive shell in a running container of the
-stack. Without the setting the tab and its routes do not exist (an
+"Shell" link of a container on the Status tab opens an interactive shell
+in it. Without the setting the links and the routes do not exist (an
 exception to "disabled, not hidden": the feature is meant to be invisible
 where it is not wanted).
 
-- `GET /stacks/{name}/shell` lists the stack's containers
+- `GET /stacks/{name}/shell?container=<id>` shows the terminal (xterm.js,
+  `static/shell.js`) of a running container of the stack's container list
   (`docker.CLI.StackContainers`: `compose ps --all` after the project owner
-  check). `?container=<id>` shows the terminal of a running container of
-  that list (xterm.js, `static/shell.js`).
+  check). Without `container` it redirects to the Status tab.
 - `GET /stacks/{name}/shell/ws?container=<id>&csrf=<token>&cols=&rows=` is
   the WebSocket (`github.com/coder/websocket`). It requires an admin
   session, the session's CSRF token (the upgrade is a GET, so the token is

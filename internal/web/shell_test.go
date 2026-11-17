@@ -14,6 +14,7 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/MB512/stackvault/internal/docker"
+	"github.com/MB512/stackvault/internal/store"
 )
 
 // fakeTTY answers every write with "got:<data>".
@@ -85,6 +86,7 @@ func shellEnv(t *testing.T, enabled bool) (*testEnv, *fakeShells) {
 	e := newEnvWith(t, true, true, func(s *Server) {
 		s.EnableShell = enabled
 		s.Shells = shells
+		s.Containers = shells // the Status tab lists the same containers
 	})
 	e.setupStacks()
 	e.setupLogs() // stack directories
@@ -107,8 +109,8 @@ func dial(t *testing.T, e *testEnv, c *http.Client, query url.Values, origin str
 
 func TestShellDisabledByDefault(t *testing.T) {
 	e, _ := shellEnv(t, false)
-	if r := e.get("/stacks/web"); strings.Contains(r.body, "/shell") {
-		t.Fatal("Shell tab shown although disabled")
+	if r := e.get("/stacks/web"); strings.Contains(r.body, "/shell") || !strings.Contains(r.body, "app-1") {
+		t.Fatal("Shell link shown although disabled")
 	}
 	expect(t, e.get("/stacks/web/shell"), http.StatusNotFound, "")
 	expect(t, e.get("/stacks/web/shell/ws"), http.StatusNotFound, "")
@@ -116,22 +118,26 @@ func TestShellDisabledByDefault(t *testing.T) {
 
 func TestShellAccess(t *testing.T) {
 	e, _ := shellEnv(t, true)
-	alice, _ := e.createUser("alice")
-	if r := e.get("/stacks/web"); !strings.Contains(r.body, `href="/stacks/web/shell"`) {
-		t.Fatal("Shell tab missing for admins")
+	alice, aliceID := e.createUser("alice")
+	// The Status tab links a shell per running container (admins only);
+	// there is no Shell tab.
+	r := e.get("/stacks/web")
+	if !strings.Contains(r.body, `href="/stacks/web/shell?container=0000000000a1"`) ||
+		strings.Contains(r.body, `shell?container=0000000000d1`) || !strings.Contains(r.body, `title="The container is not running">Shell</span>`) ||
+		strings.Contains(r.body, `href="/stacks/web/shell"`) {
+		t.Fatalf("shell links on the Status tab:\n%s", r.body)
+	}
+	web, _ := e.st.StackByName(context.Background(), "web")
+	if err := e.st.SetPermission(context.Background(), store.Permission{UserID: aliceID, StackID: web.ID, CanBackup: true}); err != nil {
+		t.Fatal(err)
 	}
 	if r := e.do(alice, http.MethodGet, "/stacks/web", nil, nil); strings.Contains(r.body, "/shell") {
-		t.Fatal("Shell tab shown to a non-admin")
+		t.Fatal("Shell link shown to a non-admin")
 	}
-	expect(t, e.do(alice, http.MethodGet, "/stacks/web/shell", nil, nil), http.StatusForbidden, "")
+	expect(t, e.do(alice, http.MethodGet, "/stacks/web/shell?container=0000000000a1", nil, nil), http.StatusForbidden, "")
 
-	// The container list: open links only for running containers.
-	r := e.get("/stacks/web/shell")
-	expect(t, r, http.StatusOK, "")
-	if !strings.Contains(r.body, `href="?container=0000000000a1"`) || strings.Contains(r.body, `?container=0000000000d1`) ||
-		strings.Contains(r.body, "xterm") {
-		t.Fatalf("container list:\n%s", r.body)
-	}
+	// Without a container the page sends the admin to the Status tab.
+	expect(t, e.get("/stacks/web/shell"), http.StatusSeeOther, "/stacks/web")
 	// A stopped or foreign container is not opened.
 	for _, id := range []string{"0000000000d1", "0000000000ff"} {
 		if r := e.get("/stacks/web/shell?container=" + id); strings.Contains(r.body, `id="terminal"`) {

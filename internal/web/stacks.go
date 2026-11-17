@@ -80,7 +80,6 @@ const (
 	tabBackups  = "backups"
 	tabLogs     = "logs"
 	tabCompose  = "compose"
-	tabShell    = "shell"
 	tabSettings = "settings"
 )
 
@@ -100,11 +99,6 @@ func (s *Server) newStackHeader(user store.User, perm store.Permission, st store
 		// Editing the compose file is admin-only: it is equivalent to root
 		// on the host.
 		tabs = append(tabs, stackTab{Label: "Compose", URL: base + "/" + tabCompose, Active: active == tabCompose})
-		// Container shells: admin-only and opt-in; without
-		// STACKVAULT_ENABLE_SHELL the tab does not exist at all.
-		if s.EnableShell {
-			tabs = append(tabs, stackTab{Label: "Shell", URL: base + "/" + tabShell, Active: active == tabShell})
-		}
 		tabs = append(tabs, stackTab{Label: "Settings", URL: base + "/" + tabSettings, Active: active == tabSettings})
 	}
 	return stackHeader{Stack: st, Tabs: tabs}
