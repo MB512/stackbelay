@@ -241,7 +241,7 @@ func (s *Server) jobDetail(w http.ResponseWriter, r *http.Request) {
 	page := s.newJobPage(r.Context(), j, perm)
 	if s.JobsDir != "" {
 		var err error
-		page.Log, page.LogCut, page.LogOffset, err = readLogTail(s.logPath(j.ID))
+		page.Log, page.LogCut, page.LogOffset, err = readLogTail(s.logPath(j.ID), s.loc())
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			s.Logger.Warn("reading job log", "job_id", j.ID, "error", err)
 		}

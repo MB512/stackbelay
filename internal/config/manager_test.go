@@ -58,9 +58,13 @@ func TestLoadManagerKeyFile(t *testing.T) {
 		"STACKVAULT_SESSION_TTL":         "30m",
 		"STACKVAULT_MAX_JOBS":            "3",
 		"STACKVAULT_ENABLE_SHELL":        "true",
+		"TZ":                             ":Europe/Berlin",
 	}), read)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if c.TimeZone == nil || c.TimeZone.String() != "Europe/Berlin" {
+		t.Fatalf("time zone %v", c.TimeZone)
 	}
 	if len(c.SecretKey) != 32 || c.DataDir != "/srv/sv" || !c.AllowInsecureHTTP || c.SessionTTL != 30*time.Minute || c.MaxJobs != 3 || !c.EnableShell {
 		t.Fatalf("unexpected config %+v", c)
@@ -82,6 +86,7 @@ func TestLoadManagerErrors(t *testing.T) {
 		{"bad ttl", map[string]string{"STACKVAULT_SESSION_TTL": "5s"}, []string{"STACKVAULT_SESSION_TTL"}},
 		{"bad max jobs", map[string]string{"STACKVAULT_MAX_JOBS": "0"}, []string{"STACKVAULT_MAX_JOBS"}},
 		{"bad shell flag", map[string]string{"STACKVAULT_ENABLE_SHELL": "maybe"}, []string{"STACKVAULT_ENABLE_SHELL"}},
+		{"unknown time zone", map[string]string{"TZ": "Europe/Atlantis"}, []string{"TZ:"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

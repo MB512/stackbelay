@@ -216,7 +216,7 @@ func TestImageVersion(t *testing.T) {
 		{docker.ImageVersion{Created: created, Digest: "sha256:0123456789abcdef"}, "2026-01-02, sha256:0123456789ab"},
 		{docker.ImageVersion{Version: "1.2", Digest: "sha256:01"}, "1.2 (sha256:01)"},
 	} {
-		if got := imageVersion(tt.v); got != tt.want {
+		if got := imageVersion(tt.v, time.UTC); got != tt.want {
 			t.Errorf("imageVersion(%+v) = %q, want %q", tt.v, got, tt.want)
 		}
 	}

@@ -76,6 +76,9 @@ type Scheduler struct {
 	Store  *store.Store
 	Queue  Queue
 	Logger *slog.Logger
+	// Location is the time zone the cron expressions are evaluated in
+	// (the manager's TZ); nil means time.Local.
+	Location *time.Location
 
 	mu      sync.Mutex // guards cron and ctx; Reload is called from HTTP handlers
 	cron    *cron.Cron
@@ -88,7 +91,12 @@ type Scheduler struct {
 func (s *Scheduler) Run(ctx context.Context) {
 	s.mu.Lock()
 	// SkipIfStillRunning: a schedule never fires twice at the same time.
-	s.cron = cron.New(cron.WithParser(parser), cron.WithChain(cron.SkipIfStillRunning(cron.DiscardLogger)))
+	loc := s.Location
+	if loc == nil {
+		loc = time.Local
+	}
+	s.cron = cron.New(cron.WithParser(parser), cron.WithLocation(loc),
+		cron.WithChain(cron.SkipIfStillRunning(cron.DiscardLogger)))
 	s.ctx = ctx
 	s.mu.Unlock()
 

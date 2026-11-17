@@ -334,7 +334,7 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, st store
 		Repo:        repo,
 		Permissions: rows,
 		Schedules:   scheds,
-		TimeZone:    s.now().Local().Format("MST (-07:00)"),
+		TimeZone:    s.zoneName() + s.now().In(s.loc()).Format(" (MST, -07:00)"),
 	}
 	page.NewSchedule = v.NewSchedule
 	s.render(w, r, v.Status, "stack_settings.html",

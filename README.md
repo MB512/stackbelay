@@ -161,7 +161,7 @@ Environment variables only:
 | `STACKVAULT_MAX_JOBS` | jobs running at the same time across all stacks, default `1` |
 | `STACKVAULT_ENABLE_SHELL` | `true` gives admins a shell in stack containers ("Shell" per container on the Status tab), default `false` |
 | `STACKVAULT_LOG_LEVEL` | `debug`, `info`, `warn`, `error` |
-| `TZ` | time zone of the schedules, e.g. `Europe/Berlin` (default UTC) |
+| `TZ` | time zone of the schedules and of all times shown in the UI, e.g. `Europe/Berlin` (default UTC); an unknown zone stops the start |
 
 ## Security
 

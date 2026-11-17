@@ -108,6 +108,8 @@ func run(ctx context.Context, getenv func(string) string, readFile func(string) 
 		Updates:  &docker.CLI{},
 		Shells:   &docker.CLI{},
 		Hostname: cfg.Hostname,
+		// All times in the UI are shown in the manager's time zone (TZ).
+		Location: cfg.TimeZone,
 		// On SIGTERM open live streams end at once (clients reconnect)
 		// instead of holding up the graceful shutdown.
 		Stopping: ctx.Done(),
@@ -121,7 +123,7 @@ func run(ctx context.Context, getenv func(string) string, readFile func(string) 
 		if disp.Template.OwnStack != "" {
 			log.Info("the manager belongs to stack", "stack", disp.Template.OwnStack)
 		}
-		sched = &scheduler.Scheduler{Store: st, Queue: disp, Logger: log}
+		sched = &scheduler.Scheduler{Store: st, Queue: disp, Logger: log, Location: cfg.TimeZone}
 		srv.Schedules = sched
 	} else {
 		srv.JobsDisabledReason = "Backups and restores are unavailable: " + jobsErr.Error()

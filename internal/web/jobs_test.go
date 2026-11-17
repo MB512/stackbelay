@@ -248,7 +248,7 @@ func TestReadLogTail(t *testing.T) {
 	if err := os.WriteFile(p, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	lines, cut, next, err := readLogTail(p)
+	lines, cut, next, err := readLogTail(p, time.UTC)
 	if err != nil || !cut || len(lines) == 0 || lines[0].Level != "INFO" {
 		t.Fatalf("cut=%v lines=%d err=%v", cut, len(lines), err)
 	}

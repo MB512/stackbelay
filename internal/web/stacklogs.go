@@ -82,7 +82,7 @@ type logsTab struct {
 // event of the live stream.
 type containerLogLine struct {
 	Container string
-	Time      string // UTC, "2006-01-02 15:04:05"; "" if the line has none
+	Time      string // in the manager's time zone, "2006-01-02 15:04:05"; "" if the line has none
 	ID        string // see logLineID; data-t of the line, for sorting in the browser
 	Text      string
 	Cut       bool
@@ -103,10 +103,10 @@ func logLineID(t time.Time) string {
 	return t.UTC().Format(logLineIDFormat)
 }
 
-func newContainerLogLine(l docker.LogLine) containerLogLine {
+func newContainerLogLine(l docker.LogLine, loc *time.Location) containerLogLine {
 	out := containerLogLine{Container: l.Container, ID: logLineID(l.Time), Text: l.Text, Cut: l.Cut}
 	if !l.Time.IsZero() {
-		out.Time = l.Time.UTC().Format("2006-01-02 15:04:05")
+		out.Time = l.Time.In(loc).Format("2006-01-02 15:04:05")
 	}
 	return out
 }
@@ -267,7 +267,7 @@ func (s *Server) stackLogEvents(w http.ResponseWriter, r *http.Request) {
 // sendLogLine sends one "line" event. Its id is the line's time, which a
 // reconnect passes back as ?since=; lines without a time have no id.
 func (s *Server) sendLogLine(sse sseWriter, l docker.LogLine) error {
-	html, err := s.partialHTML("stack_logs.html", "container-log-line", newContainerLogLine(l))
+	html, err := s.partialHTML("stack_logs.html", "container-log-line", newContainerLogLine(l, s.loc()))
 	if err != nil {
 		return err
 	}

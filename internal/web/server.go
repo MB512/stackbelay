@@ -78,6 +78,9 @@ type Server struct {
 	Hostname string
 	// Now returns the current time; defaults to time.Now (tests override it).
 	Now func() time.Time
+	// Location is the time zone all times are shown in (the manager's TZ);
+	// nil means time.Local.
+	Location *time.Location
 
 	templates  map[string]*template.Template
 	logStreams streamLimiter // open log streams
@@ -89,6 +92,24 @@ type Server struct {
 	shellCheck    time.Duration // session re-check of open shells; default shellSessionCheck (tests shorten it)
 }
 
+// loc is the time zone for displayed times.
+func (s *Server) loc() *time.Location {
+	if s.Location == nil {
+		return time.Local
+	}
+	return s.Location
+}
+
+// zoneName names the display time zone, e.g. "Europe/Berlin"; for an
+// unnamed zone (time.Local without TZ) its abbreviation at the current
+// time (e.g. "UTC", or "+0300" if the zone has none).
+func (s *Server) zoneName() string {
+	if name := s.loc().String(); name != "" && name != "Local" {
+		return name
+	}
+	return s.now().In(s.loc()).Format("MST")
+}
+
 func (s *Server) now() time.Time {
 	if s.Now == nil {
 		return time.Now()
@@ -98,7 +119,7 @@ func (s *Server) now() time.Time {
 
 // Handler returns the root HTTP handler with all routes and middleware.
 func (s *Server) Handler() (http.Handler, error) {
-	t, err := parseTemplates()
+	t, err := parseTemplates(s.templateFuncs())
 	if err != nil {
 		return nil, err
 	}

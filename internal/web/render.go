@@ -25,31 +25,38 @@ var staticFS embed.FS
 // partials.html.
 var pages = []string{"login.html", "password.html", "error.html", "stacks.html", "stack_status.html", "stack.html", "stack_settings.html", "users.html", "job.html", "restore.html", "stack_logs.html", "stack_update.html", "stack_compose.html", "stack_shell.html"}
 
-// templateFuncs are available in all templates.
-var templateFuncs = template.FuncMap{
-	// logTail is how many lines per container the Logs tab starts with.
-	"logTail": func() int { return logTailLines },
-	// version is the build version, shown in the page footer.
-	"version": func() string { return buildinfo.Version },
-	// imageVersion formats an image version for the update check: the
-	// version label if the image has one, else build date and short digest.
-	"imageVersion": imageVersion,
-	// when formats a timestamp for display; the zero time is shown as "never".
-	"when": func(t time.Time) string {
-		if t.IsZero() {
-			return "never"
-		}
-		return t.UTC().Format("2006-01-02 15:04 UTC")
-	},
+// templateFuncs returns the functions available in all templates. Times
+// are shown in the manager's time zone (s.loc).
+func (s *Server) templateFuncs() template.FuncMap {
+	loc := s.loc()
+	return template.FuncMap{
+		// logTail is how many lines per container the Logs tab starts with.
+		"logTail": func() int { return logTailLines },
+		// version is the build version, shown in the page footer.
+		"version": func() string { return buildinfo.Version },
+		// imageVersion formats an image version for the update check: the
+		// version label if the image has one, else build date and short digest.
+		"imageVersion": func(v docker.ImageVersion) string { return imageVersion(v, loc) },
+		// when formats a timestamp for display with its zone abbreviation;
+		// the zero time is shown as "never".
+		"when": func(t time.Time) string {
+			if t.IsZero() {
+				return "never"
+			}
+			return t.In(loc).Format("2006-01-02 15:04 MST")
+		},
+		// timeZone names the zone times are shown in, e.g. "Europe/Berlin".
+		"timeZone": s.zoneName,
+	}
 }
 
 // parseTemplates parses every page together with the base layout.
 // html/template escapes all values by context (HTML, attributes, URLs), so
 // user-controlled strings cannot inject markup.
-func parseTemplates() (map[string]*template.Template, error) {
+func parseTemplates(funcs template.FuncMap) (map[string]*template.Template, error) {
 	out := map[string]*template.Template{}
 	for _, p := range pages {
-		t, err := template.New(p).Funcs(templateFuncs).ParseFS(templateFS,
+		t, err := template.New(p).Funcs(funcs).ParseFS(templateFS,
 			"templates/base.html", "templates/partials.html", "templates/"+p)
 		if err != nil {
 			return nil, fmt.Errorf("parsing template %s: %w", p, err)
@@ -135,12 +142,12 @@ func staticHandler() http.Handler {
 	})
 }
 
-// imageVersion formats v for display: "1.2.3 (2026-01-02, sha256:abcdef12)".
-// Unknown parts are left out; nothing known gives "".
-func imageVersion(v docker.ImageVersion) string {
+// imageVersion formats v for display: "1.2.3 (2026-01-02, sha256:abcdef12)",
+// the date in loc. Unknown parts are left out; nothing known gives "".
+func imageVersion(v docker.ImageVersion, loc *time.Location) string {
 	var parts []string
 	if !v.Created.IsZero() {
-		parts = append(parts, v.Created.UTC().Format("2006-01-02"))
+		parts = append(parts, v.Created.In(loc).Format("2006-01-02"))
 	}
 	if d := strings.TrimPrefix(v.Digest, "sha256:"); d != "" {
 		parts = append(parts, "sha256:"+d[:min(len(d), 12)])

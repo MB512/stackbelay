@@ -46,7 +46,8 @@ func (s *Server) logPath(jobID string) string {
 
 // readLogTail reads the end of a job log for the page. next is the byte
 // offset after the last complete line; the live stream continues there.
-func readLogTail(path string) (lines []logLine, cut bool, next int64, err error) {
+// Times are shown in loc.
+func readLogTail(path string, loc *time.Location) (lines []logLine, cut bool, next int64, err error) {
 	info, err := os.Stat(path)
 	if err != nil {
 		return nil, false, 0, err
@@ -55,7 +56,7 @@ func readLogTail(path string) (lines []logLine, cut bool, next int64, err error)
 	if info.Size() > maxLogBytes {
 		start, cut = info.Size()-maxLogBytes, true
 	}
-	lines, next, err = readLogFrom(path, start, maxLogBytes, cut)
+	lines, next, err = readLogFrom(path, start, maxLogBytes, cut, loc)
 	return lines, cut, next, err
 }
 
@@ -64,7 +65,7 @@ func readLogTail(path string) (lines []logLine, cut bool, next int64, err error)
 // a line). next is the offset after the last complete line read; a line
 // the worker is still writing is left for the next call. The worker
 // already redacted secrets; lines that are not JSON are shown as they are.
-func readLogFrom(path string, from, limit int64, skipPartial bool) (lines []logLine, next int64, err error) {
+func readLogFrom(path string, from, limit int64, skipPartial bool, loc *time.Location) (lines []logLine, next int64, err error) {
 	f, err := os.Open(path) //nolint:gosec // G304: path is built from a validated job id
 	if err != nil {
 		return nil, from, err
@@ -89,14 +90,16 @@ func readLogFrom(path string, from, limit int64, skipPartial bool) (lines []logL
 		if (i == 0 && skipPartial) || strings.TrimSpace(line) == "" {
 			continue
 		}
-		l := parseLogLine(strings.TrimSpace(line))
+		l := parseLogLine(strings.TrimSpace(line), loc)
 		l.End = pos
 		lines = append(lines, l)
 	}
 	return lines, next, nil
 }
 
-func parseLogLine(line string) logLine {
+// parseLogLine parses one JSON log line of the worker; its time is shown
+// in loc.
+func parseLogLine(line string, loc *time.Location) logLine {
 	var rec map[string]any
 	if err := json.Unmarshal([]byte(line), &rec); err != nil {
 		return logLine{Msg: line}
@@ -104,7 +107,7 @@ func parseLogLine(line string) logLine {
 	l := logLine{}
 	if v, ok := rec["time"].(string); ok {
 		if t, err := time.Parse(time.RFC3339Nano, v); err == nil {
-			l.Time = t.UTC().Format("15:04:05")
+			l.Time = t.In(loc).Format("15:04:05")
 		}
 	}
 	l.Level, _ = rec["level"].(string)
@@ -244,7 +247,7 @@ func (s *Server) streamLog(sse sseWriter, jobID string, offset int64) (int64, er
 		return offset, nil
 	}
 	for {
-		lines, next, err := readLogFrom(s.logPath(jobID), offset, maxChunkBytes, false)
+		lines, next, err := readLogFrom(s.logPath(jobID), offset, maxChunkBytes, false, s.loc())
 		if errors.Is(err, os.ErrNotExist) {
 			return offset, nil // the worker has not started yet
 		}

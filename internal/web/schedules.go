@@ -37,7 +37,9 @@ func (s *Server) scheduleRows(ctx context.Context, st store.Stack) ([]scheduleRo
 	if err != nil {
 		return nil, err
 	}
-	now := s.now()
+	// Cron expressions are evaluated in the manager's time zone, like the
+	// scheduler does it.
+	now := s.now().In(s.loc())
 	rows := make([]scheduleRow, 0, len(list))
 	for _, sc := range list {
 		row := scheduleRow{Schedule: sc}

@@ -35,6 +35,9 @@ All notable changes to StackVault. The format is based on
 
 ### Changed
 
+- All times in the UI (jobs, snapshots, schedules, job and container logs,
+  image dates) are shown in the manager's time zone (`TZ`) instead of UTC.
+  An unknown `TZ` is now a configuration error instead of silently UTC.
 - The snapshot list moved to its own "Backups" tab
   (`/stacks/<name>/backups`); "Back up now" and the recent jobs moved to
   the Status tab.

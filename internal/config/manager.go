@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/MB512/stackvault/internal/secrets"
@@ -35,6 +36,11 @@ type Manager struct {
 	// (STACKVAULT_ENABLE_SHELL, default false). Off by default: a shell is
 	// free-form command execution.
 	EnableShell bool
+	// TimeZone is the zone all times are shown in and schedules run in:
+	// TZ (e.g. "Europe/Berlin"), or the system's local zone if TZ is
+	// unset. Go reads TZ for time.Local too; loading it here gives the
+	// zone its name and turns a typo into an error instead of silent UTC.
+	TimeZone *time.Location
 
 	// SecretKey encrypts repository credentials. From STACKVAULT_SECRET_KEY
 	// (base64) or STACKVAULT_SECRET_KEY_FILE (file containing the base64 key).
@@ -102,6 +108,16 @@ func LoadManager(getenv func(string) string, readFile func(string) ([]byte, erro
 			errs = append(errs, fmt.Errorf("STACKVAULT_ALLOW_INSECURE_HTTP: %w", err))
 		}
 		c.AllowInsecureHTTP = b
+	}
+
+	c.TimeZone = time.Local
+	if tz := strings.TrimPrefix(getenv("TZ"), ":"); tz != "" {
+		loc, err := time.LoadLocation(tz)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("TZ: %w", err))
+		} else {
+			c.TimeZone = loc
+		}
 	}
 
 	key, keyFile := getenv("STACKVAULT_SECRET_KEY"), getenv("STACKVAULT_SECRET_KEY_FILE")

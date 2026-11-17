@@ -69,7 +69,7 @@ compose, so they are never affected by stopping a stack.
 | `STACKVAULT_MAX_JOBS` | jobs running at the same time across all stacks, default `1` |
 | `STACKVAULT_ENABLE_SHELL` | admin-only container shells ("Shell" per container on the Status tab), default `false`; see "Container shell" |
 | `STACKVAULT_LOG_LEVEL` | `debug`, `info`, `warn`, `error` |
-| `TZ` | time zone of the cron schedules (e.g. `Europe/Berlin`), default UTC in most images; the zone database is built into the binary |
+| `TZ` | time zone of the cron schedules and of every time the UI shows (e.g. `Europe/Berlin`), default UTC in most images; the zone database is built into the binary; an unknown zone is a configuration error (Go would silently use UTC) |
 
 The database file is created with mode 0600. `/healthz` checks the database.
 The image's `HEALTHCHECK` runs `manager healthcheck`, which calls it on the
@@ -637,6 +637,13 @@ stable layout and users see what exists. Only what a user has no
 permission for (admin tabs, backup/restore controls without the right) is
 hidden.
 
+All times are shown in the manager's time zone (`TZ`, `Server.Location`):
+the `when` template function (job, snapshot and schedule times, with the
+zone abbreviation, e.g. `2026-11-13 04:00 CET`), job log and container log
+lines (the Logs tab names the zone), image dates of the update check. The
+worker logs and restic report UTC; only the display converts. Internal
+values stay UTC (database, event ids of the log streams).
+
 Light and dark mode follow the browser/OS setting (`prefers-color-scheme`,
 no switch in the UI). All colors in `static/style.css` are CSS variables
 with a light and a dark set; the job log is a dark panel in both modes.
@@ -877,8 +884,10 @@ runs. A schedule has a job type (Settings tab, admins):
   per-schedule `CRON_TZ=`/`TZ=` prefix, `@every` at least 1 minute, at most
   100 characters, and the expression must match some date. Expressions are
   stored normalized (single spaces).
-- Time zone: the manager's local zone (`TZ`). The UI shows times in UTC and
-  names the manager's zone next to the schedule form.
+- Time zone: the manager's zone (`TZ`, `config.Manager.TimeZone`), passed
+  explicitly to cron (`cron.WithLocation`) and to the next-run calculation
+  of the Settings tab. The UI shows all times in the same zone and names it
+  next to the schedule form.
 - Loading: `Scheduler.Run` loads all enabled schedules at start; the web
   handlers call `Reload` after every change, which replaces all cron entries.
 - Firing (`Scheduler.Fire`): re-reads the schedule and its stack, skips it if

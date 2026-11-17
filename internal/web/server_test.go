@@ -84,7 +84,7 @@ func newEnvWith(t *testing.T, tls, secureCookies bool, configure func(*Server)) 
 	s := &Server{
 		Store: st, Logger: discard, SessionTTL: time.Hour, SecureCookies: secureCookies,
 		Limiter: &auth.LoginLimiter{Now: e.clock}, Now: e.clock, Snapshots: e.snaps,
-		Jobs: e.queue, JobsDir: t.TempDir(),
+		Jobs: e.queue, JobsDir: t.TempDir(), Location: time.UTC,
 	}
 	e.server = s
 	if configure != nil {
