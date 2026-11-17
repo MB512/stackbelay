@@ -82,7 +82,7 @@ func fakeDocker(t *testing.T, stackDir, workingDir string) (bin, argsFile string
 case "$*" in
   *" config --format json") echo '{"name":"web"}' ;;
   "ps --all --filter"*) printf 'web-app-1\t` + workingDir + `\n' ;;
-  *" ps --all --format json") echo '{"ID":"0000000000d1","Name":"web-db-1","Project":"web","Service":"db","State":"exited"}'; echo '{"ID":"0000000000a1","Name":"web-app-1","Project":"web","Service":"app","State":"running"}'; echo '{"ID":"0000000000c1","Name":"custom","Project":"web","Service":"x","State":"running"}' ;;
+  *" ps --all --format json") echo '{"ID":"0000000000d1","Name":"web-db-1","Project":"web","Service":"db","State":"exited"}'; echo '{"ID":"0000000000a1","Name":"web-app-1","Project":"web","Service":"app","State":"running","Health":"healthy","Status":"Up 2 hours (healthy)","Image":"nginx:1.27"}'; echo '{"ID":"0000000000c1","Name":"custom","Project":"web","Service":"x","State":"running"}' ;;
   *" logs "*)
     echo "$*" > ` + argsFile + `
     echo 'web-app-1  | 2026-11-16T16:00:01.000000001Z first'
@@ -159,7 +159,7 @@ func TestStackContainers(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []Container{
-		{ID: "0000000000a1", Name: "app-1", Service: "app", State: "running"},
+		{ID: "0000000000a1", Name: "app-1", Service: "app", State: "running", Health: "healthy", Status: "Up 2 hours (healthy)", Image: "nginx:1.27"},
 		{ID: "0000000000c1", Name: "custom", Service: "x", State: "running"},
 		{ID: "0000000000d1", Name: "db-1", Service: "db", State: "exited"},
 	}

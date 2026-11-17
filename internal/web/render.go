@@ -23,7 +23,7 @@ var staticFS embed.FS
 
 // pages are the page templates; each is combined with base.html and
 // partials.html.
-var pages = []string{"login.html", "password.html", "error.html", "stacks.html", "stack.html", "stack_settings.html", "users.html", "job.html", "restore.html", "stack_logs.html", "stack_update.html", "stack_compose.html", "stack_shell.html"}
+var pages = []string{"login.html", "password.html", "error.html", "stacks.html", "stack_status.html", "stack.html", "stack_settings.html", "users.html", "job.html", "restore.html", "stack_logs.html", "stack_update.html", "stack_compose.html", "stack_shell.html"}
 
 // templateFuncs are available in all templates.
 var templateFuncs = template.FuncMap{

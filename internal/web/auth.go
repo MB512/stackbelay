@@ -94,7 +94,9 @@ func (s *Server) loadSession(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if sess.ExpiresAt.Sub(now) < s.SessionTTL/2 {
+		// The Status tab's periodic refresh (pollHeader) does not count as
+		// activity, so an open tab alone does not keep the login alive.
+		if sess.ExpiresAt.Sub(now) < s.SessionTTL/2 && r.Header.Get(pollHeader) == "" {
 			sess.ExpiresAt = now.Add(s.SessionTTL)
 			if err := s.Store.ExtendSession(r.Context(), sess.IDHash, sess.ExpiresAt); err != nil {
 				s.Logger.Warn("extending session", "error", err)
@@ -109,6 +111,13 @@ func (s *Server) loadSession(next http.Handler) http.Handler {
 func (s *Server) requireUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if authFrom(r.Context()) == nil {
+			if isHTMX(r) {
+				// HTMX would swap the login page into the fragment; this
+				// header makes it load the login page as a whole instead.
+				w.Header().Set("HX-Redirect", "/login")
+				http.Error(w, "please log in", http.StatusUnauthorized)
+				return
+			}
 			if r.Method == http.MethodGet || r.Method == http.MethodHead {
 				http.Redirect(w, r, "/login", http.StatusSeeOther)
 				return

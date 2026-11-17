@@ -335,6 +335,7 @@ type psEntry struct {
 	Service string `json:"Service"`
 	State   string `json:"State"`
 	Health  string `json:"Health"`
+	Status  string `json:"Status"`
 	Image   string `json:"Image"`
 }
 

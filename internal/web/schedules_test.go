@@ -89,7 +89,7 @@ func TestSchedules(t *testing.T) {
 	if !strings.Contains(r.body, "<code>0 3 * * *</code>") || !strings.Contains(r.body, "2026-11-1") {
 		t.Fatalf("schedule not listed with next run:\n%s", r.body)
 	}
-	if r := e.do(alice, http.MethodGet, "/stacks/web", nil, nil); !strings.Contains(r.body, "Next scheduled backup") {
+	if r := e.do(alice, http.MethodGet, "/stacks/web/backups", nil, nil); !strings.Contains(r.body, "Next scheduled backup") {
 		t.Errorf("Backups tab lacks next scheduled backup:\n%s", r.body)
 	}
 
@@ -98,7 +98,7 @@ func TestSchedules(t *testing.T) {
 	if sc, _ := e.st.ScheduleByID(ctx, list[0].ID); sc.Enabled {
 		t.Fatal("schedule still enabled")
 	}
-	if r := e.get("/stacks/web"); strings.Contains(r.body, "Next scheduled backup") {
+	if r := e.get("/stacks/web/backups"); strings.Contains(r.body, "Next scheduled backup") {
 		t.Error("disabled schedule shown as next scheduled backup")
 	}
 	expect(t, post("/stacks/web/schedules/"+id+"/enabled", url.Values{"enabled": {"true"}}), http.StatusSeeOther, "/stacks/web/settings")
@@ -140,7 +140,7 @@ func TestSchedules(t *testing.T) {
 		t.Errorf("update schedule not listed:\n%s", r.body)
 	}
 	expect(t, post("/stacks/web/schedules/"+itoa(list[1].ID)+"/delete", url.Values{}), http.StatusSeeOther, "/stacks/web/settings")
-	if r := e.get("/stacks/web"); strings.Contains(r.body, "Next scheduled backup") {
+	if r := e.get("/stacks/web/backups"); strings.Contains(r.body, "Next scheduled backup") {
 		t.Error("update schedule shown as next scheduled backup")
 	}
 	r = post("/stacks/web/schedules", url.Values{"cron_expr": {"@daily"}, "job_type": {"restore"}})

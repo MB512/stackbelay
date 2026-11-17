@@ -196,7 +196,7 @@ func TestStackDetailShowsRepositoryAndSnapshots(t *testing.T) {
 	}
 	e.loginAdmin()
 
-	r := e.get("/stacks/web")
+	r := e.get("/stacks/web/backups")
 	expect(t, r, http.StatusOK, "")
 	for _, s := range []string{"rest:https://backup.example/web", "aaaaaaaa", "final", "2026-11-13 03:00 UTC"} {
 		if !strings.Contains(r.body, s) {
@@ -310,14 +310,14 @@ func TestBackupsTabWithoutRepositoryShowsDisabledActions(t *testing.T) {
 	e.loginAdmin()
 	r := e.get("/stacks/web")
 	expect(t, r, http.StatusOK, "")
-	for _, want := range []string{
-		`disabled>Back up now</button>`,
-		`disabled>Refresh</button>`,
-		"the stack has no repository",
-	} {
+	for _, want := range []string{`disabled>Back up now</button>`, "the stack has no repository"} {
 		if !strings.Contains(r.body, want) {
-			t.Errorf("Backups tab lacks %q:\n%s", want, r.body)
+			t.Errorf("Status tab lacks %q:\n%s", want, r.body)
 		}
+	}
+	r = e.get("/stacks/web/backups")
+	if !strings.Contains(r.body, `disabled>Refresh</button>`) {
+		t.Errorf("Backups tab lacks a disabled Refresh button:\n%s", r.body)
 	}
 	// Without the backup right, the Backup section stays hidden.
 	alice, aliceID := e.createUser("alice")
@@ -327,7 +327,11 @@ func TestBackupsTabWithoutRepositoryShowsDisabledActions(t *testing.T) {
 	}
 	r = e.do(alice, http.MethodGet, "/stacks/web", nil, nil)
 	expect(t, r, http.StatusOK, "")
-	if strings.Contains(r.body, "Back up now") || !strings.Contains(r.body, `disabled>Refresh</button>`) {
-		t.Errorf("view of a user without backup right:\n%s", r.body)
+	if strings.Contains(r.body, "Back up now") {
+		t.Errorf("Status tab of a user without backup right:\n%s", r.body)
+	}
+	r = e.do(alice, http.MethodGet, "/stacks/web/backups", nil, nil)
+	if !strings.Contains(r.body, `disabled>Refresh</button>`) {
+		t.Errorf("Backups tab of a user without backup right:\n%s", r.body)
 	}
 }

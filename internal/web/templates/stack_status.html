@@ -1,0 +1,72 @@
+{{define "content"}}
+{{- with .Data}}
+{{template "stack-header" .}}
+
+{{- if .CanBackup}}
+<section>
+  <h2>Actions</h2>
+  <form method="post" action="/stacks/{{.Stack.Name}}/backup" class="inline">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+    <button type="submit"{{if or .JobsUnavailable (not .HasRepo)}} disabled{{end}}>Back up now</button>
+    <label class="check"><input type="checkbox" name="pre_stop">
+      Snapshot before stopping (shorter downtime for large stacks)</label>
+  </form>
+  {{- if not .HasRepo}}<p class="hint">Backup not possible yet: the stack has no repository.</p>
+  {{- else}}{{with .JobsUnavailable}}<p class="hint">{{.}}</p>{{end}}{{end}}
+  <p class="hint">The stack is stopped during the backup and started again afterwards.</p>
+</section>
+{{- end}}
+
+{{template "status-live" .Live}}
+{{- end}}
+{{end}}
+
+{{- /* Services and recent jobs. Refreshes itself every 10 seconds (HTMX
+       replaces the whole element with the answer of status/live). The
+       poll header keeps these requests from extending the session. Dot is
+       a statusLive. */}}
+{{define "status-live"}}
+<div id="status-live" hx-get="/stacks/{{.StackName}}/status/live" hx-trigger="every 10s"
+     hx-swap="outerHTML" hx-headers='{"X-Stackvault-Poll": "1"}'>
+<section>
+  <h2>Services</h2>
+  {{- with .Unavailable}}<p class="error">{{.}}</p>{{end}}
+  {{- if .Containers}}
+  <table>
+    <thead><tr><th>Container</th><th>Service</th><th>State</th><th>Image</th></tr></thead>
+    <tbody>
+      {{- range .Containers}}
+      <tr>
+        <td>{{.Name}}</td>
+        <td>{{.Service}}</td>
+        <td>{{template "container-state" .}}</td>
+        <td><code>{{.Image}}</code></td>
+      </tr>
+      {{- end}}
+    </tbody>
+  </table>
+  {{- else if not .Unavailable}}
+  <p class="hint">This stack has no containers.</p>
+  {{- end}}
+</section>
+
+<section>
+  <h2>Recent jobs</h2>
+  {{- if .Jobs}}
+  {{template "job-table" .Jobs}}
+  {{- else}}
+  <p class="hint">No jobs yet.</p>
+  {{- end}}
+</section>
+</div>
+{{end}}
+
+{{- /* State badge of a container with docker's status text. Dot is a
+       docker.Container. */}}
+{{define "container-state"}}
+{{- if eq .Health "unhealthy"}}<span class="badge err">unhealthy</span>
+{{- else if eq .Health "starting"}}<span class="badge run">starting</span>
+{{- else if .Running}}<span class="badge ok">{{if .Health}}{{.Health}}{{else}}running{{end}}</span>
+{{- else}}<span class="badge">{{.State}}</span>{{end}}
+{{- with .Status}} <span class="hint">{{.}}</span>{{end}}
+{{- end}}

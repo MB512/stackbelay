@@ -95,6 +95,8 @@ func run(ctx context.Context, getenv func(string) string, readFile func(string) 
 		// discovered stacks (see docs/security.md, rule 3).
 		StacksRoot: cfg.StacksRoot,
 		Logs:       &docker.CLI{},
+		// Status tab: read-only "docker compose ps".
+		Containers: &docker.CLI{},
 		// Compose editor: "docker compose config --quiet" on a temporary
 		// copy; applying runs in a worker job.
 		Compose: &docker.CLI{},

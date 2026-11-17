@@ -15,28 +15,6 @@
   {{- end}}
 </section>
 
-{{- if .CanBackup}}
-<section>
-  <h2>Backup</h2>
-  <form method="post" action="/stacks/{{.Stack.Name}}/backup" class="inline">
-    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
-    <button type="submit"{{if or .JobsUnavailable (not .Repo)}} disabled{{end}}>Back up now</button>
-    <label class="check"><input type="checkbox" name="pre_stop">
-      Snapshot before stopping (shorter downtime for large stacks)</label>
-  </form>
-  {{- if not .Repo}}<p class="hint">Not possible yet: the stack has no repository.</p>
-  {{- else}}{{with .JobsUnavailable}}<p class="hint">{{.}}</p>{{end}}{{end}}
-  <p class="hint">The stack is stopped during the backup and started again afterwards.</p>
-</section>
-{{- end}}
-
-{{- if .Jobs}}
-<section>
-  <h2>Recent jobs</h2>
-  {{template "job-table" .Jobs}}
-</section>
-{{- end}}
-
 {{template "snapshots" .}}
 {{- end}}
 {{end}}

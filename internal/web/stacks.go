@@ -76,7 +76,8 @@ type stackHeader struct {
 
 // Tab ids, also the last path segment of the tab ("" = the stack's root).
 const (
-	tabBackups  = ""
+	tabStatus   = ""
+	tabBackups  = "backups"
 	tabLogs     = "logs"
 	tabUpdate   = "update"
 	tabCompose  = "compose"
@@ -89,7 +90,10 @@ const (
 // its handler; tabs the user may not open are not shown.
 func (s *Server) newStackHeader(user store.User, perm store.Permission, st store.Stack, active string) stackHeader {
 	base := "/stacks/" + url.PathEscape(st.Name)
-	tabs := []stackTab{{Label: "Backups", URL: base, Active: active == tabBackups}}
+	tabs := []stackTab{
+		{Label: "Status", URL: base, Active: active == tabStatus},
+		{Label: "Backups", URL: base + "/" + tabBackups, Active: active == tabBackups},
+	}
 	if auth.Allowed(user, perm, auth.ActionLogs) {
 		tabs = append(tabs, stackTab{Label: "Logs", URL: base + "/" + tabLogs, Active: active == tabLogs})
 	}
@@ -110,21 +114,19 @@ func (s *Server) newStackHeader(user store.User, perm store.Permission, st store
 	return stackHeader{Stack: st, Tabs: tabs}
 }
 
-// backupsTab is the data of the "Backups" tab. It looks the same for every
-// user who may view the stack.
+// backupsTab is the data of the "Backups" tab: repository and snapshots.
+// It looks the same for every user who may view the stack.
 type backupsTab struct {
-	stackHeader           // embedded: .Stack and .Tabs are available directly
-	CanBackup, CanRestore bool
-	Repo                  *store.RepositoryInfo // nil = no repository configured
-	Snapshots             []store.CachedSnapshot
+	stackHeader // embedded: .Stack and .Tabs are available directly
+	CanRestore  bool
+	Repo        *store.RepositoryInfo // nil = no repository configured
+	Snapshots   []store.CachedSnapshot
 	// CSRF and the refresh result, for the "snapshots" partial, which is
 	// also rendered on its own as the answer to an HTMX refresh.
 	CSRF                      string
 	RefreshInfo, RefreshError string
-	Jobs                      []store.Job // recent jobs, newest first
-	JobsUnavailable           string      // why jobs cannot be started, or ""
-	Host                      string      // snapshots are shown for this host ("" = all)
-	OtherSnapshots            int         // snapshots in the repository of other stacks or hosts
+	Host                      string // snapshots are shown for this host ("" = all)
+	OtherSnapshots            int    // snapshots in the repository of other stacks or hosts
 	// NextScheduled is the next scheduled backup; zero if none.
 	NextScheduled time.Time
 }
@@ -187,7 +189,8 @@ func (s *Server) loadStack(w http.ResponseWriter, r *http.Request, action auth.A
 	return st, perm, true
 }
 
-func (s *Server) stackDetail(w http.ResponseWriter, r *http.Request) {
+// stackBackups shows the Backups tab.
+func (s *Server) stackBackups(w http.ResponseWriter, r *http.Request) {
 	st, perm, ok := s.loadStack(w, r, auth.ActionView)
 	if !ok {
 		return
@@ -197,22 +200,16 @@ func (s *Server) stackDetail(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, r, "loading stack", err)
 		return
 	}
-	s.render(w, r, http.StatusOK, "stack.html", pageData{Title: st.Name, Data: page})
+	s.render(w, r, http.StatusOK, "stack.html", pageData{Title: st.Name + " backups", Data: page})
 }
 
 // loadBackupsTab collects the data of the Backups tab.
 func (s *Server) loadBackupsTab(r *http.Request, st store.Stack, perm store.Permission) (backupsTab, error) {
 	a := authFrom(r.Context())
 	page := backupsTab{
-		stackHeader:     s.newStackHeader(a.User, perm, st, tabBackups),
-		CanBackup:       auth.Allowed(a.User, perm, auth.ActionBackup),
-		CanRestore:      auth.Allowed(a.User, perm, auth.ActionRestore),
-		CSRF:            a.Session.CSRFToken,
-		JobsUnavailable: s.jobsUnavailable(),
-	}
-	var err error
-	if page.Jobs, err = s.Store.ListJobs(r.Context(), st.ID, recentJobs); err != nil {
-		return page, err
+		stackHeader: s.newStackHeader(a.User, perm, st, tabBackups),
+		CanRestore:  auth.Allowed(a.User, perm, auth.ActionRestore),
+		CSRF:        a.Session.CSRFToken,
 	}
 	scheds, err := s.scheduleRows(r.Context(), st)
 	if err != nil {
@@ -272,7 +269,7 @@ func (s *Server) refreshStackSnapshots(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !isHTMX(r) {
-		http.Redirect(w, r, "/stacks/"+url.PathEscape(st.Name), http.StatusSeeOther)
+		http.Redirect(w, r, "/stacks/"+url.PathEscape(st.Name)+"/"+tabBackups, http.StatusSeeOther)
 		return
 	}
 	page, err := s.loadBackupsTab(r, st, perm)

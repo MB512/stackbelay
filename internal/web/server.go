@@ -45,6 +45,9 @@ type Server struct {
 	// StacksRoot is STACKS_ROOT; stack directories are looked up there by
 	// discovery (stacks.Lookup), never taken from the URL.
 	StacksRoot string
+	// Containers lists a stack's containers for the Status tab. If nil, the
+	// tab says that the list is unavailable.
+	Containers ContainerLister
 	// Logs reads container logs for the Logs tab. If nil, the tab says
 	// that logs are unavailable.
 	Logs StackLogs
@@ -126,7 +129,9 @@ func (s *Server) Handler() (http.Handler, error) {
 			r.Post("/account/password", s.changePassword)
 
 			r.Get("/", s.stackList)
-			r.Get("/stacks/{name}", s.stackDetail)
+			r.Get("/stacks/{name}", s.stackStatus)
+			r.Get("/stacks/{name}/status/live", s.stackStatusLive)
+			r.Get("/stacks/{name}/backups", s.stackBackups)
 			r.Post("/stacks/{name}/snapshots/refresh", s.refreshStackSnapshots)
 			r.Post("/stacks/{name}/backup", s.startBackup)
 			r.Get("/stacks/{name}/logs", s.stackLogsPage)

@@ -166,11 +166,11 @@ func TestRestoreJob(t *testing.T) {
 	e, alice, bob := setupJobsEnv(t)
 
 	// Restore link and form for bob (restore right), not for alice.
-	r := e.do(bob, http.MethodGet, "/stacks/web", nil, nil)
+	r := e.do(bob, http.MethodGet, "/stacks/web/backups", nil, nil)
 	if !strings.Contains(r.body, "/stacks/web/restore?snapshot=aaaaaaaa11111111") {
 		t.Fatalf("no restore link for bob:\n%s", r.body)
 	}
-	if r := e.do(alice, http.MethodGet, "/stacks/web", nil, nil); strings.Contains(r.body, "/restore?") {
+	if r := e.do(alice, http.MethodGet, "/stacks/web/backups", nil, nil); strings.Contains(r.body, "/restore?") {
 		t.Fatal("restore link for alice")
 	}
 	expect(t, e.do(alice, http.MethodGet, "/stacks/web/restore?snapshot=aaaaaaaa11111111", nil, nil), http.StatusForbidden, "")
@@ -279,7 +279,7 @@ func TestSharedRepositoryShowsOwnSnapshotsOnly(t *testing.T) {
 	}
 	e.loginAdmin()
 
-	r := e.get("/stacks/web")
+	r := e.get("/stacks/web/backups")
 	if !strings.Contains(r.body, "aaaaaaaa") || strings.Contains(r.body, "bbbbbbbb") || strings.Contains(r.body, "cccccccc") {
 		t.Fatalf("snapshot list:\n%s", r.body)
 	}

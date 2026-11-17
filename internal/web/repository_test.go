@@ -232,7 +232,7 @@ func TestRefreshSnapshots(t *testing.T) {
 	}
 
 	// Before: nothing cached.
-	if r := e.do(alice, http.MethodGet, "/stacks/web", nil, nil); !strings.Contains(r.body, "Use Refresh to load the list") {
+	if r := e.do(alice, http.MethodGet, "/stacks/web/backups", nil, nil); !strings.Contains(r.body, "Use Refresh to load the list") {
 		t.Fatalf("backups tab:\n%s", r.body)
 	}
 
@@ -250,7 +250,7 @@ func TestRefreshSnapshots(t *testing.T) {
 	}
 	// Later, as a plain form post: redirect back to the Backups tab.
 	e.advance(11 * time.Second)
-	expect(t, refresh("/stacks/web/snapshots/refresh", false), http.StatusSeeOther, "/stacks/web")
+	expect(t, refresh("/stacks/web/snapshots/refresh", false), http.StatusSeeOther, "/stacks/web/backups")
 	if e.snaps.calls != 2 {
 		t.Fatalf("calls = %d", e.snaps.calls)
 	}

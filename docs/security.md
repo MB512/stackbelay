@@ -33,8 +33,8 @@ attackers reaching the UI, a leaked database file.
    validated options; the snapshot id must be in the stack's snapshot cache.
    Only admins may skip the pre-restore safety snapshot. Besides creating
    workers, the manager may run only read-only compose commands for
-   discovered stacks, with fixed argument lists: `logs` and `ps` for the
-   log view (after checking that the compose project belongs to the stack
+   discovered stacks, with fixed argument lists: `ps` for the Status tab,
+   `logs` and `ps` for the log view (after checking that the compose project belongs to the stack
    directory; at most 4 streams per user, 20 in total) and `config --quiet`
    on a temporary copy outside the stack to validate an edited compose
    file. For the update check it also runs `docker image inspect` and
@@ -75,7 +75,8 @@ attackers reaching the UI, a leaked database file.
    format); random 256-bit session tokens, stored as SHA-256 only; cookie
    `__Host-stackvault_session` with `HttpOnly`, `Secure`, `SameSite=Lax`
    (browser-session cookie, sliding server-side expiry
-   `STACKVAULT_SESSION_TTL`); a new session id on every login; logout and
+   `STACKVAULT_SESSION_TTL`; the Status tab's automatic refresh does not
+   extend it); a new session id on every login; logout and
    password change end sessions (password change: all other sessions).
    Login rate limiting per username: 5 free failures, then exponential
    lockout up to 15 minutes (in memory). Unknown usernames cost the same

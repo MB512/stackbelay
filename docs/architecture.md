@@ -605,7 +605,9 @@ with a light and a dark set; the job log is a dark panel in both modes.
 | Route | Who | |
 |---|---|---|
 | `GET /` | logged in | stacks the user may view (admins: all) |
-| `GET /stacks/{name}` | view right | "Backups" tab: repository location, cached snapshots (same for every user) |
+| `GET /stacks/{name}` | view right | "Status" tab, the home of a stack: containers with state and image, recent jobs, "Back up now" (backup right), see "Status tab" |
+| `GET /stacks/{name}/status/live` | view right | the self-refreshing part of the Status tab (HTMX fragment, polled every 10 s) |
+| `GET /stacks/{name}/backups` | view right | "Backups" tab: repository location, cached snapshots (same for every user) |
 | `POST /stacks/{name}/backup` | backup right | queue a backup (option: pre-stop snapshot) |
 | `GET /stacks/{name}/logs` | logs right | "Logs" tab: container checkboxes and live log panel |
 | `GET /stacks/{name}/logs/events` | logs right | live container logs (SSE), see "Container logs" |
@@ -653,8 +655,26 @@ keeping repositories and their indexes small.
 Stack pages share a header with tabs (`stack-header` in `partials.html`).
 The tab list is built per user in `newStackHeader`; a tab is only shown if
 the user may open it, and its handler checks the permission again. Tabs:
-"Backups" (view right), "Logs" (logs right), "Compose", "Shell" (only with
+"Status" (view right, the default), "Backups" (view right), "Logs" (logs
+right), "Update" (update right), "Compose", "Shell" (only with
 `STACKVAULT_ENABLE_SHELL`) and "Settings" (admin).
+
+### Status tab
+
+The home of a stack (`GET /stacks/{name}`, decided in issue #11). It shows
+the stack's containers (`compose ps --all` via `docker.CLI.StackContainers`,
+after the project owner check): name, service, state with health and
+docker's status text, and image. Below them the recent jobs of the stack.
+Users with the backup right get "Back up now" there; every action checks
+its own right.
+
+Containers and jobs are one fragment (`status-live`) that HTMX reloads
+every 10 seconds from `GET /stacks/{name}/status/live`, so a running job
+and the containers it stops and starts show up without reloading the page.
+These polls carry the header `X-Stackvault-Poll` and do **not** extend the
+session (`loadSession`): an open tab alone does not keep a login alive. An
+HTMX request without a valid session gets `401` with `HX-Redirect: /login`,
+so HTMX loads the login page instead of swapping it into the fragment.
 
 Stacks a user may not view answer 404 (not 403), so stack names are not
 revealed. `{name}` must pass `stacks.ValidName` and exist in the database

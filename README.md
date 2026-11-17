@@ -89,7 +89,7 @@ tracked in [GitHub issues](https://github.com/MB512/stackvault/issues).
 4. Open the UI through your reverse proxy, log in as `admin`, set a new
    password. For each stack: **Settings** -> repository (location and
    password; "Initialize repository" creates a new one), schedules and user
-   rights. Then **Back up now** on the stack's Backups tab.
+   rights. Then **Back up now** on the stack's Status tab.
 
 ### Optional: keep the key out of the backups
 

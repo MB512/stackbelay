@@ -14,12 +14,15 @@ import (
 	"github.com/creack/pty"
 )
 
-// Container is one container of a stack, for choosing a shell target.
+// Container is one container of a stack (Status tab, shell target).
 type Container struct {
 	ID      string // short container id from compose ps
 	Name    string // as compose prefixes its log lines (see Containers)
 	Service string
 	State   string // running, exited, ...
+	Health  string // healthy, unhealthy, starting; "" without healthcheck
+	Status  string // docker's text, e.g. "Up 2 hours (healthy)"
+	Image   string // image reference the container was created from
 }
 
 // Running reports whether a shell can be opened in the container.
@@ -55,7 +58,8 @@ func (c *CLI) StackContainers(ctx context.Context, dir string) ([]Container, err
 		if e.Project != "" {
 			name = strings.TrimPrefix(name, e.Project+"-")
 		}
-		list = append(list, Container{ID: e.ID, Name: name, Service: e.Service, State: e.State})
+		list = append(list, Container{ID: e.ID, Name: name, Service: e.Service, State: e.State,
+			Health: e.Health, Status: e.Status, Image: e.Image})
 	}
 	sort.Slice(list, func(i, j int) bool { return list[i].Name < list[j].Name })
 	return list, nil

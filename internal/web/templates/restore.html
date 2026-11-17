@@ -1,7 +1,7 @@
 {{define "content"}}
 {{- with .Data}}
 <h1>Restore {{.Stack.Name}}</h1>
-<p><a href="/stacks/{{.Stack.Name}}">Back to the stack</a></p>
+<p><a href="/stacks/{{.Stack.Name}}/backups">Back to the snapshots</a></p>
 
 <div class="card wide">
   <p>Snapshot <code>{{.Snapshot.ShortID}}</code> from <strong>{{when .Snapshot.Time}}</strong>
