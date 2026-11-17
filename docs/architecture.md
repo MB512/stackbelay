@@ -774,7 +774,12 @@ starts checked; an unknown name selects all); filtering
 happens in the browser only (`static/stacklog.js`). Each container has
 its own color (8 classes `cc0`..`cc7` in `style.css`, assigned in the
 order of the checkboxes): its name and a bar at the left of its lines, and
-a swatch next to its checkbox as legend. The stream always
+a swatch next to its checkbox as legend. `compose logs` sends the history
+container by container and mixes only the lines it follows live, so the
+script inserts every line in time order: the event id and the line's
+`data-t` are its time in UTC with always nine fraction digits
+(`logLineIDFormat`), which orders correctly as a string. A reconnect
+resumes after the newest line seen. The stream always
 carries all containers. "Wrap lines" (on by default, remembered per
 browser in `localStorage`) can be turned off for horizontal scrolling.
 "Full screen" makes the log cover the browser window (not the browser's

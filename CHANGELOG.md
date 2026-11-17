@@ -27,6 +27,8 @@ All notable changes to StackVault. The format is based on
 
 ### Fixed
 
+- Logs tab: the history of several containers was shown container by
+  container instead of in time order, and a reconnect could repeat lines.
 - Scheduled updates on a stack without repository always failed ("the
   stack has no repository"), and the job page listed "no snapshot before
   stopping" for updates that make no snapshot at all.

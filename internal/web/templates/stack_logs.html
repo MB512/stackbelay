@@ -44,5 +44,5 @@
 
 {{- /* One container log line; also sent as a "line" event of the stream. */}}
 {{define "container-log-line" -}}
-<div class="line" data-c="{{.Container}}">{{with .Time}}<span class="ts">{{.}}</span> {{end}}{{with .Container}}<span class="ctr">{{.}}</span> {{end}}{{.Text}}{{if .Cut}} <span class="attrs">[line cut]</span>{{end}}</div>
+<div class="line" data-c="{{.Container}}"{{with .ID}} data-t="{{.}}"{{end}}>{{with .Time}}<span class="ts">{{.}}</span> {{end}}{{with .Container}}<span class="ctr">{{.}}</span> {{end}}{{.Text}}{{if .Cut}} <span class="attrs">[line cut]</span>{{end}}</div>
 {{- end}}

@@ -83,12 +83,28 @@ type logsTab struct {
 type containerLogLine struct {
 	Container string
 	Time      string // UTC, "2006-01-02 15:04:05"; "" if the line has none
+	ID        string // see logLineID; data-t of the line, for sorting in the browser
 	Text      string
 	Cut       bool
 }
 
+// logLineIDFormat is RFC 3339 in UTC with always nine fraction digits, so
+// ids of the same width compare correctly as strings (stacklog.js sorts
+// lines and picks the newest id with plain string comparison).
+// time.RFC3339Nano parses it.
+const logLineIDFormat = "2006-01-02T15:04:05.000000000Z07:00"
+
+// logLineID is the time of a log line as event id and data-t; "" without
+// time.
+func logLineID(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.UTC().Format(logLineIDFormat)
+}
+
 func newContainerLogLine(l docker.LogLine) containerLogLine {
-	out := containerLogLine{Container: l.Container, Text: l.Text, Cut: l.Cut}
+	out := containerLogLine{Container: l.Container, ID: logLineID(l.Time), Text: l.Text, Cut: l.Cut}
 	if !l.Time.IsZero() {
 		out.Time = l.Time.UTC().Format("2006-01-02 15:04:05")
 	}
@@ -255,9 +271,5 @@ func (s *Server) sendLogLine(sse sseWriter, l docker.LogLine) error {
 	if err != nil {
 		return err
 	}
-	id := ""
-	if !l.Time.IsZero() {
-		id = l.Time.UTC().Format(time.RFC3339Nano)
-	}
-	return sse.event("line", id, html)
+	return sse.event("line", logLineID(l.Time), html)
 }

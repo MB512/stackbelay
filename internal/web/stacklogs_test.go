@@ -107,7 +107,7 @@ func TestStackLogsAccess(t *testing.T) {
 	r = e.do(alice, http.MethodGet, "/stacks/web/logs/events", nil, nil)
 	expect(t, r, http.StatusOK, "")
 	for _, want := range []string{
-		"id: 2026-11-16T16:00:01.0000005Z\nevent: line\ndata: <div class=\"line\" data-c=\"web-app-1\">",
+		"id: 2026-11-16T16:00:01.000000500Z\nevent: line\ndata: <div class=\"line\" data-c=\"web-app-1\" data-t=\"2026-11-16T16:00:01.000000500Z\">",
 		"started &lt;b&gt;bold&lt;/b&gt;",
 		"[line cut]",
 		"event: line\ndata: <div class=\"line\" data-c=\"\">web-app-1 exited with code 0</div>",
@@ -122,7 +122,7 @@ func TestStackLogsAccess(t *testing.T) {
 	}
 
 	// A reconnect resumes after the last line and is not audited again.
-	r = e.do(alice, http.MethodGet, "/stacks/web/logs/events?since=2026-11-16T16:00:02.0000005Z", nil, nil)
+	r = e.do(alice, http.MethodGet, "/stacks/web/logs/events?since=2026-11-16T16:00:02.000000500Z", nil, nil)
 	expect(t, r, http.StatusOK, "")
 	expect(t, e.do(alice, http.MethodGet, "/stacks/web/logs/events?since=yesterday", nil, nil), http.StatusBadRequest, "")
 
@@ -190,5 +190,31 @@ func TestStreamLimiter(t *testing.T) {
 	}
 	if l.acquire(999, maxLogStreamsPerUser, maxLogStreams) {
 		t.Fatal("total limit not enforced")
+	}
+}
+
+// Line ids have a fixed width, so the browser can order them as strings,
+// and they parse back as ?since=.
+func TestLogLineID(t *testing.T) {
+	times := []time.Time{
+		time.Date(2026, 11, 17, 8, 40, 21, 0, time.UTC),
+		time.Date(2026, 11, 17, 8, 40, 21, 5, time.UTC),
+		time.Date(2026, 11, 17, 8, 40, 21, 500_000_000, time.UTC),
+		time.Date(2026, 11, 17, 9, 40, 22, 0, time.FixedZone("CET", 3600)), // 08:40:22 UTC
+	}
+	prev := ""
+	for _, tm := range times {
+		id := logLineID(tm)
+		if len(id) != len("2026-11-17T08:40:21.000000000Z") || id <= prev {
+			t.Fatalf("id %q (after %q)", id, prev)
+		}
+		back, err := time.Parse(time.RFC3339Nano, id)
+		if err != nil || !back.Equal(tm) {
+			t.Fatalf("parse %q: %v, %v", id, back, err)
+		}
+		prev = id
+	}
+	if logLineID(time.Time{}) != "" {
+		t.Fatal("id for a line without time")
 	}
 }

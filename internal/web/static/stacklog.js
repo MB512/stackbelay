@@ -2,8 +2,8 @@
 //
 // Follows /stacks/<name>/logs/events (Server-Sent Events). "line" events
 // carry one server-rendered, escaped line with data-c = container name and
-// the line's time as event id. The container checkboxes show or hide lines
-// in the browser only. When the stream ends ("end", "failed", or the
+// the line's time as event id and data-t; lines are inserted in time
+// order. The container checkboxes show or hide lines in the browser only. When the stream ends ("end", "failed", or the
 // connection was lost) the script reconnects with ?since=<last id> and
 // backoff, so lines are not repeated. Plain script, no build step.
 (function () {
@@ -184,6 +184,31 @@
 		addColor(input);
 	}
 
+	// insertLine adds a server-rendered (escaped) line in time order.
+	// "compose logs" sends the history container by container and only
+	// mixes the lines it follows live, so a line can be older than the
+	// ones already shown. data-t has a fixed width (see logLineIDFormat in
+	// stacklogs.go), so string comparison orders by time. Lines without
+	// time (compose's own messages) stay where they arrived.
+	function insertLine(html) {
+		var tmp = document.createElement("div");
+		tmp.innerHTML = html;
+		var line = tmp.firstElementChild;
+		var t = line.getAttribute("data-t");
+		var before = null;
+		if (t) {
+			for (var n = log.lastElementChild; n; n = n.previousElementSibling) {
+				var nt = n.getAttribute("data-t");
+				if (!nt || nt <= t) {
+					break;
+				}
+				before = n;
+			}
+		}
+		log.insertBefore(line, before);
+		return line;
+	}
+
 	function connect() {
 		source = new EventSource(since ? url + "?since=" + encodeURIComponent(since) : url);
 
@@ -194,15 +219,16 @@
 		source.addEventListener("line", function (e) {
 			delay = 1000;
 			var atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 8;
-			log.insertAdjacentHTML("beforeend", e.data);
-			var line = log.lastElementChild;
+			var line = insertLine(e.data);
 			var name = line.getAttribute("data-c");
 			if (name) {
 				addCheckbox(name);
 			}
 			colorLine(line);
 			applyFilter(line);
-			if (e.lastEventId) {
+			// Resume after the newest line, not the last one received: the
+			// history arrives container by container.
+			if (e.lastEventId && e.lastEventId > since) {
 				since = e.lastEventId;
 			}
 			while (log.children.length > maxLines) {
