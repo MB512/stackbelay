@@ -20,6 +20,7 @@ import (
 type stackRow struct {
 	store.StackSummary
 	Backup lastJob
+	Update lastJob
 }
 
 // lastJob is a stack's newest job of one type and its last success, for
@@ -54,6 +55,7 @@ func (s *Server) stackList(w http.ResponseWriter, r *http.Request) {
 		rows = append(rows, stackRow{
 			StackSummary: sum,
 			Backup:       lastJob{JobBrief: sum.LastBackup, Success: sum.LastSuccessfulBackup, SuccessLabel: "Last successful backup"},
+			Update:       lastJob{JobBrief: sum.LastUpdate, Success: sum.LastImageUpdate, SuccessLabel: "Last update that changed an image"},
 		})
 	}
 	s.render(w, r, http.StatusOK, "stacks.html", pageData{Title: "Stacks", Data: rows})

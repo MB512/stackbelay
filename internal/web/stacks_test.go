@@ -225,9 +225,25 @@ func TestStackDetailShowsRepositoryAndSnapshots(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// Last update check: the newest update job, the last update that
+	// changed an image as tooltip.
+	for _, j := range []store.Job{
+		{ID: "01AAAAAAAAAAAAAAAAAAAAAAA3", FinishedAt: t0.Add(48 * time.Hour), Result: store.JobResult{ImagesChanged: []string{"app"}}},
+		{ID: "01AAAAAAAAAAAAAAAAAAAAAAA4", FinishedAt: t0.Add(72 * time.Hour), Result: store.JobResult{Unchanged: true}},
+	} {
+		j.StackID, j.Type, j.Trigger, j.State, j.QueuedAt, j.StartedAt = web, jobs.TypeUpdate, store.TriggerSchedule, jobs.StateSucceeded, t0, t0
+		if err := e.st.ImportJob(ctx, j, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
 	r = e.get("/")
-	if want := `<a href="/jobs/01AAAAAAAAAAAAAAAAAAAAAAA2" title="Last successful backup: 2026-11-13 03:00 UTC">2026-11-14 03:00 UTC</a> <span class="badge err">failed</span>`; !strings.Contains(r.body, want) {
-		t.Errorf("stack list lacks %s:\n%s", want, r.body)
+	for _, want := range []string{
+		`<a href="/jobs/01AAAAAAAAAAAAAAAAAAAAAAA2" title="Last successful backup: 2026-11-13 03:00 UTC">2026-11-14 03:00 UTC</a> <span class="badge err">failed</span>`,
+		`<a href="/jobs/01AAAAAAAAAAAAAAAAAAAAAAA4" title="Last update that changed an image: 2026-11-15 03:00 UTC">2026-11-16 03:00 UTC</a> <span class="badge ok">succeeded</span>`,
+	} {
+		if !strings.Contains(r.body, want) {
+			t.Errorf("stack list lacks %s:\n%s", want, r.body)
+		}
 	}
 
 	// Disable and enable the stack on the Settings tab.

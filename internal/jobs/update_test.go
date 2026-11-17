@@ -3,6 +3,7 @@ package jobs
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -20,6 +21,7 @@ func TestUpdate(t *testing.T) {
 		up      = "docker.Up app,db"
 		healthy = "docker.WaitHealthy"
 		start   = "docker.Start app,db" // old containers again
+		after   = "docker.Services"     // images after the change
 	)
 	tests := []struct {
 		name      string
@@ -32,12 +34,12 @@ func TestUpdate(t *testing.T) {
 		{
 			name:      "with backup",
 			opts:      UpdateOptions{Backup: true},
-			wantCalls: []string{check, svcs, pull, prestop, stop, final, up, healthy},
+			wantCalls: []string{check, svcs, pull, prestop, stop, final, up, healthy, after},
 			wantRes:   ChangeResult{PreStopSnapshot: "snap-pre-stop", Snapshot: "snap-final"},
 		},
 		{
 			name:      "without repository: no snapshots",
-			wantCalls: []string{svcs, pull, stop, up, healthy},
+			wantCalls: []string{svcs, pull, stop, up, healthy, after},
 		},
 		{
 			name:      "pull fails: nothing is stopped",
@@ -56,14 +58,14 @@ func TestUpdate(t *testing.T) {
 		{
 			name:      "without pre-stop snapshot",
 			opts:      UpdateOptions{Backup: true, NoPreStop: true},
-			wantCalls: []string{check, svcs, pull, stop, "restic.Backup tag=final parent= host=host-a", up, healthy},
+			wantCalls: []string{check, svcs, pull, stop, "restic.Backup tag=final parent= host=host-a", up, healthy, after},
 			wantRes:   ChangeResult{Snapshot: "snap-final"},
 		},
 		{
 			name:      "pre-stop snapshot fails: continue without parent",
 			opts:      UpdateOptions{Backup: true},
 			setup:     func(e *env) { e.restic.failOn["Backup:pre-stop"] = errBoom },
-			wantCalls: []string{check, svcs, pull, prestop, stop, "restic.Backup tag=final parent= host=host-a", up, healthy},
+			wantCalls: []string{check, svcs, pull, prestop, stop, "restic.Backup tag=final parent= host=host-a", up, healthy, after},
 			wantRes:   ChangeResult{Snapshot: "snap-final"},
 		},
 		{
@@ -93,6 +95,25 @@ func TestUpdate(t *testing.T) {
 			wantErr:   "not rolled back (no repository)",
 		},
 		{
+			// The running image changed (pulled now or by another stack's
+			// update before): recorded for "last real update".
+			name: "new image is recorded",
+			opts: UpdateOptions{Backup: true},
+			setup: func(e *env) {
+				e.docker.servicesAfter = append([]docker.ServiceState(nil), e.docker.services...)
+				e.docker.servicesAfter[0].ImageID = "sha256:new"
+			},
+			wantCalls: []string{check, svcs, pull, prestop, stop, final, up, healthy, after},
+			wantRes:   ChangeResult{PreStopSnapshot: "snap-pre-stop", Snapshot: "snap-final", ImagesChanged: []string{"app"}},
+		},
+		{
+			name:      "reading the state after the update fails: success, nothing recorded",
+			opts:      UpdateOptions{Backup: true},
+			setup:     func(e *env) { e.docker.failOn["ServicesAfter"] = errBoom },
+			wantCalls: []string{check, svcs, pull, prestop, stop, final, up, healthy, after},
+			wantRes:   ChangeResult{PreStopSnapshot: "snap-pre-stop", Snapshot: "snap-final"},
+		},
+		{
 			name: "only if new: no new image, nothing touched",
 			opts: UpdateOptions{Backup: true, OnlyIfNew: true},
 			setup: func(e *env) {
@@ -110,7 +131,7 @@ func TestUpdate(t *testing.T) {
 			setup: func(e *env) {
 				e.docker.images = map[string]docker.ConfiguredImage{"app": {Ref: "nextcloud:29", ID: "sha256:new"}, "db": {Ref: "postgres:16"}}
 			},
-			wantCalls: []string{check, svcs, pull, "docker.ConfiguredImages app,db", prestop, stop, final, up, healthy},
+			wantCalls: []string{check, svcs, pull, "docker.ConfiguredImages app,db", prestop, stop, final, up, healthy, after},
 			wantRes:   ChangeResult{PreStopSnapshot: "snap-pre-stop", Snapshot: "snap-final"},
 		},
 		{
@@ -122,7 +143,7 @@ func TestUpdate(t *testing.T) {
 				e.docker.services[0].ImageRef = "nextcloud@" + strings.TrimPrefix(testDigest, "nextcloud@")
 				e.docker.images = map[string]docker.ConfiguredImage{"app": {Ref: "nextcloud:29", ID: testImageID}, "db": {Ref: "postgres:16"}}
 			},
-			wantCalls: []string{check, svcs, pull, "docker.ConfiguredImages app,db", prestop, stop, final, up, healthy},
+			wantCalls: []string{check, svcs, pull, "docker.ConfiguredImages app,db", prestop, stop, final, up, healthy, after},
 			wantRes:   ChangeResult{PreStopSnapshot: "snap-pre-stop", Snapshot: "snap-final"},
 		},
 		{
@@ -164,7 +185,7 @@ func TestUpdate(t *testing.T) {
 			case tt.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tt.wantErr)):
 				t.Fatalf("err = %v, want %q", err, tt.wantErr)
 			}
-			if res != tt.wantRes {
+			if !reflect.DeepEqual(res, tt.wantRes) {
 				t.Errorf("result = %+v, want %+v", res, tt.wantRes)
 			}
 			assertCalls(t, e.calls.list(), tt.wantCalls)

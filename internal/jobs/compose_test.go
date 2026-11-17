@@ -53,6 +53,7 @@ func TestComposeApply(t *testing.T) {
 		"docker.Services", // services of the new file
 		"docker.Up app,db,worker",
 		"docker.WaitHealthy",
+		"docker.Services", // images after the change
 	})
 	if res.Snapshot != "snap-final" || res.RolledBack {
 		t.Fatalf("result %+v", res)
@@ -144,7 +145,8 @@ func TestComposeApplyWithoutBackup(t *testing.T) {
 		wantCalls []string
 		wantFile  string
 	}{
-		{"success", nil, "", []string{"docker.Services", "docker.Stop", "docker.Services", "docker.Up app,db", "docker.WaitHealthy"}, newCompose},
+		{"success", nil, "", []string{"docker.Services", "docker.Stop", "docker.Services", "docker.Up app,db", "docker.WaitHealthy",
+			"docker.Services"}, newCompose},
 		{"unhealthy: not rolled back", func(e *env) { e.docker.failOn["WaitHealthy"] = errBoom }, "not rolled back (no repository)",
 			[]string{"docker.Services", "docker.Stop", "docker.Services", "docker.Up app,db", "docker.WaitHealthy"}, newCompose},
 		{"stop fails: old containers restart, file unchanged", func(e *env) { e.docker.failOn["Stop"] = errBoom }, "stopping stack",

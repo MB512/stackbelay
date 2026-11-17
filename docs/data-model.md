@@ -88,7 +88,8 @@ CREATE TABLE jobs (
 );
 CREATE INDEX jobs_stack_state ON jobs(stack_id, state);
 -- migration 0003:
---   result TEXT NOT NULL DEFAULT '{}'  -- JSON: pre_stop_snapshot, safety_snapshot, previous_dir
+--   result TEXT NOT NULL DEFAULT '{}'  -- JSON: pre_stop_snapshot, safety_snapshot, previous_dir,
+--                                         rolled_back, unchanged, images_changed (update, compose apply)
 --   UNIQUE INDEX jobs_one_running_per_stack ON jobs(stack_id) WHERE state = 'running'
 
 CREATE TABLE job_compose (                -- migration 0007

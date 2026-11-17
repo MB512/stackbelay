@@ -52,6 +52,9 @@ type JobResult struct {
 	PreviousDir     string `json:"previous_dir,omitempty"`
 	RolledBack      bool   `json:"rolled_back,omitempty"` // update: failed and restored to the job's snapshot
 	Unchanged       bool   `json:"unchanged,omitempty"`   // update "only if new": no new image, nothing done
+	// ImagesChanged: update, compose apply: services whose running image
+	// (image id) differs after the change.
+	ImagesChanged []string `json:"images_changed,omitempty"`
 }
 
 // Job is a backup or restore job. State follows jobs.State: queued ->
@@ -255,11 +258,17 @@ func (s *Store) latestJobs(ctx context.Context, typ jobs.Type) (map[int64]JobBri
 }
 
 // lastSucceeded returns, per stack id, when the newest succeeded job of
-// type typ finished. Stacks without such a job are missing from the map.
-func (s *Store) lastSucceeded(ctx context.Context, typ jobs.Type) (map[int64]time.Time, error) {
+// type typ finished. With imagesChanged only jobs that changed the image of
+// a running service count (result.images_changed, see "Update pipeline" in
+// docs/architecture.md). Stacks without such a job are missing from the
+// map.
+func (s *Store) lastSucceeded(ctx context.Context, typ jobs.Type, imagesChanged bool) (map[int64]time.Time, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT stack_id, MAX(finished_at) FROM jobs WHERE type = ? AND state = ? AND finished_at IS NOT NULL GROUP BY stack_id`,
-		typ, jobs.StateSucceeded)
+		`SELECT stack_id, MAX(finished_at) FROM jobs
+		 WHERE type = ? AND state = ? AND finished_at IS NOT NULL
+		   AND (NOT ? OR json_array_length(result, '$.images_changed') > 0)
+		 GROUP BY stack_id`,
+		typ, jobs.StateSucceeded, imagesChanged)
 	if err != nil {
 		return nil, fmt.Errorf("listing last succeeded %s jobs: %w", typ, err)
 	}

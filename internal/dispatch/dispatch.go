@@ -221,8 +221,7 @@ func (d *Dispatcher) reconcileDir(ctx context.Context, id string, importing bool
 	switch {
 	case statusErr == nil && status.ID == id:
 		j.State, j.Snapshot, j.Error = status.State, status.Snapshot, status.Error
-		j.Result = store.JobResult{PreStopSnapshot: status.PreStopSnapshot, SafetySnapshot: status.SafetySnapshot,
-			PreviousDir: status.PreviousDir, RolledBack: status.RolledBack, Unchanged: status.Unchanged}
+		j.Result = resultOf(status)
 		if status.StartedAt != nil {
 			j.StartedAt = *status.StartedAt
 		}
@@ -415,10 +414,15 @@ func (d *Dispatcher) finalStatus(j store.Job) (st jobs.Status, ok bool, err erro
 }
 
 func (d *Dispatcher) finishWithStatus(ctx context.Context, j store.Job, st jobs.Status) {
-	d.finish(ctx, j, st.State, st.Snapshot, st.Error, store.JobResult{
+	d.finish(ctx, j, st.State, st.Snapshot, st.Error, resultOf(st))
+}
+
+// resultOf returns the job result a worker reported in its final status.
+func resultOf(st jobs.Status) store.JobResult {
+	return store.JobResult{
 		PreStopSnapshot: st.PreStopSnapshot, SafetySnapshot: st.SafetySnapshot, PreviousDir: st.PreviousDir,
-		RolledBack: st.RolledBack, Unchanged: st.Unchanged,
-	})
+		RolledBack: st.RolledBack, Unchanged: st.Unchanged, ImagesChanged: st.ImagesChanged,
+	}
 }
 
 // finish records the final state and refreshes the snapshot cache if the

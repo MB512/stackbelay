@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -595,6 +596,12 @@ func TestUpdateRepositoryHandling(t *testing.T) {
 	e.d.Step(ctx)
 	if got := e.job(withRepo.ID); !got.Result.RolledBack || got.Result.PreviousDir == "" || got.Snapshot == "" {
 		t.Fatalf("rolled-back update: %+v", got)
+	}
+	// A successful update keeps the services whose image changed.
+	e.workerDone(confirmed.ID, jobs.Status{State: jobs.StateSucceeded, ImagesChanged: []string{"app"}})
+	e.d.Step(ctx)
+	if got := e.job(confirmed.ID); got.State != jobs.StateSucceeded || !slices.Equal(got.Result.ImagesChanged, []string{"app"}) {
+		t.Fatalf("successful update: %+v", got)
 	}
 }
 

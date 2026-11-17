@@ -68,6 +68,9 @@ func (f *fakeDocker) fail(m string) error { return f.failOn[m] }
 func (f *fakeDocker) Services(ctx context.Context, dir string) ([]docker.ServiceState, error) {
 	f.calls.add("docker.Services")
 	f.servicesCalls++
+	if err := f.failOn["ServicesAfter"]; err != nil && f.servicesCalls > 1 {
+		return nil, err
+	}
 	if f.servicesAfter != nil && f.servicesCalls > 1 {
 		return f.servicesAfter, f.fail("Services")
 	}

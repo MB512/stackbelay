@@ -170,17 +170,21 @@ func TestQueueState(t *testing.T) {
 	}
 }
 
-func TestStackSummariesLastBackup(t *testing.T) {
+func TestStackSummariesLastJobs(t *testing.T) {
 	s := openTest(t)
 	ctx := context.Background()
 	web, db := stackID(t, s, "web"), stackID(t, s, "db")
 	t0 := time.Date(2026, 11, 14, 3, 0, 0, 0, time.UTC)
-	add := func(id string, stack int64, typ jobs.Type, state jobs.State, queued, started, finished time.Time) {
+	addResult := func(id string, stack int64, typ jobs.Type, state jobs.State, queued, started, finished time.Time, res JobResult) {
 		t.Helper()
 		if err := s.ImportJob(ctx, Job{ID: id, StackID: stack, Type: typ, Trigger: TriggerSchedule, State: state,
-			QueuedAt: queued, StartedAt: started, FinishedAt: finished}, ""); err != nil {
+			QueuedAt: queued, StartedAt: started, FinishedAt: finished, Result: res}, ""); err != nil {
 			t.Fatal(err)
 		}
+	}
+	add := func(id string, stack int64, typ jobs.Type, state jobs.State, queued, started, finished time.Time) {
+		t.Helper()
+		addResult(id, stack, typ, state, queued, started, finished, JobResult{})
 	}
 	h := time.Hour
 	add("01AAAAAAAAAAAAAAAAAAAAAAA1", web, jobs.TypeBackup, jobs.StateSucceeded, t0, t0, t0.Add(10*time.Minute))
@@ -189,6 +193,13 @@ func TestStackSummariesLastBackup(t *testing.T) {
 	add("01AAAAAAAAAAAAAAAAAAAAAAA3", web, jobs.TypeUpdate, jobs.StateSucceeded, t0.Add(48*h), t0.Add(48*h), t0.Add(49*h))
 	// A running backup shows its start.
 	add("01AAAAAAAAAAAAAAAAAAAAAAA4", db, jobs.TypeBackup, jobs.StateRunning, t0, t0.Add(h), time.Time{})
+	// Updates of web: only the one that changed an image is a real update;
+	// the newest update job (failed) is the last check.
+	addResult("01AAAAAAAAAAAAAAAAAAAAAAA5", web, jobs.TypeUpdate, jobs.StateSucceeded, t0.Add(50*h), t0.Add(50*h), t0.Add(51*h),
+		JobResult{ImagesChanged: []string{"app"}})
+	addResult("01AAAAAAAAAAAAAAAAAAAAAAA6", web, jobs.TypeUpdate, jobs.StateSucceeded, t0.Add(60*h), t0.Add(60*h), t0.Add(61*h),
+		JobResult{Unchanged: true})
+	add("01AAAAAAAAAAAAAAAAAAAAAAA7", web, jobs.TypeUpdate, jobs.StateFailed, t0.Add(70*h), t0.Add(70*h), t0.Add(71*h))
 
 	sums, err := s.StackSummaries(ctx)
 	if err != nil || len(sums) != 2 {
@@ -206,5 +217,15 @@ func TestStackSummariesLastBackup(t *testing.T) {
 	}
 	if !d.LastSuccessfulBackup.IsZero() {
 		t.Errorf("db last successful backup: %v", d.LastSuccessfulBackup)
+	}
+	if want := (JobBrief{ID: "01AAAAAAAAAAAAAAAAAAAAAAA7", State: jobs.StateFailed, Time: t0.Add(71 * h)}); w.LastUpdate != want {
+		t.Errorf("web last update: %+v, want %+v", w.LastUpdate, want)
+	}
+	if !w.LastImageUpdate.Equal(t0.Add(51 * h)) {
+		t.Errorf("web last image update: %v", w.LastImageUpdate)
+	}
+	// db has no update jobs.
+	if d.LastUpdate.ID != "" || !d.LastImageUpdate.IsZero() {
+		t.Errorf("db updates: %+v %v", d.LastUpdate, d.LastImageUpdate)
 	}
 }

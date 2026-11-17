@@ -65,6 +65,10 @@ type StackSummary struct {
 	HasRepository        bool
 	LastBackup           JobBrief  // newest backup job in any state; zero if there is none
 	LastSuccessfulBackup time.Time // finish of the newest succeeded backup; zero if there is none
+	LastUpdate           JobBrief  // newest update job in any state; zero if there is none
+	// LastImageUpdate is the finish of the newest succeeded update job
+	// that changed the image of a running service; zero if there is none.
+	LastImageUpdate time.Time
 }
 
 // StackSummaries returns all stacks with their overview data, ordered by
@@ -74,7 +78,15 @@ func (s *Store) StackSummaries(ctx context.Context) ([]StackSummary, error) {
 	if err != nil {
 		return nil, err
 	}
-	lastSuccess, err := s.lastSucceeded(ctx, jobs.TypeBackup)
+	lastSuccess, err := s.lastSucceeded(ctx, jobs.TypeBackup, false)
+	if err != nil {
+		return nil, err
+	}
+	lastUpdate, err := s.latestJobs(ctx, jobs.TypeUpdate)
+	if err != nil {
+		return nil, err
+	}
+	lastImageUpdate, err := s.lastSucceeded(ctx, jobs.TypeUpdate, true)
 	if err != nil {
 		return nil, err
 	}
@@ -96,6 +108,7 @@ func (s *Store) StackSummaries(ctx context.Context) ([]StackSummary, error) {
 		}
 		ss.LastBackup = lastBackup[ss.ID]
 		ss.LastSuccessfulBackup = lastSuccess[ss.ID]
+		ss.LastUpdate, ss.LastImageUpdate = lastUpdate[ss.ID], lastImageUpdate[ss.ID]
 		out = append(out, ss)
 	}
 	return out, rows.Err()

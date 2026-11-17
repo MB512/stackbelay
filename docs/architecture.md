@@ -445,7 +445,13 @@ cancel):
    start` of the old containers (still the old images), job fails.
 6. `compose up --detach --force-recreate -- <running services>`, then wait
    until every service runs and, with a healthcheck, is healthy (5 min;
-   a service that exits or turns unhealthy fails at once).
+   a service that exits or turns unhealthy fails at once). On success the
+   worker reads the services again and records in `result.images_changed`
+   the services that ran before and now run another image id (content
+   digest; also for a compose apply). Whether the job pulled the image
+   does not matter: another stack's update may have pulled it before. A
+   job with a non-empty list is a "real" update for the stack list's
+   tooltip (issue #23); a failure to read the state only warns.
 7. Failure in 6:
    - with repository: **automatic rollback** = the restore pipeline on the
      final snapshot without safety snapshot (the final snapshot already is
@@ -662,7 +668,7 @@ with a light and a dark set; the job log is a dark panel in both modes.
 
 | Route | Who | |
 |---|---|---|
-| `GET /` | logged in | stack list: the stacks the user may view (admins: all) with scheduling (enabled/disabled, or missing directory), repository and last backup (the newest backup job in any state with a link, the last successful one as tooltip; from the jobs table) (issue #23) |
+| `GET /` | logged in | stack list: the stacks the user may view (admins: all) with scheduling (enabled/disabled, or missing directory), repository, last backup (the newest backup job in any state with a link, the last successful one as tooltip) and last update check (the newest update job, as tooltip the last succeeded one with `result.images_changed`, see "Update pipeline"); both from the jobs table (issue #23) |
 | `GET /stacks/{name}` | view right | "Status" tab, the home of a stack: containers with state and image, recent jobs, "Back up now" (backup right), see "Status tab" |
 | `GET /stacks/{name}/status/live` | view right | the self-refreshing part of the Status tab (HTMX fragment, polled every 10 s) |
 | `GET /stacks/{name}/backups` | view right | "Backups" tab: repository location, cached snapshots (same for every user) |

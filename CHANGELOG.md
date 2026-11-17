@@ -61,7 +61,11 @@ All notable changes to StackVault. The format is based on
   scheduled backups are enabled); the columns "Snapshots", "Last snapshot"
   and "You may" are gone. A new "Last backup" column shows the newest
   backup job with its state, linking to it; its tooltip gives the time of
-  the last successful backup (issue #23).
+  the last successful backup. "Last update check" shows the newest update
+  job the same way; its tooltip gives the last update that actually
+  changed the image of a running container (issue #23).
+- Update and compose-apply jobs record which services run another image
+  afterwards (`images_changed` in the job result).
 
 ## [0.2.0] - 2026-11-16
 
