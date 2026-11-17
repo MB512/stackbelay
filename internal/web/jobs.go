@@ -227,7 +227,9 @@ type jobPage struct {
 	Job store.Job
 	// Progress is what a running job does right now (the worker's
 	// progress.json); nil if the job is not running or reports nothing.
-	Progress  *jobs.Progress
+	Progress *jobs.Progress
+	// Queue says why a queued job has not started yet; nil otherwise.
+	Queue     *queueInfo
 	Log       []logLine
 	LogCut    bool  // only the end of the log is shown
 	LogOffset int64 // byte offset in log.txt after the shown lines; the live stream continues there
@@ -258,6 +260,13 @@ func (s *Server) newJobPage(ctx context.Context, j store.Job, perm store.Permiss
 	a := authFrom(ctx)
 	page := jobPage{Job: j, CSRF: a.Session.CSRFToken,
 		CanCancel: !j.State.Final() && s.Jobs != nil && mayRunJob(a.User, perm, j.Type)}
+	if j.State == jobs.StateQueued {
+		if qs, err := s.Store.QueueState(ctx, j); err == nil {
+			page.Queue = &queueInfo{QueueState: qs, MaxJobs: s.MaxJobs}
+		} else {
+			s.Logger.Warn("loading queue state", "job_id", j.ID, "error", err)
+		}
+	}
 	if j.State == jobs.StateRunning && s.JobsDir != "" {
 		// Informational: a missing or unreadable file shows no progress.
 		if p, err := jobs.ReadProgress(filepath.Join(s.JobsDir, j.ID)); err == nil && p.Phase != "" {
@@ -297,3 +306,13 @@ func (s *Server) cancelJob(w http.ResponseWriter, r *http.Request) {
 
 // jobURL is the path of a job page.
 func jobURL(id string) string { return "/jobs/" + url.PathEscape(id) }
+
+// queueInfo is the queue state of a queued job for the job page.
+type queueInfo struct {
+	store.QueueState
+	MaxJobs int // STACKVAULT_MAX_JOBS; 0 if unknown
+}
+
+// SlotsFull reports whether the job waits for a running job to finish
+// because the limit of jobs running at the same time is reached.
+func (q queueInfo) SlotsFull() bool { return q.MaxJobs > 0 && q.Running >= q.MaxJobs }

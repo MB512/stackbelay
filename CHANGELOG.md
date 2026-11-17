@@ -21,6 +21,9 @@ All notable changes to StackVault. The format is based on
 - Job progress: the job page shows the current phase of a running job and,
   while restic backs up or restores, a progress bar with bytes, files,
   speed and remaining time. Phases of a rollback are marked "rollback:".
+  While the stack stops or the job waits for healthy services, the services
+  still pending are named. A queued job says what it waits for (a job of
+  the same stack or a free slot) and how many jobs are ahead.
 - Buttons of slow actions (saving or initializing a repository, compose
   validation, update check, snapshot refresh, …) show a spinner and a short
   message while the server works, and cannot be clicked twice. The Logs tab

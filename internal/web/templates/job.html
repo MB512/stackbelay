@@ -27,6 +27,17 @@
     {{- else if eq (print .Job.Type) "restart"}}Restart{{else}}Backup{{end}} of
     <a href="/stacks/{{.Job.StackName}}">{{.Job.StackName}}</a> {{template "job-state" .Job.State}}</h1>
 
+  {{- /* Why a queued job has not started yet. */}}
+  {{- with .Queue}}
+  <div class="progress card wide" role="status">
+    <p><strong>waiting to start</strong></p>
+    <p class="hint">
+      {{- with .Blocking}}Waiting for the {{.Type}} of this stack (<a href="/jobs/{{.ID}}">{{if eq (print .State) "running"}}running{{else}}queued earlier{{end}}</a>): one job per stack at a time.
+      {{- else}}{{if .SlotsFull}}Waiting for a free slot: {{.Running}} job{{if ne .Running 1}}s{{end}} running, at most {{.MaxJobs}} at a time (<code>STACKVAULT_MAX_JOBS</code>).
+      {{- else}}Starting in a moment.{{end}}{{end}}
+      {{- with .Ahead}} {{.}} job{{if ne . 1}}s{{end}} queued before this one.{{end}}</p>
+  </div>
+  {{- end}}
   {{- /* What the running job does now (progress.json of the worker). */}}
   {{- with .Progress}}
   <div class="progress card wide" role="status">

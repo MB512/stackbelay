@@ -312,3 +312,37 @@ func truncateRunes(s string, n int) string {
 	}
 	return s
 }
+
+// QueueState explains why a queued job has not started yet, following the
+// rules of ClaimNextJob: the oldest queued job whose stack has no running
+// job starts next, as long as fewer than the limit are running.
+type QueueState struct {
+	// Blocking is the job of the same stack the job waits for: the running
+	// one, else the oldest one queued before it. Nil if there is none.
+	Blocking *Job
+	// Ahead counts the jobs of all stacks queued before this one.
+	Ahead int
+	// Running counts the jobs running now (all stacks).
+	Running int
+}
+
+// QueueState returns the queue state of the queued job j.
+func (s *Store) QueueState(ctx context.Context, j Job) (QueueState, error) {
+	var qs QueueState
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT (SELECT COUNT(*) FROM jobs WHERE state = ? AND id < ?), (SELECT COUNT(*) FROM jobs WHERE state = ?)`,
+		jobs.StateQueued, j.ID, jobs.StateRunning).Scan(&qs.Ahead, &qs.Running); err != nil {
+		return qs, fmt.Errorf("queue state of job %s: %w", j.ID, err)
+	}
+	blocking, err := s.queryJobs(ctx, `SELECT `+jobColumns+jobFrom+
+		`WHERE j.stack_id = ? AND j.id <> ? AND (j.state = ? OR (j.state = ? AND j.id < ?))
+		 ORDER BY (j.state = ?) DESC, j.id LIMIT 1`,
+		j.StackID, j.ID, jobs.StateRunning, jobs.StateQueued, j.ID, jobs.StateRunning)
+	if err != nil {
+		return qs, fmt.Errorf("queue state of job %s: %w", j.ID, err)
+	}
+	if len(blocking) == 1 {
+		qs.Blocking = &blocking[0]
+	}
+	return qs, nil
+}

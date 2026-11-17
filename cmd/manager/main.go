@@ -117,6 +117,7 @@ func run(ctx context.Context, getenv func(string) string, readFile func(string) 
 	var sched *scheduler.Scheduler
 	if disp != nil {
 		srv.Jobs = disp
+		srv.MaxJobs = cfg.MaxJobs
 		// The manager's own stack gets no Stop button (nobody could start
 		// it again from the UI).
 		srv.OwnStack = disp.Template.OwnStack

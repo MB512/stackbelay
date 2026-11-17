@@ -38,6 +38,9 @@ type Server struct {
 	// unavailable and JobsDisabledReason says why.
 	Jobs               JobQueue
 	JobsDisabledReason string
+	// MaxJobs is STACKVAULT_MAX_JOBS (jobs running at the same time), for
+	// explaining why a job waits; 0 if unknown.
+	MaxJobs int
 	// Schedules is told when schedules change. nil: schedules can still be
 	// edited, they take effect when the manager starts.
 	Schedules ScheduleReloader

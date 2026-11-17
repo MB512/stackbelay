@@ -115,8 +115,9 @@ func run(args []string, getenv func(string) string, stderr io.Writer) int {
 	}
 
 	resticCLI := &restic.CLI{Logger: log}
+	dockerCLI := &docker.CLI{}
 	p := &jobs.Pipeline{
-		Docker: &docker.CLI{},
+		Docker: dockerCLI,
 		Restic: resticCLI,
 		Repo:   restic.Repo{Location: cfg.RepoLocation, Env: cfg.RepoEnv},
 		Host:   cfg.Hostname,
@@ -124,10 +125,19 @@ func run(args []string, getenv func(string) string, stderr io.Writer) int {
 	}
 	if jobDir != "" {
 		// progress.json for the job page: phases from the pipeline,
-		// transfer numbers straight from restic's status lines.
+		// transfer numbers straight from restic's status lines, pending
+		// services from docker.
 		progress := &jobs.FileProgress{Dir: jobDir}
 		p.Progress = progress
 		resticCLI.Progress = progress.Transfer
+		// Services a stop or the health wait is still waiting for.
+		dockerCLI.Pending = func(services []string) {
+			if len(services) == 0 {
+				progress.Detail("")
+				return
+			}
+			progress.Detail("waiting for: " + strings.Join(services, ", "))
+		}
 	}
 	err = execute(ctx, p, cfg, spec, jobDir, &status, log)
 

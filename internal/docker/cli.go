@@ -9,6 +9,7 @@ import (
 	"io"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -19,8 +20,19 @@ import (
 type CLI struct {
 	// Binary is the docker executable; defaults to "docker" (looked up in PATH).
 	Binary string
-	// PollInterval for WaitHealthy; defaults to 2s.
+	// PollInterval for WaitHealthy (and for watching a stop); defaults to 2s.
 	PollInterval time.Duration
+	// Pending, if set, receives the services Stop and WaitHealthy are
+	// still waiting for (sorted; empty when done). The worker shows them
+	// as the detail of the job's phase.
+	Pending func(services []string)
+}
+
+func (c *CLI) pollInterval() time.Duration {
+	if c.PollInterval <= 0 {
+		return 2 * time.Second
+	}
+	return c.PollInterval
 }
 
 // Compile-time check that *CLI satisfies Client (like an explicit
@@ -212,9 +224,63 @@ func foreignContainers(out []byte, dir string) []string {
 }
 
 // Stop implements Client.
+//
+// With Pending set, a goroutine watches "compose ps" while compose stops
+// the containers (each may take up to its stop timeout) and reports the
+// services that still run.
 func (c *CLI) Stop(ctx context.Context, dir string) error {
+	if c.Pending == nil {
+		_, err := c.compose(ctx, dir, "stop")
+		return err
+	}
+	done := make(chan struct{})
+	watched := make(chan struct{})
+	go func() {
+		defer close(watched)
+		c.watchRunning(ctx, dir, done)
+	}()
 	_, err := c.compose(ctx, dir, "stop")
+	close(done)
+	<-watched // no report after Stop has returned
+	c.Pending(nil)
 	return err
+}
+
+// watchRunning reports the running services of the project in dir every
+// poll interval until done is closed. Errors only skip a report.
+func (c *CLI) watchRunning(ctx context.Context, dir string, done <-chan struct{}) {
+	ticker := time.NewTicker(c.pollInterval())
+	defer ticker.Stop()
+	for {
+		select {
+		case <-done:
+			return
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+		out, err := c.compose(ctx, dir, "ps", "--format", "json")
+		if err != nil {
+			continue
+		}
+		entries, err := parsePS(out)
+		if err != nil {
+			continue
+		}
+		var running []string
+		for _, e := range entries {
+			if e.State == "running" && !slices.Contains(running, e.Service) {
+				running = append(running, e.Service)
+			}
+		}
+		sort.Strings(running)
+		select {
+		case <-done: // stop finished meanwhile: this list is outdated
+			return
+		default:
+			c.Pending(running)
+		}
+	}
 }
 
 // Start implements Client.
@@ -264,11 +330,7 @@ func (c *CLI) EnsureImage(ctx context.Context, ref string) (bool, error) {
 
 // WaitHealthy implements Client.
 func (c *CLI) WaitHealthy(ctx context.Context, dir string, services []string) error {
-	interval := c.PollInterval
-	if interval <= 0 {
-		interval = 2 * time.Second
-	}
-	ticker := time.NewTicker(interval)
+	ticker := time.NewTicker(c.pollInterval())
 	defer ticker.Stop()
 	for {
 		out, err := c.compose(ctx, dir, "ps", "--all", "--format", "json")
@@ -280,6 +342,9 @@ func (c *CLI) WaitHealthy(ctx context.Context, dir string, services []string) er
 			return err
 		}
 		pending, err := healthStatus(containers, services)
+		if c.Pending != nil {
+			c.Pending(pending)
+		}
 		if err != nil {
 			return err
 		}

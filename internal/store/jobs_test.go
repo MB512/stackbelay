@@ -137,3 +137,35 @@ func TestJobComposeContent(t *testing.T) {
 		t.Fatalf("job without content: %v", err)
 	}
 }
+
+func TestQueueState(t *testing.T) {
+	s := openTest(t)
+	ctx := context.Background()
+	web, db := stackID(t, s, "web"), stackID(t, s, "db")
+	t0 := time.Date(2026, 11, 17, 10, 0, 0, 0, time.UTC)
+	a := newJob(t, s, "01AAAAAAAAAAAAAAAAAAAAAAA1", web, jobs.TypeBackup, t0)
+	b := newJob(t, s, "01AAAAAAAAAAAAAAAAAAAAAAA2", web, jobs.TypeRestore, t0.Add(time.Second))
+	c := newJob(t, s, "01AAAAAAAAAAAAAAAAAAAAAAA3", db, jobs.TypeBackup, t0.Add(2*time.Second))
+	d := newJob(t, s, "01AAAAAAAAAAAAAAAAAAAAAAA4", web, jobs.TypeUpdate, t0.Add(3*time.Second))
+
+	// Nothing runs: b waits for the older queued job a of its stack.
+	qs, err := s.QueueState(ctx, b)
+	if err != nil || qs.Blocking == nil || qs.Blocking.ID != a.ID || qs.Ahead != 1 || qs.Running != 0 {
+		t.Fatalf("b: %+v %v", qs, err)
+	}
+	// The oldest job has nothing before it.
+	if qs, _ := s.QueueState(ctx, a); qs.Blocking != nil || qs.Ahead != 0 {
+		t.Fatalf("a: %+v", qs)
+	}
+	// a runs: d waits for the running job, not for the queued b.
+	if _, ok, err := s.ClaimNextJob(ctx, 1, t0); !ok || err != nil {
+		t.Fatal("claim")
+	}
+	if qs, _ := s.QueueState(ctx, d); qs.Blocking == nil || qs.Blocking.ID != a.ID || qs.Ahead != 2 || qs.Running != 1 {
+		t.Fatalf("d: %+v", qs)
+	}
+	// c (db) only waits for the global limit.
+	if qs, _ := s.QueueState(ctx, c); qs.Blocking != nil || qs.Ahead != 1 || qs.Running != 1 {
+		t.Fatalf("c: %+v", qs)
+	}
+}

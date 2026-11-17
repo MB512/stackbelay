@@ -75,3 +75,41 @@ func TestFormatBytesAndSeconds(t *testing.T) {
 		}
 	}
 }
+
+// A queued job says what it is waiting for.
+func TestJobPageQueueState(t *testing.T) {
+	e := newEnv(t, true, true)
+	e.server.MaxJobs = 1
+	web, db := e.setupStacks()
+	ctx := context.Background()
+	add := func(id string, stack int64, typ jobs.Type) {
+		if err := e.st.CreateJob(ctx, store.Job{ID: id, StackID: stack, Type: typ, Trigger: store.TriggerManual,
+			QueuedAt: e.clock()}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	add("01AAAAAAAAAAAAAAAAAAAAAAA1", web, jobs.TypeBackup)
+	add("01AAAAAAAAAAAAAAAAAAAAAAA2", web, jobs.TypeRestart)
+	add("01AAAAAAAAAAAAAAAAAAAAAAA3", db, jobs.TypeBackup)
+	e.loginAdmin()
+
+	if r := e.get("/jobs/01AAAAAAAAAAAAAAAAAAAAAAA1"); !strings.Contains(r.body, "Starting in a moment.") {
+		t.Fatalf("first job:\n%s", r.body)
+	}
+	if _, ok, err := e.st.ClaimNextJob(ctx, 1, e.clock()); !ok || err != nil {
+		t.Fatal("claim")
+	}
+	r := e.get("/jobs/01AAAAAAAAAAAAAAAAAAAAAAA2")
+	if !strings.Contains(r.body, `Waiting for the backup of this stack (<a href="/jobs/01AAAAAAAAAAAAAAAAAAAAAAA1">running</a>)`) {
+		t.Fatalf("same stack:\n%s", r.body)
+	}
+	r = e.get("/jobs/01AAAAAAAAAAAAAAAAAAAAAAA3")
+	if !strings.Contains(r.body, "Waiting for a free slot: 1 job running, at most 1 at a time") ||
+		!strings.Contains(r.body, "1 job queued before this one.") {
+		t.Fatalf("global limit:\n%s", r.body)
+	}
+	// A running job shows no queue state.
+	if r := e.get("/jobs/01AAAAAAAAAAAAAAAAAAAAAAA1"); strings.Contains(r.body, "waiting to start") {
+		t.Fatal("queue state for a running job")
+	}
+}

@@ -765,7 +765,12 @@ current phase ("pre-stop snapshot", "stopping stack", "final snapshot",
 while restic backs up or restores, a progress bar with percent, bytes and
 files done, average speed and (backups only, restic reports it) the
 remaining time. During the rollback of an update or compose apply every
-phase is prefixed "rollback: ".
+phase is prefixed "rollback: ". While the stack stops and while the job
+waits until services are healthy, the services still pending are shown
+("waiting for: app, db"; issue #8). A queued job says what it waits for:
+the running (or earlier queued) job of its stack, or a free slot when
+`STACKVAULT_MAX_JOBS` jobs run, and how many jobs are queued before it
+(`store.QueueState`, the same rules as `ClaimNextJob`).
 
 - The pipeline reports phases to `Pipeline.Progress` (`jobs.ProgressReporter`;
   nil reports nothing). `restic.CLI.Progress` receives restic's `--json`
@@ -774,7 +779,12 @@ phase is prefixed "rollback: ".
   restic runs with `RESTIC_PROGRESS_FPS=1`, so it prints one status line
   per second instead of up to 60; the first comes after one second, so
   transfers shorter than that show no numbers.
-- In the worker both feed `jobs.FileProgress`, which writes
+- `docker.CLI.Pending` receives the services still pending: `WaitHealthy`
+  reports them on every poll; `Stop` starts a goroutine that runs
+  `compose ps` every 2 s while `compose stop` waits for the containers
+  (each up to its stop timeout) and reports the services still running.
+  The worker turns them into the detail of the current phase.
+- In the worker all three feed `jobs.FileProgress`, which writes
   `progress.json` into the job directory: atomically (temporary file and
   rename, owner like the other job files), phases and details at once,
   transfer numbers at most once per second (the first of a phase at once).
