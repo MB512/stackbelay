@@ -12,9 +12,10 @@ import (
 )
 
 // ContainerLister lists the containers of a stack (*docker.CLI: read-only
-// "docker compose ps").
+// "docker compose ps"), alone or with the configured services.
 type ContainerLister interface {
 	StackContainers(ctx context.Context, dir string) ([]docker.Container, error)
+	StackOverview(ctx context.Context, dir string) (docker.Overview, error)
 }
 
 // pollHeader marks the periodic refresh of the Status tab. Such requests do

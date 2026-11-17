@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -15,14 +16,30 @@ import (
 
 // fakeContainers implements ContainerLister.
 type fakeContainers struct {
-	list []docker.Container
-	err  error
-	dirs []string
+	mu        sync.Mutex
+	list      []docker.Container
+	err       error
+	dirs      []string
+	overviews int // calls of StackOverview
 }
 
 func (f *fakeContainers) StackContainers(_ context.Context, dir string) ([]docker.Container, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.dirs = append(f.dirs, dir)
 	return f.list, f.err
+}
+
+// StackOverview reports the services of the containers in list.
+func (f *fakeContainers) StackOverview(_ context.Context, _ string) (docker.Overview, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.overviews++
+	ov := docker.Overview{Containers: f.list}
+	for _, c := range f.list {
+		ov.Services = append(ov.Services, c.Service)
+	}
+	return ov, f.err
 }
 
 // setupStatus creates the stack directories (see setupLogs) and a fake

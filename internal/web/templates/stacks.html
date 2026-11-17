@@ -1,15 +1,19 @@
 {{define "content"}}
 <h1>Stacks</h1>
 {{- with .Data}}
+<p><button type="button" id="refresh-states">Refresh state</button></p>
 <table>
   <thead>
-    <tr><th>Stack</th><th>Scheduling</th><th>Repository</th><th>Last backup</th><th>Last update check</th></tr>
+    <tr><th>Stack</th><th>State</th><th>Scheduling</th><th>Repository</th><th>Last backup</th><th>Last update check</th></tr>
   </thead>
   <tbody>
     {{- range .}}
     <tr>
       <td><a href="/stacks/{{.Name}}">{{.Name}}</a></td>
-      <td>{{template "stack-status" .Stack}}</td>
+      <td>
+        {{- if .Present}}<span hx-get="/stacks/{{.Name}}/state" hx-trigger="load, click from:#refresh-states"><span class="muted">…</span></span>
+        {{- else}}<span class="badge warn" title="The stack directory is missing.">missing</span>{{end}}</td>
+      <td>{{template "stack-scheduling" .Stack}}</td>
       <td>{{if .HasRepository}}configured{{else}}<span class="muted">none</span>{{end}}</td>
       <td>{{template "last-job" .Backup}}</td>
       <td>{{template "last-job" .Update}}</td>
@@ -26,3 +30,9 @@ they are discovered when the manager starts.</p>
 {{- end}}
 {{- end}}
 {{end}}
+
+{{- /* State column of the stack list. Dot is a stackState. */}}
+{{define "stack-state"}}
+{{- if .JobID}}<a href="/jobs/{{.JobID}}" title="{{.Detail}}"><span class="badge run">{{.Label}}</span></a>
+{{- else}}<span class="badge{{with .Class}} {{.}}{{end}}"{{with .Detail}} title="{{.}}"{{end}}>{{.Label}}</span>{{end}}
+{{- end}}

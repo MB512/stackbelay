@@ -72,6 +72,11 @@ func (f *fakeShells) StackContainers(context.Context, string) ([]docker.Containe
 	}, nil
 }
 
+func (f *fakeShells) StackOverview(ctx context.Context, dir string) (docker.Overview, error) {
+	list, err := f.StackContainers(ctx, dir)
+	return docker.Overview{Services: []string{"app", "db"}, Containers: list}, err
+}
+
 func (f *fakeShells) StartShell(_ context.Context, id string, cols, rows uint16) (docker.TTY, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

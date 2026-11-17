@@ -57,6 +57,10 @@ All notable changes to StackVault. The format is based on
 - The Shell tab is gone: with `STACKVAULT_ENABLE_SHELL`, admins open a
   shell from the container's row on the Status tab. Each row also links
   to the Logs tab with only that container selected.
+- Stack list: a new "State" column shows whether a stack is started,
+  stopped, degraded (a service not running, unhealthy or restarting), not
+  created, busy with a job, missing or created by docker-compose v1. It
+  loads after the page and again with "Refresh state".
 - Stack list: the "Status" column is now "Scheduling" (it shows whether
   scheduled backups are enabled); the columns "Snapshots", "Last snapshot"
   and "You may" are gone. A new "Last backup" column shows the newest

@@ -668,7 +668,8 @@ with a light and a dark set; the job log is a dark panel in both modes.
 
 | Route | Who | |
 |---|---|---|
-| `GET /` | logged in | stack list: the stacks the user may view (admins: all) with scheduling (enabled/disabled, or missing directory), repository, last backup (the newest backup job in any state with a link, the last successful one as tooltip) and last update check (the newest update job, as tooltip the last succeeded one with `result.images_changed`, see "Update pipeline"); both from the jobs table (issue #23) |
+| `GET /stacks/{name}/state` | view right | State cell of the stack list (HTMX fragment), see "Stack list" |
+| `GET /` | logged in | stack list: the stacks the user may view (admins: all), see "Stack list" |
 | `GET /stacks/{name}` | view right | "Status" tab, the home of a stack: containers with state and image, recent jobs, "Back up now" (backup right), see "Status tab" |
 | `GET /stacks/{name}/status/live` | view right | the self-refreshing part of the Status tab (HTMX fragment, polled every 10 s) |
 | `GET /stacks/{name}/backups` | view right | "Backups" tab: repository location, cached snapshots (same for every user) |
@@ -716,6 +717,41 @@ directly with the stored password; restic refuses if a repository already
 exists, so nothing is overwritten. This works with an append-only
 rest-server and makes it easy to start a fresh repository e.g. per year,
 keeping repositories and their indexes small.
+
+### Stack list
+
+The start page (`GET /`, decided in issue #23) lists the stacks the user
+may view with these columns:
+
+- **State** (see below).
+- **Scheduling**: `active`/`disabled`, the stack's `enabled` flag (scheduled
+  backups only).
+- **Repository**: configured or none.
+- **Last backup** and **Last update check**: the newest backup or update
+  job in any state with a link. The tooltip shows the last successful
+  backup, or the last update that changed an image (`result.images_changed`,
+  see "Update pipeline").
+
+The State cell loads lazily (HTMX, `GET /stacks/{name}/state`, again on
+"Refresh state"), so the page does not wait for docker:
+
+| State | Meaning |
+|---|---|
+| missing | the stack directory is gone (rendered directly, no request) |
+| busy: `<type>` | a job of the stack runs; links to it (no docker call) |
+| not created | the stack has no containers |
+| started | every service runs (and is healthy, if it has a healthcheck) |
+| stopped | no container runs |
+| degraded | some but not all services run, or a container is unhealthy or restarting; containers that exited with code 0 while others run (one-shot services) are ignored |
+| legacy (compose v1) | containers created by docker-compose v1 (`docker.ErrLegacyCompose`, see "Interfaces") |
+| unknown | reading the state failed (error in the tooltip) |
+
+The manager reads it with `docker.CLI.StackOverview` (`compose config
+--format json`, the project owner check, `compose ps --all`). Results are
+cached per stack for 5 seconds; concurrent requests for the same stack
+share one load, and at most 4 loads run at a time (`stateCache`).
+
+The page header of a stack shows `missing` and the scheduling badge.
 
 Stack pages share a header with tabs (`stack-header` in `partials.html`).
 The tab list is built per user in `newStackHeader`; a tab is only shown if

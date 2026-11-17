@@ -92,7 +92,9 @@ type Server struct {
 	updateChecks streamLimiter
 	// the last update check per stack
 	updateResults updateResults
-	shellCheck    time.Duration // session re-check of open shells; default shellSessionCheck (tests shorten it)
+	// the State column of the stack list, cached per stack
+	stackStates stateCache
+	shellCheck  time.Duration // session re-check of open shells; default shellSessionCheck (tests shorten it)
 }
 
 // loc is the time zone for displayed times.
@@ -161,6 +163,7 @@ func (s *Server) Handler() (http.Handler, error) {
 			r.Get("/", s.stackList)
 			r.Get("/stacks/{name}", s.stackStatus)
 			r.Get("/stacks/{name}/status/live", s.stackStatusLive)
+			r.Get("/stacks/{name}/state", s.stackStateCell)
 			r.Get("/stacks/{name}/backups", s.stackBackups)
 			r.Post("/stacks/{name}/snapshots/refresh", s.refreshStackSnapshots)
 			r.Post("/stacks/{name}/backup", s.startBackup)
