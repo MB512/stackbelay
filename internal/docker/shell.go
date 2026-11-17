@@ -16,13 +16,14 @@ import (
 
 // Container is one container of a stack (Status tab, shell target).
 type Container struct {
-	ID      string // short container id from compose ps
-	Name    string // as compose prefixes its log lines (see Containers)
-	Service string
-	State   string // running, exited, ...
-	Health  string // healthy, unhealthy, starting; "" without healthcheck
-	Status  string // docker's text, e.g. "Up 2 hours (healthy)"
-	Image   string // image reference the container was created from
+	ID       string // short container id from compose ps
+	Name     string // as compose prefixes its log lines (see Containers)
+	Service  string
+	State    string // running, exited, ...
+	Health   string // healthy, unhealthy, starting; "" without healthcheck
+	Status   string // docker's text, e.g. "Up 2 hours (healthy)"
+	Image    string // image reference the container was created from
+	ExitCode int    // of an exited container
 }
 
 // Running reports whether a shell can be opened in the container.
@@ -41,6 +42,37 @@ func (c *CLI) StackContainers(ctx context.Context, dir string) ([]Container, err
 	if err := c.checkProjectOwner(ctx, dir); err != nil {
 		return nil, err
 	}
+	return c.composeContainers(ctx, dir)
+}
+
+// Overview is the state of a stack for the stack list.
+type Overview struct {
+	Services   []string    // services of the compose file (active profiles), sorted
+	Containers []Container // all containers of the project, sorted by name
+}
+
+// StackOverview returns the services and containers of the stack in dir
+// (read-only: "compose config", "docker ps" and "compose ps"). Like
+// StackContainers it checks the project owner first; containers created by
+// docker-compose v1 give an error wrapping ErrLegacyCompose.
+func (c *CLI) StackOverview(ctx context.Context, dir string) (Overview, error) {
+	cfg, err := c.projectConfig(ctx, dir)
+	if err != nil {
+		return Overview{}, err
+	}
+	if err := c.checkProjectContainers(ctx, dir, cfg.Name); err != nil {
+		return Overview{}, err
+	}
+	list, err := c.composeContainers(ctx, dir)
+	if err != nil {
+		return Overview{}, err
+	}
+	return Overview{Services: cfg.Services, Containers: list}, nil
+}
+
+// composeContainers lists the containers of the compose project in dir,
+// sorted by name, without the owner check.
+func (c *CLI) composeContainers(ctx context.Context, dir string) ([]Container, error) {
 	out, err := c.compose(ctx, dir, "ps", "--all", "--format", "json")
 	if err != nil {
 		return nil, err
@@ -59,7 +91,7 @@ func (c *CLI) StackContainers(ctx context.Context, dir string) ([]Container, err
 			name = strings.TrimPrefix(name, e.Project+"-")
 		}
 		list = append(list, Container{ID: e.ID, Name: name, Service: e.Service, State: e.State,
-			Health: e.Health, Status: e.Status, Image: e.Image})
+			Health: e.Health, Status: e.Status, Image: e.Image, ExitCode: e.ExitCode})
 	}
 	sort.Slice(list, func(i, j int) bool { return list[i].Name < list[j].Name })
 	return list, nil

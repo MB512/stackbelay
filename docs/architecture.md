@@ -1013,8 +1013,15 @@ the directory name (or `name:` in `compose.yml`). Before touching a stack,
 created from this stack's directory (label
 `com.docker.compose.project.working_dir`); otherwise the job fails before
 anything is stopped. This protects against a stack of the same name
-elsewhere on the host or one started with `docker compose -p`. `restic restore <id>:<subpath>`
-requires restic >= 0.17.
+elsewhere on the host or one started with `docker compose -p`.
+Containers created by the Python docker-compose v1 have no working
+directory label but a `com.docker.compose.version` label `1.*`: they are
+refused with `docker.ErrLegacyCompose` ("recreate them once with `docker
+compose up -d`"; the stack list shows such a stack as "Legacy (compose
+v1)"). The check also looks for them under the project name v1 before 1.21
+derived (only letters and digits, e.g. `myapp` for `my-app`), because
+Compose v2 would not see them and start a second copy of the stack next
+to them. `restic restore <id>:<subpath>` requires restic >= 0.17.
 
 ## Worker CLI
 

@@ -66,6 +66,12 @@ All notable changes to StackVault. The format is based on
   changed the image of a running container (issue #23).
 - Update and compose-apply jobs record which services run another image
   afterwards (`images_changed` in the job result).
+- Stacks whose containers were created by the old Python docker-compose v1
+  are refused with a clear message ("recreate them once with `docker
+  compose up -d`") instead of "containers from another directory". This
+  also covers v1 containers under the project name older v1 versions
+  derived (`myapp` for a directory `my-app`), which were not detected
+  before.
 
 ## [0.2.0] - 2026-11-16
 

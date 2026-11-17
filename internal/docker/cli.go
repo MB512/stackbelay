@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os/exec"
 	"path/filepath"
 	"slices"
@@ -182,58 +183,122 @@ func (c *CLI) imageInfo(ctx context.Context, dir, imageID string) (imageInfo, er
 	return infos[0], nil
 }
 
+// ErrLegacyCompose means that containers of the stack were created by the
+// Python docker-compose v1. They lack the labels StackVault relies on (see
+// checkProjectOwner), so it refuses to manage the stack until it is
+// recreated with "docker compose up".
+var ErrLegacyCompose = errors.New("created by docker-compose v1")
+
+// projectConfig is the part of "compose config --format json" StackVault
+// needs.
+type projectConfig struct {
+	Name     string
+	Services []string // sorted
+}
+
+// projectConfig reads the compose project of dir.
+func (c *CLI) projectConfig(ctx context.Context, dir string) (projectConfig, error) {
+	out, err := c.compose(ctx, dir, "config", "--format", "json")
+	if err != nil {
+		return projectConfig{}, err
+	}
+	return parseProjectConfig(out)
+}
+
 // checkProjectOwner refuses a stack whose compose project name is also used
 // by containers created from another directory. Compose identifies a
 // project only by its name (the directory name, or "name:" in compose.yml);
 // a stack of the same name elsewhere, or one started with "-p", would
 // otherwise make stop/start/up act on someone else's containers.
 func (c *CLI) checkProjectOwner(ctx context.Context, dir string) error {
-	out, err := c.compose(ctx, dir, "config", "--format", "json")
+	cfg, err := c.projectConfig(ctx, dir)
 	if err != nil {
 		return err
 	}
-	project, err := parseProjectName(out)
-	if err != nil {
-		return err
+	return c.checkProjectContainers(ctx, dir, cfg.Name)
+}
+
+// containerLabelsFormat prints name, working directory and compose version
+// of each container (see classifyContainers).
+const containerLabelsFormat = `{{.Names}}` + "\t" + `{{.Label "com.docker.compose.project.working_dir"}}` +
+	"\t" + `{{.Label "com.docker.compose.version"}}`
+
+// checkProjectContainers is checkProjectOwner for a known project name. It
+// returns an error wrapping ErrLegacyCompose if docker-compose v1 created
+// containers of the stack: under the project name itself or under the
+// name older v1 versions derived from it (without "-" and "_"), which a
+// directory like "my-app" gives.
+func (c *CLI) checkProjectContainers(ctx context.Context, dir, project string) error {
+	names := []string{project}
+	if v1 := legacyProjectName(project); v1 != project {
+		names = append(names, v1)
 	}
-	out, err = c.run(ctx, dir, "ps", "--all", "--filter", "label=com.docker.compose.project="+project,
-		"--format", `{{.Names}}`+"\t"+`{{.Label "com.docker.compose.project.working_dir"}}`)
-	if err != nil {
-		return err
-	}
-	if foreign := foreignContainers(out, dir); len(foreign) > 0 {
-		return fmt.Errorf("compose project %q is also used by containers from another directory (%s); "+
-			"refusing to touch it. Give the stacks different names, or start this stack from its own "+
-			"directory without -p", project, strings.Join(foreign, ", "))
+	for i, name := range names {
+		out, err := c.run(ctx, dir, "ps", "--all", "--filter", "label=com.docker.compose.project="+name,
+			"--format", containerLabelsFormat)
+		if err != nil {
+			return err
+		}
+		foreign, legacy := classifyContainers(out, dir)
+		if len(legacy) > 0 {
+			return fmt.Errorf("%w: containers %s were created by the old docker-compose v1 and cannot be "+
+				"managed; recreate them once with \"docker compose up -d\" in the stack directory",
+				ErrLegacyCompose, strings.Join(legacy, ", "))
+		}
+		if i == 0 && len(foreign) > 0 {
+			return fmt.Errorf("compose project %q is also used by containers from another directory (%s); "+
+				"refusing to touch it. Give the stacks different names, or start this stack from its own "+
+				"directory without -p", project, strings.Join(foreign, ", "))
+		}
 	}
 	return nil
 }
 
-func parseProjectName(out []byte) (string, error) {
-	var cfg struct {
-		Name string `json:"name"`
-	}
-	if err := json.Unmarshal(out, &cfg); err != nil {
-		return "", fmt.Errorf("parsing compose config: %w", err)
-	}
-	if cfg.Name == "" {
-		return "", errors.New("compose config has no project name")
-	}
-	return cfg.Name, nil
+// legacyProjectName is the project name docker-compose v1 before 1.21
+// derived from name: only lower-case letters and digits.
+func legacyProjectName(name string) string {
+	return strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			return r
+		}
+		return -1
+	}, strings.ToLower(name))
 }
 
-// foreignContainers returns "name (working dir)" for every container in
-// "docker ps" output (name<TAB>working_dir lines) that was not created from
-// dir.
-func foreignContainers(out []byte, dir string) []string {
-	var foreign []string
+func parseProjectConfig(out []byte) (projectConfig, error) {
+	var cfg struct {
+		Name     string                     `json:"name"`
+		Services map[string]json.RawMessage `json:"services"`
+	}
+	if err := json.Unmarshal(out, &cfg); err != nil {
+		return projectConfig{}, fmt.Errorf("parsing compose config: %w", err)
+	}
+	if cfg.Name == "" {
+		return projectConfig{}, errors.New("compose config has no project name")
+	}
+	return projectConfig{Name: cfg.Name, Services: slices.Sorted(maps.Keys(cfg.Services))}, nil
+}
+
+// classifyContainers sorts the containers in "docker ps" output
+// (containerLabelsFormat lines) that were not created from dir into
+// foreign ("name (working dir)") and legacy (name; created by
+// docker-compose v1, whose containers have no working directory label).
+func classifyContainers(out []byte, dir string) (foreign, legacy []string) {
 	for _, line := range parseLines(out) {
-		name, wd, _ := strings.Cut(line, "\t")
-		if filepath.Clean(wd) != filepath.Clean(dir) {
+		parts := strings.SplitN(line, "\t", 3)
+		for len(parts) < 3 {
+			parts = append(parts, "")
+		}
+		name, wd, version := parts[0], parts[1], parts[2]
+		switch {
+		case wd != "" && filepath.Clean(wd) == filepath.Clean(dir):
+		case wd == "" && strings.HasPrefix(version, "1."):
+			legacy = append(legacy, name)
+		default:
 			foreign = append(foreign, fmt.Sprintf("%s (%s)", name, wd))
 		}
 	}
-	return foreign
+	return foreign, legacy
 }
 
 // Stop implements Client.
@@ -410,14 +475,15 @@ func healthStatus(containers []psEntry, services []string) (pending []string, er
 
 // psEntry is one container from "docker compose ps --format json".
 type psEntry struct {
-	ID      string `json:"ID"`
-	Name    string `json:"Name"`
-	Project string `json:"Project"`
-	Service string `json:"Service"`
-	State   string `json:"State"`
-	Health  string `json:"Health"`
-	Status  string `json:"Status"`
-	Image   string `json:"Image"`
+	ID       string `json:"ID"`
+	Name     string `json:"Name"`
+	Project  string `json:"Project"`
+	Service  string `json:"Service"`
+	State    string `json:"State"`
+	Health   string `json:"Health"`
+	Status   string `json:"Status"`
+	Image    string `json:"Image"`
+	ExitCode int    `json:"ExitCode"`
 }
 
 // parsePS accepts both output styles of "compose ps --format json": a JSON
