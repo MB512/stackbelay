@@ -27,21 +27,22 @@ func TestUpdateJob(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Only the update right shows the tab and opens it.
-	if r := e.do(alice, http.MethodGet, "/stacks/web", nil, nil); strings.Contains(r.body, `href="/stacks/web/update"`) {
-		t.Fatal("Update tab without the update right")
+	// Only the update right shows "Update…" on the Status tab and opens the
+	// update page; there is no Update tab.
+	if r := e.do(alice, http.MethodGet, "/stacks/web", nil, nil); strings.Contains(r.body, `action="/stacks/web/update"`) {
+		t.Fatal("Update… without the update right")
 	}
 	expect(t, e.do(alice, http.MethodGet, "/stacks/web/update", nil, nil), http.StatusForbidden, "")
 	r := e.do(carol, http.MethodGet, "/stacks/web", nil, nil)
-	if !strings.Contains(r.body, `href="/stacks/web/update"`) || strings.Contains(r.body, `action="/stacks/web/update"`) {
-		t.Fatalf("Update tab missing, or update form still on the Backups tab:\n%s", r.body)
+	if !strings.Contains(r.body, `<form method="get" action="/stacks/web/update"`) || strings.Contains(r.body, `>Update</a>`) {
+		t.Fatalf("Update… missing, or an Update tab:\n%s", r.body)
 	}
 	r = e.do(carol, http.MethodGet, "/stacks/web/update", nil, nil)
 	expect(t, r, http.StatusOK, "")
-	for _, want := range []string{`aria-current="page">Update`, "rolled back", `name="only_if_new" checked`, `name="pre_stop" checked`,
-		`name="rollback" value="in-place"`} {
+	for _, want := range []string{"<h1>Update web</h1>", "rolled back", `name="only_if_new" checked`, `name="pre_stop" checked`,
+		`name="rollback" value="in-place"`, "No update check since the manager started"} {
 		if !strings.Contains(r.body, want) {
-			t.Errorf("update tab lacks %s", want)
+			t.Errorf("update page lacks %s", want)
 		}
 	}
 	if strings.Contains(r.body, "confirm_no_backup") {
@@ -115,8 +116,13 @@ func (f *fakeUpdates) CheckUpdates(_ context.Context, dir string) ([]docker.Imag
 }
 
 func TestUpdateCheck(t *testing.T) {
-	e, alice, _ := setupJobsEnv(t)
-	e.setupLogs() // stack directories
+	e, alice, _ := setupJobsEnv(t) // alice: backup right on web
+	e.setupStatus()                // stack directories and containers
+	e.server.Containers.(*fakeContainers).list = []docker.Container{
+		{ID: "0000000000a1", Name: "app-1", Service: "app", State: "running"},
+		{ID: "0000000000b1", Name: "db-1", Service: "db", State: "running"},
+		{ID: "0000000000c1", Name: "tool-1", Service: "tool", State: "exited"},
+	}
 	created := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
 	u := &fakeUpdates{checks: []docker.ImageCheck{
 		{Service: "app", Image: "nextcloud:29", Running: true, Status: docker.UpdateAvailable,
@@ -130,6 +136,9 @@ func TestUpdateCheck(t *testing.T) {
 
 	// The check needs the update right and a CSRF token.
 	aliceToken := csrfOf(e, alice, "/stacks/web")
+	if r := e.do(alice, http.MethodGet, "/stacks/web", nil, nil); strings.Contains(r.body, "/update/check") {
+		t.Fatal("check offered without the update right")
+	}
 	expect(t, e.do(alice, http.MethodPost, "/stacks/web/update/check", url.Values{"csrf_token": {aliceToken}}, nil),
 		http.StatusForbidden, "")
 	expect(t, e.post("/stacks/web/update/check", nil), http.StatusForbidden, "")
@@ -137,12 +146,17 @@ func TestUpdateCheck(t *testing.T) {
 		t.Fatal("checked without permission or token")
 	}
 
-	r := e.post("/stacks/web/update/check", url.Values{"csrf_token": {e.csrf("/stacks/web/update")}})
+	// HTMX: the answer is the Status tab's fragment with the result.
+	token := e.csrf("/stacks/web")
+	htmx := map[string]string{"HX-Request": "true"}
+	r := e.do(e.client, http.MethodPost, "/stacks/web/update/check", url.Values{"csrf_token": {token}}, htmx)
 	expect(t, r, http.StatusOK, "")
-	for _, want := range []string{"1 running service can be updated", "29.0.1 (sha256:aaaaaaaaaaaa)",
-		"29.0.2 (2026-01-02, sha256:bbbbbbbbbbbb)", "update available", "up to date", "not checked",
-		"built locally", "&lt;b&gt;postgres:16&lt;/b&gt;", `name="only_if_new"`,
-		"<code>db</code>\n      runs the image by digest", ">Unpin now</button>"} {
+	if !strings.HasPrefix(strings.TrimSpace(r.body), `<div id="status-live"`) {
+		t.Fatalf("check answer is not the fragment:\n%s", r.body)
+	}
+	for _, want := range []string{"1 running service can be updated", "1 running service runs a version pinned",
+		"running: 29.0.1 (sha256:aaaaaaaaaaaa)", "available: 29.0.2 (2026-01-02, sha256:bbbbbbbbbbbb)",
+		"update available", "up to date", ">pinned</span>", "not checked", "built locally", "<th>Update</th>"} {
 		if !strings.Contains(r.body, want) {
 			t.Errorf("check result lacks %q", want)
 		}
@@ -151,27 +165,42 @@ func TestUpdateCheck(t *testing.T) {
 		t.Fatalf("checked dirs %v", u.dirs)
 	}
 
-	// The unpin button posts an update with "only if new" and swap rollback.
-	if !strings.Contains(r.body, `<input type="hidden" name="only_if_new" value="on">`) {
-		t.Fatal("unpin form without only_if_new")
+	// The result stays: alice (view right) sees it on the Status tab, the
+	// update page shows the summary and the unpin box.
+	if r := e.do(alice, http.MethodGet, "/stacks/web", nil, nil); !strings.Contains(r.body, "1 running service can be updated") {
+		t.Fatalf("result not on alice's Status tab:\n%s", r.body)
 	}
-	// Nothing pinned: no unpin box.
+	r = e.get("/stacks/web/update")
+	for _, want := range []string{"Last update check", "1 running service can be updated",
+		"<code>db</code>\n      runs the image by digest", ">Unpin now</button>",
+		`<input type="hidden" name="only_if_new" value="on">`} {
+		if !strings.Contains(r.body, want) {
+			t.Errorf("update page lacks %q", want)
+		}
+	}
+
+	// Without HTMX: redirect to the Status tab. Nothing pinned: no unpin box.
 	u.checks[1].Pinned = false
-	r = e.post("/stacks/web/update/check", url.Values{"csrf_token": {e.csrf("/stacks/web/update")}})
-	if strings.Contains(r.body, "Unpin now") {
+	expect(t, e.post("/stacks/web/update/check", url.Values{"csrf_token": {token}}), http.StatusSeeOther, "/stacks/web")
+	if r := e.get("/stacks/web/update"); strings.Contains(r.body, "Unpin now") {
 		t.Fatal("unpin offered without pinned services")
 	}
 
 	u.err = errors.New("compose project is broken")
-	r = e.post("/stacks/web/update/check", url.Values{"csrf_token": {e.csrf("/stacks/web/update")}})
-	if !strings.Contains(r.body, "The check failed: compose project is broken") {
+	r = e.do(e.client, http.MethodPost, "/stacks/web/update/check", url.Values{"csrf_token": {token}}, htmx)
+	if !strings.Contains(r.body, "The check failed: compose project is broken") || strings.Contains(r.body, "<th>Update</th>") {
 		t.Fatalf("check error not shown:\n%s", r.body)
 	}
 
+	// A check that cannot run keeps the last result and says why.
 	e.server.Updates = nil
-	r = e.get("/stacks/web/update")
-	if strings.Contains(r.body, "/update/check") || !strings.Contains(r.body, "not available in this installation") {
-		t.Fatal("check offered without checker")
+	r = e.do(e.client, http.MethodPost, "/stacks/web/update/check", url.Values{"csrf_token": {token}}, htmx)
+	if !strings.Contains(r.body, "not available in this installation") || !strings.Contains(r.body, "compose project is broken") {
+		t.Fatalf("check without checker:\n%s", r.body)
+	}
+	expect(t, e.post("/stacks/web/update/check", url.Values{"csrf_token": {token}}), http.StatusServiceUnavailable, "")
+	if r := e.get("/stacks/web"); !strings.Contains(r.body, "disabled>Check for updates</button>") {
+		t.Fatal("check button not disabled without checker")
 	}
 }
 

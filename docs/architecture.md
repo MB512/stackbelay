@@ -410,7 +410,8 @@ Notes and limits (show them in the UI):
 ## Update pipeline
 
 Job type `update` (`jobs.Pipeline.Update`), started by users with the update
-right (`can_update`) from the "Update" tab (see "Update check"). It runs in
+right (`can_update`) from the update page, which the Status tab links to
+with **Update…** (see "Update check"). It runs in
 a worker like backup and restore (same queue, per-stack lock, live log,
 cancel):
 
@@ -474,9 +475,13 @@ that starts, passes the check and fails later is not detected.
 
 ### Update check
 
-The "Update" tab (update right) has a **Check now** button (`POST
-/stacks/{name}/update/check`, CSRF token because every check sends
-registry requests; not audited, it changes nothing). The manager
+The Status tab has a **Check for updates** button for users with the
+update right (`POST /stacks/{name}/update/check`, CSRF token because every
+check sends registry requests; not audited, it changes nothing). The
+result fills an "Update" column of the services table and stays there for
+everyone who may view the stack until the next check (kept in memory per
+stack, lost when the manager restarts); the 10-second refresh of the tab
+keeps it. The update page shows the same summary. The manager
 (`docker.CLI.CheckUpdates`) runs only read-only commands with fixed
 argument lists:
 
@@ -496,10 +501,10 @@ argument lists:
    checked** (built locally, pinned by digest in the compose file). A
    container started by a pinned restore or rollback
    (`name@sha256:...` instead of the tag) is compared by digest and marked
-   as pinned. If running services are pinned, the tab offers **Unpin
-   now** (with a repository): it queues an update with "only if new" and
+   as pinned. If running services are pinned, the update page offers
+   **Unpin now** (with a repository): it queues an update with "only if new" and
    rollback by swap, which recreates them with their tag (and, as any
-   update, pulls newer images of the tags). The table shows running and available version: the version
+   update, pulls newer images of the tags). The column shows running and available version: the version
    label if the image has one, else creation date and short digest.
 
 At most one check per user and three in total run at a time. The check is
@@ -611,8 +616,8 @@ with a light and a dark set; the job log is a dark panel in both modes.
 | `POST /stacks/{name}/backup` | backup right | queue a backup (option: pre-stop snapshot) |
 | `GET /stacks/{name}/logs` | logs right | "Logs" tab: container checkboxes and live log panel |
 | `GET /stacks/{name}/logs/events` | logs right | live container logs (SSE), see "Container logs" |
-| `GET /stacks/{name}/update` | update right | "Update" tab: update check and update form (only if new, rollback method); without repository it requires confirming "no backup, no rollback" |
-| `POST /stacks/{name}/update/check` | update right | check for newer images (registry query, no pull), see "Update check" |
+| `GET /stacks/{name}/update` | update right | update page (no tab, linked from Status): last check, unpin, update form (only if new, rollback method); without repository it requires confirming "no backup, no rollback" |
+| `POST /stacks/{name}/update/check` | update right | check for newer images (registry query, no pull), see "Update check"; HTMX: returns the Status tab's fragment |
 | `POST /stacks/{name}/update` | update right | queue an update, see "Update pipeline" |
 | `GET /stacks/{name}/restore?snapshot=<id>` | restore right | confirmation page with options |
 | `POST /stacks/{name}/restore` | restore right | queue a restore of a cached, not removed snapshot; only admins may skip the safety snapshot |
@@ -656,7 +661,7 @@ Stack pages share a header with tabs (`stack-header` in `partials.html`).
 The tab list is built per user in `newStackHeader`; a tab is only shown if
 the user may open it, and its handler checks the permission again. Tabs:
 "Status" (view right, the default), "Backups" (view right), "Logs" (logs
-right), "Update" (update right), "Compose", "Shell" (only with
+right), "Compose", "Shell" (only with
 `STACKVAULT_ENABLE_SHELL`) and "Settings" (admin).
 
 ### Status tab
@@ -664,9 +669,10 @@ right), "Update" (update right), "Compose", "Shell" (only with
 The home of a stack (`GET /stacks/{name}`, decided in issue #11). It shows
 the stack's containers (`compose ps --all` via `docker.CLI.StackContainers`,
 after the project owner check): name, service, state with health and
-docker's status text, and image. Below them the recent jobs of the stack.
-Users with the backup right get "Back up now" there; every action checks
-its own right.
+docker's status text, image and, after an update check, its result.
+Below them the recent jobs of the stack. Users with the backup right get
+"Back up now" there, users with the update right "Check for updates" and
+"Update…" (the update page); every action checks its own right.
 
 Containers and jobs are one fragment (`status-live`) that HTMX reloads
 every 10 seconds from `GET /stacks/{name}/status/live`, so a running job

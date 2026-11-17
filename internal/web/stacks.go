@@ -79,7 +79,6 @@ const (
 	tabStatus   = ""
 	tabBackups  = "backups"
 	tabLogs     = "logs"
-	tabUpdate   = "update"
 	tabCompose  = "compose"
 	tabShell    = "shell"
 	tabSettings = "settings"
@@ -96,9 +95,6 @@ func (s *Server) newStackHeader(user store.User, perm store.Permission, st store
 	}
 	if auth.Allowed(user, perm, auth.ActionLogs) {
 		tabs = append(tabs, stackTab{Label: "Logs", URL: base + "/" + tabLogs, Active: active == tabLogs})
-	}
-	if auth.Allowed(user, perm, auth.ActionUpdate) {
-		tabs = append(tabs, stackTab{Label: "Update", URL: base + "/" + tabUpdate, Active: active == tabUpdate})
 	}
 	if user.IsAdmin {
 		// Editing the compose file is admin-only: it is equivalent to root

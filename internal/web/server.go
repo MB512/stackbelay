@@ -80,7 +80,9 @@ type Server struct {
 	shells     streamLimiter // open shell sessions
 	// running update checks (not streams, but limited the same way)
 	updateChecks streamLimiter
-	shellCheck   time.Duration // session re-check of open shells; default shellSessionCheck (tests shorten it)
+	// the last update check per stack
+	updateResults updateResults
+	shellCheck    time.Duration // session re-check of open shells; default shellSessionCheck (tests shorten it)
 }
 
 func (s *Server) now() time.Time {

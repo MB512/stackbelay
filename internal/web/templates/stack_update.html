@@ -1,45 +1,18 @@
 {{define "content"}}
 {{- with .Data}}
-{{template "stack-header" .}}
+<h1>Update {{.Stack.Name}}</h1>
+<p><a href="/stacks/{{.Stack.Name}}">Back to the stack</a></p>
 
+{{- with .Check}}
 <section>
-  <div class="section-head">
-    <h2>Check for updates</h2>
-    {{- if .CanCheck}}
-    <form method="post" action="/stacks/{{.Stack.Name}}/update/check">
-      <input type="hidden" name="csrf_token" value="{{.CSRF}}">
-      <button type="submit" class="secondary">Check now</button>
-    </form>
-    {{- end}}
-  </div>
-  <p class="hint">Asks the registries which images their tags point to now and compares them with the running containers.
-    Nothing is pulled or changed. Versions come from the image label <code>org.opencontainers.image.version</code> if the
-    image has one, otherwise build date and digest are shown.</p>
-  {{- if not .CanCheck}}<p class="hint">Update checks are not available in this installation.</p>{{end}}
-  {{- with .CheckError}}<p class="error" role="alert">{{.}}</p>{{end}}
-  {{- if and .Checked (not .CheckError)}}
-  <p>Checked {{when .CheckedAt}}:
+  <h2>Last update check</h2>
+  {{- if .Error}}<p class="error">{{when .At}}: {{.Error}}</p>
+  {{- else}}
+  <p>{{when .At}}:
     {{if .NewImages}}<strong>{{.NewImages}} running service{{if ne .NewImages 1}}s{{end}} can be updated.</strong>
-    {{- else}}no running service has a newer image.{{end}}</p>
-  <table>
-    <thead><tr><th>Service</th><th>Image</th><th>Running</th><th>Available</th><th>Status</th></tr></thead>
-    <tbody>
-      {{- range .Checks}}
-      <tr>
-        <td>{{.Service}}</td>
-        <td><code>{{.Image}}</code></td>
-        <td>{{with imageVersion .Current}}{{.}}{{else}}<span class="muted">–</span>{{end}}</td>
-        <td>{{with imageVersion .Available}}{{.}}{{else}}<span class="muted">–</span>{{end}}</td>
-        <td>
-          {{- if eq .Status "up-to-date"}}<span class="badge ok">up to date</span>
-          {{- else if eq .Status "available"}}<span class="badge warn">update available</span>
-          {{- else if eq .Status "unknown"}}<span class="badge err">unknown</span>
-          {{- else}}<span class="badge">not checked</span>{{end}}
-          {{- with .Note}} <span class="hint">{{.}}</span>{{end}}</td>
-      </tr>
-      {{- end}}
-    </tbody>
-  </table>
+    {{- else}}no running service has a newer image.{{end}} Details are on the
+    <a href="/stacks/{{$.Data.Stack.Name}}">Status tab</a>.</p>
+  {{- end}}
   {{- with .Pinned}}
   <div class="card wide">
     <p><strong>Pinned versions:</strong> {{range $i, $s := .}}{{if $i}}, {{end}}<code>{{$s}}</code>{{end}}
@@ -61,8 +34,11 @@
     {{- end}}
   </div>
   {{- end}}
-  {{- end}}
 </section>
+{{- else}}
+<p class="hint">No update check since the manager started. "Check for updates" on the
+  <a href="/stacks/{{.Stack.Name}}">Status tab</a> shows which services have newer images.</p>
+{{- end}}
 
 <section>
   <h2>Update</h2>

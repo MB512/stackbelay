@@ -26,19 +26,32 @@ type statusTab struct {
 	stackHeader
 	CSRF            string
 	CanBackup       bool
+	CanUpdate       bool
+	CanCheck        bool // this installation can check for updates
 	HasRepo         bool
 	JobsUnavailable string // why jobs cannot be started, or ""
 	Live            statusLive
 }
 
 // statusLive is the part of the Status tab that refreshes itself: the
-// services and the recent jobs. It is also the answer to the poll.
+// services with the last update check, and the recent jobs. It is also the
+// answer to the poll and to "Check now".
 type statusLive struct {
 	StackName   string
 	Containers  []docker.Container
 	Unavailable string      // why the containers cannot be listed, or ""
 	Jobs        []store.Job // recent jobs, newest first
+	// Check is the last update check of the stack, or nil.
+	Check *updateResult
+	// CheckMessage says why "Check now" could not run (only in the answer
+	// to it).
+	CheckMessage string
+	CanUpdate    bool
 }
+
+// ShowUpdates reports whether the services table has an update column: a
+// successful update check exists.
+func (l statusLive) ShowUpdates() bool { return l.Check != nil && l.Check.Error == "" }
 
 // stackStatus shows the Status tab (GET /stacks/{name}).
 func (s *Server) stackStatus(w http.ResponseWriter, r *http.Request) {
@@ -51,6 +64,8 @@ func (s *Server) stackStatus(w http.ResponseWriter, r *http.Request) {
 		stackHeader:     s.newStackHeader(a.User, perm, st, tabStatus),
 		CSRF:            a.Session.CSRFToken,
 		CanBackup:       auth.Allowed(a.User, perm, auth.ActionBackup),
+		CanUpdate:       auth.Allowed(a.User, perm, auth.ActionUpdate),
+		CanCheck:        s.Updates != nil,
 		JobsUnavailable: s.jobsUnavailable(),
 	}
 	hasRepo, err := s.hasRepository(r.Context(), st)
@@ -59,7 +74,7 @@ func (s *Server) stackStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page.HasRepo = hasRepo
-	if page.Live, err = s.loadStatusLive(r.Context(), st); err != nil {
+	if page.Live, err = s.loadStatusLive(r, st, perm); err != nil {
 		s.internalError(w, r, "loading stack", err)
 		return
 	}
@@ -69,11 +84,11 @@ func (s *Server) stackStatus(w http.ResponseWriter, r *http.Request) {
 // stackStatusLive answers the periodic refresh of the Status tab with the
 // "status-live" fragment.
 func (s *Server) stackStatusLive(w http.ResponseWriter, r *http.Request) {
-	st, _, ok := s.loadStack(w, r, auth.ActionView)
+	st, perm, ok := s.loadStack(w, r, auth.ActionView)
 	if !ok {
 		return
 	}
-	live, err := s.loadStatusLive(r.Context(), st)
+	live, err := s.loadStatusLive(r, st, perm)
 	if err != nil {
 		s.internalError(w, r, "loading stack", err)
 		return
@@ -81,10 +96,16 @@ func (s *Server) stackStatusLive(w http.ResponseWriter, r *http.Request) {
 	s.renderPartial(w, "stack_status.html", "status-live", live)
 }
 
-// loadStatusLive lists the containers and the recent jobs of st. A failing
-// container list is shown on the page, not returned as an error.
-func (s *Server) loadStatusLive(ctx context.Context, st store.Stack) (statusLive, error) {
-	live := statusLive{StackName: st.Name}
+// loadStatusLive lists the containers and the recent jobs of st for the
+// user of r, whose permission on st is perm. A failing container list is
+// shown on the page, not returned as an error.
+func (s *Server) loadStatusLive(r *http.Request, st store.Stack, perm store.Permission) (statusLive, error) {
+	ctx := r.Context()
+	live := statusLive{
+		StackName: st.Name,
+		Check:     s.updateResults.get(st.ID),
+		CanUpdate: auth.Allowed(authFrom(ctx).User, perm, auth.ActionUpdate),
+	}
 	var err error
 	if live.Jobs, err = s.Store.ListJobs(ctx, st.ID, recentJobs); err != nil {
 		return live, err

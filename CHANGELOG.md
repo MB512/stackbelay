@@ -11,12 +11,17 @@ All notable changes to StackVault. The format is based on
 - **Status tab**, the new home of a stack: its containers with state,
   health and image, the recent jobs and "Back up now". Containers and jobs
   refresh every 10 seconds; this refresh does not extend the login session.
+  The update check moved there: its result is a column of the services
+  table and stays visible to everyone who may view the stack until the
+  next check.
 
 ### Changed
 
 - The snapshot list moved to its own "Backups" tab
   (`/stacks/<name>/backups`); "Back up now" and the recent jobs moved to
   the Status tab.
+- The Update tab is gone: "Update…" on the Status tab opens the update
+  form (with the last check and "Unpin now") as its own page.
 
 ## [0.2.0] - 2026-11-16
 
