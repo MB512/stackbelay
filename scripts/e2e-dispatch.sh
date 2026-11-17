@@ -183,7 +183,7 @@ step "change data, then restore"
 docker run --rm -v "$ROOT/_repo:/r" busybox:1.36 chmod -R a+rX /r
 sleep 10 # refresh cooldown
 c -o /dev/null --data-urlencode "csrf_token=$T" "$B/stacks/$STACK/snapshots/refresh"
-SNAP="$(c "$B/stacks/$STACK" | grep -o 'restore?snapshot=[0-9a-f]*' | head -1 | cut -d= -f2 || true)"
+SNAP="$(c "$B/stacks/$STACK/backups" | grep -o 'restore?snapshot=[0-9a-f]*' | head -1 | cut -d= -f2 || true)"
 [[ -n "$SNAP" ]] || fail "no snapshot in the list"
 pass "newest snapshot ${SNAP:0:8}"
 echo v2 >"$DIR/data/value.txt"
@@ -224,6 +224,22 @@ RUNNING="$(docker inspect --format '{{.Config.Image}}' "$CID")"
 [[ "$RUNNING" == "$DIGEST" ]] || fail "app runs '$RUNNING', want '$DIGEST'"
 grep -q 'image: busybox:1.36' "$DIR/compose.yml" || fail "compose.yml was changed"
 pass "app runs $DIGEST, compose.yml unchanged"
+
+step "status tab, restart, stop, start (no backup)"
+c "$B/stacks/$STACK" | grep -q '<span class="badge ok">running</span>' || fail "status tab shows no running container"
+pass "status tab lists the running container"
+control() { c -o /dev/null -w '%{redirect_url}' --data-urlencode "csrf_token=$T" "$B/stacks/$STACK/$1"; }
+for action in restart stop start; do
+	JOB="$(control "$action")"
+	JOB="${JOB#"$B"}"
+	[[ "$JOB" == /jobs/* ]] || fail "$action not queued"
+	S="$(wait_job "$JOB")"
+	[[ "$S" == succeeded ]] || fail "$action $S: $(job_error "$JOB")"
+	WANT=running
+	[[ "$action" == stop ]] && WANT=exited
+	[[ "$(state app)" == "$WANT" ]] || fail "app is $(state app) after $action, want $WANT"
+	pass "$action succeeded, app $WANT"
+done
 
 step "cleanup and secrets"
 sleep 3

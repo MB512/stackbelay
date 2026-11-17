@@ -127,7 +127,7 @@ pass "user 'later' exists"
 step "self-restore of the backup"
 sleep 10 # snapshot refresh cooldown
 c -o /dev/null --data-urlencode "csrf_token=$T" "$B/stacks/$NAME/snapshots/refresh"
-SNAP="$(c "$B/stacks/$NAME" | grep -o 'restore?snapshot=[0-9a-f]*' | head -1 | cut -d= -f2 || true)"
+SNAP="$(c "$B/stacks/$NAME/backups" | grep -o 'restore?snapshot=[0-9a-f]*' | head -1 | cut -d= -f2 || true)"
 [[ -n "$SNAP" ]] || fail "no snapshot to restore"
 RESTORE="$(c -o /dev/null -w '%{redirect_url}' --data-urlencode "csrf_token=$T" -d "snapshot_id=$SNAP" \
 	-d safety_snapshot=on -d start=on "$B/stacks/$NAME/restore")"
