@@ -117,7 +117,14 @@ table.details th { width: 10rem; }
 .log .WARN .lvl { color: #e8b44c; }
 .log .ERROR .lvl, .log .ERROR { color: #f28b82; }
 .log .attrs { color: #9aa5b4; }
-.log .ctr { color: #7cb7ff; }
+.log .ctr { color: var(--cc, #7cb7ff); }
+/* Container colors (Logs tab): stacklog.js gives each container one of
+   these classes, in the order of the container checkboxes. Light enough
+   for the dark log panel; red is left out, it marks errors. */
+.cc0 { --cc: #7cb7ff; } .cc1 { --cc: #8fd694; } .cc2 { --cc: #f0b45e; } .cc3 { --cc: #e88fd0; }
+.cc4 { --cc: #7fd8d8; } .cc5 { --cc: #b9a2ff; } .cc6 { --cc: #d9d36a; } .cc7 { --cc: #ff9f80; }
+.log .line.colored { border-left: 3px solid var(--cc); padding-left: .5rem; }
+.swatch { display: inline-block; width: .8rem; height: .8rem; border-radius: 2px; background: var(--cc); }
 .log .line[hidden] { display: none; }
 fieldset.containers { display: flex; flex-wrap: wrap; gap: .3rem 1.2rem; align-items: center; }
 fieldset.containers .actions { margin-left: auto; display: flex; gap: .5rem; }

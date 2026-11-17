@@ -49,6 +49,32 @@
 		return boxes.querySelectorAll("input[type=checkbox]");
 	}
 
+	// Container colors: each container gets one of the classes cc0..cc7
+	// (style.css), in the order of its checkbox; the checkbox shows a
+	// swatch of the same color as a legend.
+	var colorCount = 8;
+	var colors = {}; // container name -> class
+	function addColor(input) {
+		var cls = "cc" + (Object.keys(colors).length % colorCount);
+		colors[input.value] = cls;
+		var swatch = document.createElement("span");
+		swatch.className = "swatch " + cls;
+		swatch.setAttribute("aria-hidden", "true");
+		input.parentNode.insertBefore(swatch, input.nextSibling);
+	}
+	(function () {
+		var all = checkboxes();
+		for (var i = 0; i < all.length; i++) {
+			addColor(all[i]);
+		}
+	})();
+	function colorLine(line) {
+		var cls = colors[line.getAttribute("data-c")];
+		if (cls) {
+			line.classList.add("colored", cls);
+		}
+	}
+
 	// Containers whose checkbox starts unchecked (the page was opened for
 	// one container) are hidden from the start.
 	(function () {
@@ -155,6 +181,7 @@
 		label.appendChild(input);
 		label.appendChild(document.createTextNode(" " + name));
 		boxes.insertBefore(label, boxes.querySelector(".actions"));
+		addColor(input);
 	}
 
 	function connect() {
@@ -173,6 +200,7 @@
 			if (name) {
 				addCheckbox(name);
 			}
+			colorLine(line);
 			applyFilter(line);
 			if (e.lastEventId) {
 				since = e.lastEventId;

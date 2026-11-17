@@ -771,7 +771,10 @@ containers of a stack, mixed in the order `docker compose logs` prints
 them. One checkbox per container shows or hides its lines (opened with
 `?container=<name>`, the Logs link on the Status tab, only that container
 starts checked; an unknown name selects all); filtering
-happens in the browser only (`static/stacklog.js`), the stream always
+happens in the browser only (`static/stacklog.js`). Each container has
+its own color (8 classes `cc0`..`cc7` in `style.css`, assigned in the
+order of the checkboxes): its name and a bar at the left of its lines, and
+a swatch next to its checkbox as legend. The stream always
 carries all containers. "Wrap lines" (on by default, remembered per
 browser in `localStorage`) can be turned off for horizontal scrolling.
 "Full screen" makes the log cover the browser window (not the browser's
