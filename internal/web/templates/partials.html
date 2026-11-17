@@ -6,10 +6,6 @@
 {{- else}}<span class="badge ok">active</span>{{end}}
 {{- end}}
 
-{{define "rights"}}
-{{- with .Rights}}{{.}}{{else}}<span class="muted">view</span>{{end}}
-{{- end}}
-
 {{- /* Top of every stack page: name, status and the tabs the user may open.
        Dot is a stackHeader (or a struct embedding one). */}}
 {{define "stack-header"}}

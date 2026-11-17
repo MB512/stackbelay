@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"time"
 )
 
 // Stack is a stack record. Names come from discovery (internal/stacks); the
@@ -61,24 +60,16 @@ func (s *Store) ListStacks(ctx context.Context) ([]Stack, error) {
 type StackSummary struct {
 	Stack
 	HasRepository bool
-	Snapshots     int       // cached snapshots that still exist in the repository
-	LastSnapshot  time.Time // zero if there is none
 }
 
-// StackSummaries returns all stacks with repository and snapshot cache
-// information, ordered by name. Only snapshots of the stack itself from
-// host count (see StackSnapshots); an empty host matches all hosts.
-func (s *Store) StackSummaries(ctx context.Context, host string) ([]StackSummary, error) {
+// StackSummaries returns all stacks with their overview data, ordered by
+// name.
+func (s *Store) StackSummaries(ctx context.Context) ([]StackSummary, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT s.id, s.name, s.enabled, s.present, r.id IS NOT NULL, COUNT(sn.snapshot_id), MAX(sn.time)
+		`SELECT s.id, s.name, s.enabled, s.present, r.id IS NOT NULL
 		 FROM stacks s
 		 LEFT JOIN repositories r ON r.stack_id = s.id
-		 LEFT JOIN snapshots sn ON sn.repo_id = r.id AND sn.missing = 0
-		   AND json_array_length(sn.paths) = 1
-		   AND substr(json_extract(sn.paths, '$[0]'), -length(s.name) - 1) = '/' || s.name
-		   AND (? = '' OR sn.hostname = ?)
-		 GROUP BY s.id
-		 ORDER BY s.name`, host, host)
+		 ORDER BY s.name`)
 	if err != nil {
 		return nil, fmt.Errorf("listing stacks: %w", err)
 	}
@@ -86,14 +77,8 @@ func (s *Store) StackSummaries(ctx context.Context, host string) ([]StackSummary
 	var out []StackSummary
 	for rows.Next() {
 		var ss StackSummary
-		var last sql.NullString
-		if err := rows.Scan(&ss.ID, &ss.Name, &ss.Enabled, &ss.Present, &ss.HasRepository, &ss.Snapshots, &last); err != nil {
+		if err := rows.Scan(&ss.ID, &ss.Name, &ss.Enabled, &ss.Present, &ss.HasRepository); err != nil {
 			return nil, fmt.Errorf("listing stacks: %w", err)
-		}
-		if last.Valid {
-			if ss.LastSnapshot, err = parseTime(last.String); err != nil {
-				return nil, err
-			}
 		}
 		out = append(out, ss)
 	}

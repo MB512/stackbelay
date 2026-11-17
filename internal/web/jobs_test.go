@@ -286,9 +286,6 @@ func TestSharedRepositoryShowsOwnSnapshotsOnly(t *testing.T) {
 	if !strings.Contains(r.body, "2 other snapshots in this repository belong to other stacks or hosts") {
 		t.Fatal("no hint about hidden snapshots")
 	}
-	if r := e.get("/"); !strings.Contains(r.body, "<td>1</td>") {
-		t.Fatalf("stack list must count 1 snapshot:\n%s", r.body)
-	}
 	expect(t, e.get("/stacks/web/restore?snapshot=bbbbbbbb22222222"), http.StatusNotFound, "")
 	expect(t, e.post("/stacks/web/restore", url.Values{"csrf_token": {e.csrf("/stacks/web")}, "snapshot_id": {"cccccccc33333333"}}),
 		http.StatusBadRequest, "")

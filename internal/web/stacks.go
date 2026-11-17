@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -17,27 +16,10 @@ import (
 	"github.com/MB512/stackvault/internal/store"
 )
 
-// stackRow is one line of the stack list.
-type stackRow struct {
-	store.StackSummary
-	Rights string // what the user may do besides viewing, e.g. "backup, logs"
-}
-
-// rightsText lists the actions besides viewing that user may perform with perm.
-func rightsText(user store.User, perm store.Permission) string {
-	var names []string
-	for _, act := range []auth.Action{auth.ActionBackup, auth.ActionRestore, auth.ActionUpdate, auth.ActionOperate, auth.ActionLogs} {
-		if auth.Allowed(user, perm, act) {
-			names = append(names, act.String())
-		}
-	}
-	return strings.Join(names, ", ")
-}
-
 // stackList shows the stacks the user may see.
 func (s *Server) stackList(w http.ResponseWriter, r *http.Request) {
 	a := authFrom(r.Context())
-	sums, err := s.Store.StackSummaries(r.Context(), s.Hostname)
+	sums, err := s.Store.StackSummaries(r.Context())
 	if err != nil {
 		s.internalError(w, r, "listing stacks", err)
 		return
@@ -49,13 +31,13 @@ func (s *Server) stackList(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	var rows []stackRow
+	var rows []store.StackSummary
 	for _, sum := range sums {
 		p := perms[sum.ID] // zero Permission (no grant) if missing, also for admins
 		if !auth.Allowed(a.User, p, auth.ActionView) {
 			continue
 		}
-		rows = append(rows, stackRow{StackSummary: sum, Rights: rightsText(a.User, p)})
+		rows = append(rows, sum)
 	}
 	s.render(w, r, http.StatusOK, "stacks.html", pageData{Title: "Stacks", Data: rows})
 }

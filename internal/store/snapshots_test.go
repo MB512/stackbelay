@@ -117,8 +117,4 @@ func TestStackSnapshotsFilter(t *testing.T) {
 	if got, _ := s.ListSnapshots(ctx, repo); len(got) != 5 {
 		t.Fatalf("all: %d", len(got))
 	}
-	sums, err := s.StackSummaries(ctx, "host-a")
-	if err != nil || len(sums) != 1 || sums[0].Snapshots != 1 || !sums[0].LastSnapshot.Equal(t0.Add(time.Hour)) {
-		t.Fatalf("summary: %+v %v", sums, err)
-	}
 }

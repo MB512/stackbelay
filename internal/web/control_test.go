@@ -41,9 +41,6 @@ func TestControlJobs(t *testing.T) {
 	if strings.Contains(r.body, "Back up now") {
 		t.Error("backup button for carol")
 	}
-	if r := e.do(carol, http.MethodGet, "/", nil, nil); !strings.Contains(r.body, "operate") {
-		t.Error("stack list does not show the operate right")
-	}
 
 	// Each action queues a job of its type, without repository need (db),
 	// with CSRF token only.

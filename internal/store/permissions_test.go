@@ -154,14 +154,14 @@ func TestStackSummariesAndRepositoryInfo(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sums, err := s.StackSummaries(ctx, "")
+	sums, err := s.StackSummaries(ctx)
 	if err != nil || len(sums) != 2 {
 		t.Fatalf("StackSummaries: %+v, %v", sums, err)
 	}
-	if d := sums[0]; d.Name != "db" || d.HasRepository || d.Snapshots != 0 || !d.LastSnapshot.IsZero() {
+	if d := sums[0]; d.Name != "db" || d.HasRepository {
 		t.Fatalf("db summary: %+v", d)
 	}
-	if w := sums[1]; w.Name != "web" || !w.HasRepository || w.Snapshots != 1 || !w.LastSnapshot.Equal(t1) {
+	if w := sums[1]; w.Name != "web" || !w.HasRepository {
 		t.Fatalf("web summary: %+v", w)
 	}
 

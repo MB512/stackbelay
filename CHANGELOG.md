@@ -57,6 +57,9 @@ All notable changes to StackVault. The format is based on
 - The Shell tab is gone: with `STACKVAULT_ENABLE_SHELL`, admins open a
   shell from the container's row on the Status tab. Each row also links
   to the Logs tab with only that container selected.
+- Stack list: the "Status" column is now "Scheduling" (it shows whether
+  scheduled backups are enabled); the columns "Snapshots", "Last snapshot"
+  and "You may" are gone (issue #23).
 
 ## [0.2.0] - 2026-11-16
 
