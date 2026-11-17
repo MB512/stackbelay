@@ -1,9 +1,10 @@
 {{- /* Snippets shared by several pages. */ -}}
 
-{{- /* Whether scheduled backups run. Dot is a store.Stack. */}}
+{{- /* Whether scheduled jobs run. Dot is a store.StackSummary. */}}
 {{define "stack-scheduling"}}
-{{- if .Enabled}}<span class="badge ok" title="Scheduled backups are enabled">active</span>
-{{- else}}<span class="badge" title="Scheduled backups are disabled">disabled</span>{{end}}
+{{- if not .Enabled}}<span class="badge" title="The stack is disabled: its schedules do not run">disabled</span>
+{{- else if .ActiveSchedules}}<span class="badge ok" title="{{.ActiveSchedules}} enabled backup or update schedule(s)">active</span>
+{{- else}}<span class="muted" title="No enabled backup or update schedule">none</span>{{end}}
 {{- end}}
 
 {{- /* Top of every stack page: name, status and the tabs the user may open.
@@ -11,7 +12,7 @@
 {{define "stack-header"}}
 <h1>{{.Stack.Name}}
   {{- if not .Stack.Present}} <span class="badge warn" title="The stack directory is missing">missing</span>{{end}}
-  {{- " "}}{{template "stack-scheduling" .Stack}}</h1>
+  {{- if not .Stack.Enabled}} <span class="badge" title="The stack is disabled: its schedules do not run">disabled</span>{{end}}</h1>
 <nav class="tabs" aria-label="Stack sections">
   {{- range .Tabs}}
   <a href="{{.URL}}"{{if .Active}} aria-current="page"{{end}}>{{.Label}}</a>

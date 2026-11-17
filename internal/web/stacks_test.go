@@ -214,6 +214,26 @@ func TestStackDetailShowsRepositoryAndSnapshots(t *testing.T) {
 		!strings.Contains(r.body, `<span class="muted">never</span>`) {
 		t.Errorf("stack list:\n%s", r.body)
 	}
+	// Scheduling: none without schedule, active with one, disabled with
+	// the stack disabled.
+	if !strings.Contains(r.body, `title="No enabled backup or update schedule">none</span>`) {
+		t.Errorf("scheduling none:\n%s", r.body)
+	}
+	if _, err := e.st.CreateSchedule(ctx, store.Schedule{StackID: web, CronExpr: "0 3 * * *", Type: jobs.TypeUpdate}); err != nil {
+		t.Fatal(err)
+	}
+	if r = e.get("/"); !strings.Contains(r.body, `<span class="badge ok" title="1 enabled backup or update schedule(s)">active</span>`) {
+		t.Errorf("scheduling active:\n%s", r.body)
+	}
+	if err := e.st.SetStackEnabled(ctx, web, false); err != nil {
+		t.Fatal(err)
+	}
+	if r = e.get("/"); !strings.Contains(r.body, `title="The stack is disabled: its schedules do not run">disabled</span>`) {
+		t.Errorf("scheduling disabled:\n%s", r.body)
+	}
+	if err := e.st.SetStackEnabled(ctx, web, true); err != nil {
+		t.Fatal(err)
+	}
 	// Last backup: the newest backup job with its state, the last success
 	// as tooltip.
 	for _, j := range []store.Job{

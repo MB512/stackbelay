@@ -724,8 +724,9 @@ The start page (`GET /`, decided in issue #23) lists the stacks the user
 may view with these columns:
 
 - **State** (see below).
-- **Scheduling**: `active`/`disabled`, the stack's `enabled` flag (scheduled
-  backups only).
+- **Scheduling**: `disabled` (the stack's `enabled` flag is off: none of
+  its schedules run), `active` (at least one enabled backup or update
+  schedule) or `none`.
 - **Repository**: configured or none.
 - **Last backup** and **Last update check**: the newest backup or update
   job in any state with a link. The tooltip shows the last successful
@@ -751,7 +752,7 @@ The manager reads it with `docker.CLI.StackOverview` (`compose config
 cached per stack for 5 seconds; concurrent requests for the same stack
 share one load, and at most 4 loads run at a time (`stateCache`).
 
-The page header of a stack shows `missing` and the scheduling badge.
+The page header of a stack shows `missing` and `disabled` badges.
 
 Stack pages share a header with tabs (`stack-header` in `partials.html`).
 The tab list is built per user in `newStackHeader`; a tab is only shown if

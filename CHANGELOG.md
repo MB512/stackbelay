@@ -61,8 +61,9 @@ All notable changes to StackVault. The format is based on
   stopped, degraded (a service not running, unhealthy or restarting), not
   created, busy with a job, missing or created by docker-compose v1. It
   loads after the page and again with "Refresh state".
-- Stack list: the "Status" column is now "Scheduling" (it shows whether
-  scheduled backups are enabled); the columns "Snapshots", "Last snapshot"
+- Stack list: the "Status" column is now "Scheduling": `active` (at least
+  one enabled backup or update schedule), `none` or `disabled` (the stack
+  is disabled); the columns "Snapshots", "Last snapshot"
   and "You may" are gone. A new "Last backup" column shows the newest
   backup job with its state, linking to it; its tooltip gives the time of
   the last successful backup. "Last update check" shows the newest update
