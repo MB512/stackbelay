@@ -122,7 +122,7 @@ attackers reaching the UI, a leaked database file.
     way the README tells users to keep a copy of the key elsewhere.
 
 13. **Container shell.** Off unless the operator sets
-    `STACKVAULT_ENABLE_SHELL=true`; then the tab and routes exist for admins
+    `STACKVAULT_ENABLE_SHELL=true`; then the links and routes exist for admins
     only (otherwise they do not exist at all). A session needs an admin
     session, the CSRF token and a same-origin WebSocket upgrade, and targets
     only a running container from the stack's own container list (after the
