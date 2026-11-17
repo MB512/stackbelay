@@ -16,6 +16,20 @@ import (
 	"github.com/MB512/stackvault/internal/store"
 )
 
+// stackRow is one line of the stack list.
+type stackRow struct {
+	store.StackSummary
+	Backup lastJob
+}
+
+// lastJob is a stack's newest job of one type and its last success, for
+// the "last-job" template.
+type lastJob struct {
+	store.JobBrief
+	Success      time.Time // zero if never
+	SuccessLabel string    // tooltip text before the success time
+}
+
 // stackList shows the stacks the user may see.
 func (s *Server) stackList(w http.ResponseWriter, r *http.Request) {
 	a := authFrom(r.Context())
@@ -31,13 +45,16 @@ func (s *Server) stackList(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	var rows []store.StackSummary
+	var rows []stackRow
 	for _, sum := range sums {
 		p := perms[sum.ID] // zero Permission (no grant) if missing, also for admins
 		if !auth.Allowed(a.User, p, auth.ActionView) {
 			continue
 		}
-		rows = append(rows, sum)
+		rows = append(rows, stackRow{
+			StackSummary: sum,
+			Backup:       lastJob{JobBrief: sum.LastBackup, Success: sum.LastSuccessfulBackup, SuccessLabel: "Last successful backup"},
+		})
 	}
 	s.render(w, r, http.StatusOK, "stacks.html", pageData{Title: "Stacks", Data: rows})
 }

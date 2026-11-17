@@ -169,3 +169,42 @@ func TestQueueState(t *testing.T) {
 		t.Fatalf("c: %+v", qs)
 	}
 }
+
+func TestStackSummariesLastBackup(t *testing.T) {
+	s := openTest(t)
+	ctx := context.Background()
+	web, db := stackID(t, s, "web"), stackID(t, s, "db")
+	t0 := time.Date(2026, 11, 14, 3, 0, 0, 0, time.UTC)
+	add := func(id string, stack int64, typ jobs.Type, state jobs.State, queued, started, finished time.Time) {
+		t.Helper()
+		if err := s.ImportJob(ctx, Job{ID: id, StackID: stack, Type: typ, Trigger: TriggerSchedule, State: state,
+			QueuedAt: queued, StartedAt: started, FinishedAt: finished}, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	h := time.Hour
+	add("01AAAAAAAAAAAAAAAAAAAAAAA1", web, jobs.TypeBackup, jobs.StateSucceeded, t0, t0, t0.Add(10*time.Minute))
+	add("01AAAAAAAAAAAAAAAAAAAAAAA2", web, jobs.TypeBackup, jobs.StateFailed, t0.Add(24*h), t0.Add(24*h), t0.Add(25*h))
+	// Newer jobs of other types do not count.
+	add("01AAAAAAAAAAAAAAAAAAAAAAA3", web, jobs.TypeUpdate, jobs.StateSucceeded, t0.Add(48*h), t0.Add(48*h), t0.Add(49*h))
+	// A running backup shows its start.
+	add("01AAAAAAAAAAAAAAAAAAAAAAA4", db, jobs.TypeBackup, jobs.StateRunning, t0, t0.Add(h), time.Time{})
+
+	sums, err := s.StackSummaries(ctx)
+	if err != nil || len(sums) != 2 {
+		t.Fatalf("StackSummaries: %+v, %v", sums, err)
+	}
+	d, w := sums[0], sums[1]
+	if want := (JobBrief{ID: "01AAAAAAAAAAAAAAAAAAAAAAA2", State: jobs.StateFailed, Time: t0.Add(25 * h)}); w.LastBackup != want {
+		t.Errorf("web last backup: %+v, want %+v", w.LastBackup, want)
+	}
+	if !w.LastSuccessfulBackup.Equal(t0.Add(10 * time.Minute)) {
+		t.Errorf("web last successful backup: %v", w.LastSuccessfulBackup)
+	}
+	if want := (JobBrief{ID: "01AAAAAAAAAAAAAAAAAAAAAAA4", State: jobs.StateRunning, Time: t0.Add(h)}); d.LastBackup != want {
+		t.Errorf("db last backup: %+v, want %+v", d.LastBackup, want)
+	}
+	if !d.LastSuccessfulBackup.IsZero() {
+		t.Errorf("db last successful backup: %v", d.LastSuccessfulBackup)
+	}
+}

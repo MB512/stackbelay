@@ -17,6 +17,13 @@
 </nav>
 {{end}}
 
+{{- /* Newest job of a type with a link, its state and, as tooltip, the
+       last success. Dot is a lastJob. */}}
+{{define "last-job"}}
+{{- if .ID}}<a href="/jobs/{{.ID}}" title="{{.SuccessLabel}}: {{when .Success}}">{{when .Time}}</a> {{template "job-state" .State}}
+{{- else}}<span class="muted">never</span>{{end}}
+{{- end}}
+
 {{- /* Badge for a job state. Dot is a jobs.State. */}}
 {{define "job-state"}}
 {{- if eq (print .) "succeeded"}}<span class="badge ok">succeeded</span>

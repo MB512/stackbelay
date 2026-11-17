@@ -662,7 +662,7 @@ with a light and a dark set; the job log is a dark panel in both modes.
 
 | Route | Who | |
 |---|---|---|
-| `GET /` | logged in | stack list: the stacks the user may view (admins: all) with scheduling (enabled/disabled, or missing directory) and repository (issue #23) |
+| `GET /` | logged in | stack list: the stacks the user may view (admins: all) with scheduling (enabled/disabled, or missing directory), repository and last backup (the newest backup job in any state with a link, the last successful one as tooltip; from the jobs table) (issue #23) |
 | `GET /stacks/{name}` | view right | "Status" tab, the home of a stack: containers with state and image, recent jobs, "Back up now" (backup right), see "Status tab" |
 | `GET /stacks/{name}/status/live` | view right | the self-refreshing part of the Status tab (HTMX fragment, polled every 10 s) |
 | `GET /stacks/{name}/backups` | view right | "Backups" tab: repository location, cached snapshots (same for every user) |

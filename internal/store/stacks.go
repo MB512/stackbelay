@@ -5,6 +5,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
+
+	"github.com/MB512/stackvault/internal/jobs"
 )
 
 // Stack is a stack record. Names come from discovery (internal/stacks); the
@@ -59,12 +62,23 @@ func (s *Store) ListStacks(ctx context.Context) ([]Stack, error) {
 // StackSummary is a stack with overview data for the stack list.
 type StackSummary struct {
 	Stack
-	HasRepository bool
+	HasRepository        bool
+	LastBackup           JobBrief  // newest backup job in any state; zero if there is none
+	LastSuccessfulBackup time.Time // finish of the newest succeeded backup; zero if there is none
 }
 
 // StackSummaries returns all stacks with their overview data, ordered by
 // name.
 func (s *Store) StackSummaries(ctx context.Context) ([]StackSummary, error) {
+	lastBackup, err := s.latestJobs(ctx, jobs.TypeBackup)
+	if err != nil {
+		return nil, err
+	}
+	lastSuccess, err := s.lastSucceeded(ctx, jobs.TypeBackup)
+	if err != nil {
+		return nil, err
+	}
+
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT s.id, s.name, s.enabled, s.present, r.id IS NOT NULL
 		 FROM stacks s
@@ -80,6 +94,8 @@ func (s *Store) StackSummaries(ctx context.Context) ([]StackSummary, error) {
 		if err := rows.Scan(&ss.ID, &ss.Name, &ss.Enabled, &ss.Present, &ss.HasRepository); err != nil {
 			return nil, fmt.Errorf("listing stacks: %w", err)
 		}
+		ss.LastBackup = lastBackup[ss.ID]
+		ss.LastSuccessfulBackup = lastSuccess[ss.ID]
 		out = append(out, ss)
 	}
 	return out, rows.Err()

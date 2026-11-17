@@ -221,6 +221,63 @@ func (s *Store) ListJobs(ctx context.Context, stackID int64, limit int) ([]Job, 
 		stackID, stackID, limit)
 }
 
+// JobBrief is the short form of a job for overviews.
+type JobBrief struct {
+	ID    string // empty if there is no such job
+	State jobs.State
+	Time  time.Time // finished, else started, else queued
+}
+
+// latestJobs returns, per stack id, the newest job of type typ in any
+// state. Stacks without such a job are missing from the map.
+func (s *Store) latestJobs(ctx context.Context, typ jobs.Type) (map[int64]JobBrief, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT stack_id, id, state, COALESCE(finished_at, started_at, queued_at) FROM jobs
+		 WHERE id IN (SELECT MAX(id) FROM jobs WHERE type = ? GROUP BY stack_id)`, typ)
+	if err != nil {
+		return nil, fmt.Errorf("listing latest %s jobs: %w", typ, err)
+	}
+	defer rows.Close()
+	out := make(map[int64]JobBrief)
+	for rows.Next() {
+		var stackID int64
+		var b JobBrief
+		var at string
+		if err := rows.Scan(&stackID, &b.ID, &b.State, &at); err != nil {
+			return nil, fmt.Errorf("listing latest %s jobs: %w", typ, err)
+		}
+		if b.Time, err = parseTime(at); err != nil {
+			return nil, err
+		}
+		out[stackID] = b
+	}
+	return out, rows.Err()
+}
+
+// lastSucceeded returns, per stack id, when the newest succeeded job of
+// type typ finished. Stacks without such a job are missing from the map.
+func (s *Store) lastSucceeded(ctx context.Context, typ jobs.Type) (map[int64]time.Time, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT stack_id, MAX(finished_at) FROM jobs WHERE type = ? AND state = ? AND finished_at IS NOT NULL GROUP BY stack_id`,
+		typ, jobs.StateSucceeded)
+	if err != nil {
+		return nil, fmt.Errorf("listing last succeeded %s jobs: %w", typ, err)
+	}
+	defer rows.Close()
+	out := make(map[int64]time.Time)
+	for rows.Next() {
+		var stackID int64
+		var at string
+		if err := rows.Scan(&stackID, &at); err != nil {
+			return nil, fmt.Errorf("listing last succeeded %s jobs: %w", typ, err)
+		}
+		if out[stackID], err = parseTime(at); err != nil {
+			return nil, err
+		}
+	}
+	return out, rows.Err()
+}
+
 // JobsInState returns all jobs in a state, oldest first.
 func (s *Store) JobsInState(ctx context.Context, state jobs.State) ([]Job, error) {
 	return s.queryJobs(ctx, `SELECT `+jobColumns+jobFrom+`WHERE j.state = ? ORDER BY j.id`, state)

@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/MB512/stackvault/internal/jobs"
 	"github.com/MB512/stackvault/internal/restic"
 	"github.com/MB512/stackvault/internal/store"
 )
@@ -209,8 +210,24 @@ func TestStackDetailShowsRepositoryAndSnapshots(t *testing.T) {
 		}
 	}
 	r = e.get("/")
-	if !strings.Contains(r.body, "<th>Scheduling</th>") || !strings.Contains(r.body, "configured") {
+	if !strings.Contains(r.body, "<th>Scheduling</th>") || !strings.Contains(r.body, "configured") ||
+		!strings.Contains(r.body, `<span class="muted">never</span>`) {
 		t.Errorf("stack list:\n%s", r.body)
+	}
+	// Last backup: the newest backup job with its state, the last success
+	// as tooltip.
+	for _, j := range []store.Job{
+		{ID: "01AAAAAAAAAAAAAAAAAAAAAAA1", State: jobs.StateSucceeded, FinishedAt: t0},
+		{ID: "01AAAAAAAAAAAAAAAAAAAAAAA2", State: jobs.StateFailed, FinishedAt: t0.Add(24 * time.Hour)},
+	} {
+		j.StackID, j.Type, j.Trigger, j.QueuedAt, j.StartedAt = web, jobs.TypeBackup, store.TriggerSchedule, t0, t0
+		if err := e.st.ImportJob(ctx, j, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r = e.get("/")
+	if want := `<a href="/jobs/01AAAAAAAAAAAAAAAAAAAAAAA2" title="Last successful backup: 2026-11-13 03:00 UTC">2026-11-14 03:00 UTC</a> <span class="badge err">failed</span>`; !strings.Contains(r.body, want) {
+		t.Errorf("stack list lacks %s:\n%s", want, r.body)
 	}
 
 	// Disable and enable the stack on the Settings tab.
