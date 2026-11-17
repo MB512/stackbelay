@@ -106,6 +106,17 @@ var ErrIncomplete = errors.New("snapshot created, but some files could not be re
 // SnapshotIDPattern is the accepted form of snapshot ids from user input.
 var SnapshotIDPattern = regexp.MustCompile(`^[0-9a-f]{8,64}$`)
 
+// Progress is one status line of a running backup or restore.
+type Progress struct {
+	Percent          float64 // 0..1
+	BytesDone        uint64
+	TotalBytes       uint64 // may grow during a backup while restic scans
+	FilesDone        uint64
+	TotalFiles       uint64
+	SecondsElapsed   int64
+	SecondsRemaining int64 // 0 if unknown (restic reports it for backups only)
+}
+
 // Runner is the subset of restic operations the job pipelines need.
 type Runner interface {
 	// CheckRepo verifies that the repository is reachable and the

@@ -66,6 +66,7 @@ func (p *Pipeline) Backup(ctx context.Context, stack stacks.Stack, opts BackupOp
 	// 3. Optional pre-stop snapshot. Failure is not fatal.
 	if opts.PreStop {
 		log.Info("taking pre-stop snapshot")
+		p.phase("pre-stop snapshot")
 		id, err := p.Restic.Backup(ctx, p.Repo, stack.Dir, restic.BackupOptions{Host: p.Host, Tags: []string{TagPreStop}})
 		if err != nil {
 			log.Warn("pre-stop snapshot failed; continuing without parent", "error", err)
@@ -87,12 +88,14 @@ func (p *Pipeline) Backup(ctx context.Context, stack stacks.Stack, opts BackupOp
 
 	// 4. Stop.
 	log.Info("stopping stack")
+	p.phase("stopping stack")
 	if err := p.Docker.Stop(ctx, stack.Dir); err != nil {
 		return res, fmt.Errorf("stopping stack: %w", err)
 	}
 
 	// 5. Final snapshot.
 	log.Info("taking final snapshot", "parent", res.PreStopSnapshot)
+	p.phase("final snapshot")
 	id, err := p.Restic.Backup(ctx, p.Repo, stack.Dir, restic.BackupOptions{
 		Host: p.Host, Tags: []string{TagFinal}, Parent: res.PreStopSnapshot,
 	})

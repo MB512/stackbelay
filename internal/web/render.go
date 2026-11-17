@@ -47,6 +47,10 @@ func (s *Server) templateFuncs() template.FuncMap {
 		},
 		// timeZone names the zone times are shown in, e.g. "Europe/Berlin".
 		"timeZone": s.zoneName,
+		// bytes, percent and seconds format job progress.
+		"bytes":   formatBytes,
+		"percent": func(f float64) string { return fmt.Sprintf("%.0f %%", f*100) },
+		"seconds": formatSeconds,
 	}
 }
 
@@ -159,5 +163,31 @@ func imageVersion(v docker.ImageVersion, loc *time.Location) string {
 		return v.Version
 	default:
 		return strings.Join(parts, ", ")
+	}
+}
+
+// formatBytes shows a size with a binary unit: "512 B", "1.5 MiB".
+func formatBytes(n uint64) string {
+	const unit = 1024
+	if n < unit {
+		return fmt.Sprintf("%d B", n)
+	}
+	div, exp := uint64(unit), 0
+	for m := n / unit; m >= unit && exp < 5; m /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %ciB", float64(n)/float64(div), "KMGTPE"[exp])
+}
+
+// formatSeconds shows a duration roughly: "45 s", "3 min", "2 h 5 min".
+func formatSeconds(s int64) string {
+	switch {
+	case s < 60:
+		return fmt.Sprintf("%d s", s)
+	case s < 3600:
+		return fmt.Sprintf("%d min", (s+30)/60)
+	default:
+		return fmt.Sprintf("%d h %d min", s/3600, s%3600/60)
 	}
 }

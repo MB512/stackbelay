@@ -41,6 +41,7 @@ func (p *Pipeline) Update(ctx context.Context, stack stacks.Stack, opts UpdateOp
 		rollbackInPlace: opts.RollbackInPlace, noPreStop: opts.NoPreStop,
 		prepare: func(ctx context.Context, services []docker.ServiceState, running []string) error {
 			log.Info("pulling images", "services", running)
+			p.phase("pulling images")
 			if err := p.Docker.Pull(ctx, stack.Dir, running); err != nil {
 				return fmt.Errorf("pulling images (the stack was not changed): %w", err)
 			}

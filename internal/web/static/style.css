@@ -176,3 +176,7 @@ button.busy::before, form.htmx-request button::before {
 }
 .busy-text { display: none; }
 form.htmx-request .busy-text { display: inline; }
+
+/* Progress of a running job (job page). */
+.progress p { margin: .2rem 0; }
+.progress progress { width: 100%; height: .9rem; accent-color: var(--accent); }

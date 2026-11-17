@@ -27,6 +27,21 @@
     {{- else if eq (print .Job.Type) "restart"}}Restart{{else}}Backup{{end}} of
     <a href="/stacks/{{.Job.StackName}}">{{.Job.StackName}}</a> {{template "job-state" .Job.State}}</h1>
 
+  {{- /* What the running job does now (progress.json of the worker). */}}
+  {{- with .Progress}}
+  <div class="progress card wide" role="status">
+    <p><strong>{{.Phase}}</strong>{{with .Detail}} <span class="hint">{{.}}</span>{{end}}</p>
+    {{- with .Transfer}}
+    <progress max="1" value="{{.Percent}}">{{percent .Percent}}</progress>
+    <p class="hint">{{percent .Percent}}
+      {{- if .TotalBytes}} · {{bytes .BytesDone}} of {{bytes .TotalBytes}}{{end}}
+      {{- if .TotalFiles}} · {{.FilesDone}} of {{.TotalFiles}} files{{end}}
+      {{- with .BytesPerSecond}} · {{bytes .}}/s{{end}}
+      {{- with .SecondsRemaining}} · about {{seconds .}} left{{end}}</p>
+    {{- end}}
+  </div>
+  {{- end}}
+
   <table class="details">
     <tbody>
       <tr><th>Job</th><td><code>{{.Job.ID}}</code></td></tr>

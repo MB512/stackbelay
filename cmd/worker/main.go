@@ -114,12 +114,20 @@ func run(args []string, getenv func(string) string, stderr io.Writer) int {
 		}
 	}
 
+	resticCLI := &restic.CLI{Logger: log}
 	p := &jobs.Pipeline{
 		Docker: &docker.CLI{},
-		Restic: &restic.CLI{Logger: log},
+		Restic: resticCLI,
 		Repo:   restic.Repo{Location: cfg.RepoLocation, Env: cfg.RepoEnv},
 		Host:   cfg.Hostname,
 		Logger: log,
+	}
+	if jobDir != "" {
+		// progress.json for the job page: phases from the pipeline,
+		// transfer numbers straight from restic's status lines.
+		progress := &jobs.FileProgress{Dir: jobDir}
+		p.Progress = progress
+		resticCLI.Progress = progress.Transfer
 	}
 	err = execute(ctx, p, cfg, spec, jobDir, &status, log)
 

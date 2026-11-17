@@ -118,6 +118,7 @@ func (p *Pipeline) preparePinning(ctx context.Context, log *slog.Logger, stackNa
 				"service", s.Name)
 			continue
 		}
+		p.phase("getting image " + s.RepoDigest)
 		pulled, err := p.Docker.EnsureImage(ctx, s.RepoDigest)
 		if err != nil {
 			return nil, nil, fmt.Errorf("image pinning: service %s: getting %s: %w", s.Name, s.RepoDigest, err)

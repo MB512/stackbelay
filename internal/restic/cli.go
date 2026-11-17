@@ -20,7 +20,15 @@ type CLI struct {
 	Binary string
 	// Logger receives restic warnings/errors; defaults to slog.Default().
 	Logger *slog.Logger
+	// Progress, if set, receives the status lines of backups and restores
+	// (about once per second, see progressFPS). The worker turns them into
+	// the job's progress.
+	Progress func(Progress)
 }
+
+// progressFPS limits restic's status lines when Progress is set: with
+// --json restic would print up to 60 per second.
+const progressFPS = "1"
 
 var _ Runner = (*CLI)(nil)
 
@@ -44,6 +52,9 @@ func (c *CLI) command(ctx context.Context, repo Repo, args ...string) (*exec.Cmd
 	env, err := environ(repo, os.LookupEnv)
 	if err != nil {
 		return nil, err
+	}
+	if c.Progress != nil {
+		env = append(env, "RESTIC_PROGRESS_FPS="+progressFPS)
 	}
 	cmd := exec.CommandContext(ctx, c.binary(), args...)
 	cmd.Env = env
@@ -202,6 +213,10 @@ func (c *CLI) Backup(ctx context.Context, repo Repo, path string, opts BackupOpt
 			return
 		}
 		switch msg.MessageType {
+		case "status":
+			c.report(Progress{Percent: msg.PercentDone, BytesDone: msg.BytesDone, TotalBytes: msg.TotalBytes,
+				FilesDone: msg.FilesDone, TotalFiles: msg.TotalFiles,
+				SecondsElapsed: msg.SecondsElapsed, SecondsRemaining: msg.SecondsRemaining})
 		case "summary":
 			snapshotID = msg.SnapshotID
 		case "error":
@@ -226,9 +241,17 @@ func (c *CLI) Backup(ctx context.Context, repo Repo, path string, opts BackupOpt
 type backupMessage struct {
 	MessageType string `json:"message_type"`
 	SnapshotID  string `json:"snapshot_id"`
-	Item        string `json:"item"`
-	During      string `json:"during"`
-	Error       struct {
+	// status lines
+	PercentDone      float64 `json:"percent_done"`
+	BytesDone        uint64  `json:"bytes_done"`
+	TotalBytes       uint64  `json:"total_bytes"`
+	FilesDone        uint64  `json:"files_done"`
+	TotalFiles       uint64  `json:"total_files"`
+	SecondsElapsed   int64   `json:"seconds_elapsed"`
+	SecondsRemaining int64   `json:"seconds_remaining"`
+	Item             string  `json:"item"`
+	During           string  `json:"during"`
+	Error            struct {
 		Message string `json:"message"`
 	} `json:"error"`
 }
@@ -272,7 +295,7 @@ func (c *CLI) Restore(ctx context.Context, repo Repo, snapshotID, subpath, targe
 	if !SnapshotIDPattern.MatchString(snapshotID) {
 		return fmt.Errorf("invalid snapshot id %q", snapshotID)
 	}
-	return c.runJSON(ctx, repo, func([]byte) {},
+	return c.runJSON(ctx, repo, c.onRestoreLine,
 		"restore", "--target", target, "--", snapshotID+":"+subpath)
 }
 
@@ -294,7 +317,7 @@ func (c *CLI) RestoreInPlace(ctx context.Context, repo Repo, snapshotID, subpath
 		args = append(args, "--exclude", "/"+dir)
 	}
 	args = append(args, "--", snapshotID+":"+subpath)
-	return c.runJSON(ctx, repo, func([]byte) {}, args...)
+	return c.runJSON(ctx, repo, c.onRestoreLine, args...)
 }
 
 // validExcludeDir accepts clean relative paths without restic pattern
@@ -353,4 +376,38 @@ func tail(s string) string {
 		return "..." + s[len(s)-max:]
 	}
 	return s
+}
+
+// report passes a status to Progress, if set.
+func (c *CLI) report(p Progress) {
+	if c.Progress != nil {
+		c.Progress(p)
+	}
+}
+
+// restoreMessage is a status line of "restic restore --json" (restic >=
+// 0.17). Skipped files and bytes (unchanged, in-place restore) count as
+// done, as in restic's own percent_done.
+type restoreMessage struct {
+	MessageType    string  `json:"message_type"`
+	PercentDone    float64 `json:"percent_done"`
+	TotalFiles     uint64  `json:"total_files"`
+	FilesRestored  uint64  `json:"files_restored"`
+	FilesSkipped   uint64  `json:"files_skipped"`
+	TotalBytes     uint64  `json:"total_bytes"`
+	BytesRestored  uint64  `json:"bytes_restored"`
+	BytesSkipped   uint64  `json:"bytes_skipped"`
+	SecondsElapsed int64   `json:"seconds_elapsed"`
+}
+
+func (c *CLI) onRestoreLine(line []byte) {
+	if c.Progress == nil {
+		return
+	}
+	var m restoreMessage
+	if json.Unmarshal(line, &m) != nil || m.MessageType != "status" {
+		return
+	}
+	c.report(Progress{Percent: m.PercentDone, BytesDone: m.BytesRestored + m.BytesSkipped, TotalBytes: m.TotalBytes,
+		FilesDone: m.FilesRestored + m.FilesSkipped, TotalFiles: m.TotalFiles, SecondsElapsed: m.SecondsElapsed})
 }

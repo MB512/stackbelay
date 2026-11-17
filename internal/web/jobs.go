@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 
 	"github.com/go-chi/chi/v5"
 
@@ -223,7 +224,10 @@ func jobAction(t jobs.Type) auth.Action {
 
 // jobPage is the data of the job page.
 type jobPage struct {
-	Job       store.Job
+	Job store.Job
+	// Progress is what a running job does right now (the worker's
+	// progress.json); nil if the job is not running or reports nothing.
+	Progress  *jobs.Progress
 	Log       []logLine
 	LogCut    bool  // only the end of the log is shown
 	LogOffset int64 // byte offset in log.txt after the shown lines; the live stream continues there
@@ -252,8 +256,15 @@ func (s *Server) jobDetail(w http.ResponseWriter, r *http.Request) {
 // newJobPage returns the job page data without the log.
 func (s *Server) newJobPage(ctx context.Context, j store.Job, perm store.Permission) jobPage {
 	a := authFrom(ctx)
-	return jobPage{Job: j, CSRF: a.Session.CSRFToken,
+	page := jobPage{Job: j, CSRF: a.Session.CSRFToken,
 		CanCancel: !j.State.Final() && s.Jobs != nil && mayRunJob(a.User, perm, j.Type)}
+	if j.State == jobs.StateRunning && s.JobsDir != "" {
+		// Informational: a missing or unreadable file shows no progress.
+		if p, err := jobs.ReadProgress(filepath.Join(s.JobsDir, j.ID)); err == nil && p.Phase != "" {
+			page.Progress = &p
+		}
+	}
+	return page
 }
 
 // cancelJob cancels a queued or running job. It needs the same right as

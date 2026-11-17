@@ -148,6 +148,7 @@ func (p *Pipeline) Restore(ctx context.Context, stack stacks.Stack, opts Restore
 
 	// 2./3. Stop, then safety snapshot of the stopped (consistent) stack.
 	log.Info("stopping stack")
+	p.phase("stopping stack")
 	if err := p.Docker.Stop(ctx, stack.Dir); err != nil {
 		return res, fmt.Errorf("stopping stack: %w", err)
 	}
@@ -155,6 +156,7 @@ func (p *Pipeline) Restore(ctx context.Context, stack stacks.Stack, opts Restore
 		log.Warn("safety snapshot disabled")
 	} else {
 		log.Info("taking pre-restore safety snapshot")
+		p.phase("safety snapshot")
 		id, err := p.Restic.Backup(ctx, p.Repo, stack.Dir, restic.BackupOptions{Host: p.Host, Tags: []string{TagPreRestore}})
 		if err != nil {
 			return res, fmt.Errorf("safety snapshot: %w", err)
@@ -175,12 +177,14 @@ func (p *Pipeline) Restore(ctx context.Context, stack stacks.Stack, opts Restore
 		}
 		log.Info("restoring in place (unchanged files are kept, files not in the snapshot are deleted)",
 			"dir", stack.Dir, "kept_unchanged", exclude)
+		p.phase("restoring in place")
 		changed = true
 		if err := p.Restic.RestoreInPlace(ctx, p.Repo, snap.ID, srcPath, stack.Dir, exclude); err != nil {
 			return res, fmt.Errorf("restoring snapshot in place: %w", err)
 		}
 	} else {
 		log.Info("restoring into staging directory", "dir", target)
+		p.phase("restoring")
 		if err := p.Restic.Restore(ctx, p.Repo, snap.ID, srcPath, target); err != nil {
 			return res, fmt.Errorf("restoring snapshot: %w", err)
 		}

@@ -38,6 +38,11 @@ type Pipeline struct {
 	StartTimeout time.Duration
 	// HealthTimeout bounds waiting for services to become healthy.
 	HealthTimeout time.Duration
+	// Progress receives the phases of the job (nil: none are reported).
+	// restic's transfer progress reaches it directly from restic.CLI.
+	Progress ProgressReporter
+	// phasePrefix marks the phases of a rollback ("rollback: ").
+	phasePrefix string
 	// UpdateHealthTimeout bounds the health check after an update; default
 	// DefaultUpdateHealthTimeout. Exceeding it fails (and rolls back) the update.
 	UpdateHealthTimeout time.Duration
@@ -79,6 +84,7 @@ func (p *Pipeline) bringUp(ctx context.Context, log *slog.Logger, dir string, co
 	defer cancel()
 
 	var err error
+	p.phase("starting stack")
 	if up {
 		log.Info("starting stack (compose up)", "services", services, "compose_files", composeFiles)
 		err = p.Docker.Up(ctx, dir, composeFiles, services)
@@ -97,6 +103,7 @@ func (p *Pipeline) bringUp(ctx context.Context, log *slog.Logger, dir string, co
 
 	hctx, hcancel := context.WithTimeout(ctx, orDefault(p.HealthTimeout, DefaultHealthTimeout))
 	defer hcancel()
+	p.phase("waiting until healthy")
 	if err := p.Docker.WaitHealthy(hctx, dir, services); err != nil {
 		log.Warn("stack started but not all services are healthy", "error", err)
 	} else {

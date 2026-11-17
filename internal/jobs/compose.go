@@ -73,6 +73,7 @@ func (p *Pipeline) ComposeApply(ctx context.Context, stack stacks.Stack, opts Co
 		},
 		apply: func(ctx context.Context, before []docker.ServiceState, running []string) ([]string, []string, bool, error) {
 			log.Info("writing the new compose file", "file", filepath.Base(stack.ComposeFile), "bytes", len(opts.Content))
+			p.phase("writing the compose file")
 			if err := replaceFile(stack.ComposeFile, opts.Content); err != nil {
 				return nil, nil, false, fmt.Errorf("writing %s: %w", filepath.Base(stack.ComposeFile), err)
 			}

@@ -18,6 +18,9 @@ All notable changes to StackVault. The format is based on
   as worker jobs with a new per-stack right "Operate" (admins always).
   StackVault's own stack can be restarted but not stopped.
 - Worker commands `worker stop|start|restart <stack>`.
+- Job progress: the job page shows the current phase of a running job and,
+  while restic backs up or restores, a progress bar with bytes, files,
+  speed and remaining time. Phases of a rollback are marked "rollback:".
 - Buttons of slow actions (saving or initializing a repository, compose
   validation, update check, snapshot refresh, …) show a spinner and a short
   message while the server works, and cannot be clicked twice. The Logs tab

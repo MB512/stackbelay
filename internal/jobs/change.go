@@ -131,6 +131,7 @@ func (p *Pipeline) runChange(ctx context.Context, stack stacks.Stack, c change) 
 	}
 	if c.backup && len(running) > 0 && !c.noPreStop {
 		log.Info("taking pre-stop snapshot")
+		p.phase("pre-stop snapshot")
 		id, err := p.Restic.Backup(ctx, p.Repo, stack.Dir, restic.BackupOptions{Host: p.Host, Tags: []string{TagPreStop}})
 		if err != nil {
 			log.Warn("pre-stop snapshot failed; continuing without parent", "error", err)
@@ -158,6 +159,7 @@ func (p *Pipeline) runChange(ctx context.Context, stack stacks.Stack, c change) 
 	// 4. Stop.
 	if len(running) > 0 {
 		log.Info("stopping stack")
+		p.phase("stopping stack")
 		if err := p.Docker.Stop(ctx, stack.Dir); err != nil {
 			return res, fmt.Errorf("stopping stack: %w", err)
 		}
@@ -166,6 +168,7 @@ func (p *Pipeline) runChange(ctx context.Context, stack stacks.Stack, c change) 
 	// 5. Final snapshot: the state the rollback returns to.
 	if c.backup {
 		log.Info("taking final snapshot", "parent", res.PreStopSnapshot)
+		p.phase("final snapshot")
 		id, err := p.Restic.Backup(ctx, p.Repo, stack.Dir, restic.BackupOptions{
 			Host: p.Host, Tags: []string{TagFinal}, Parent: res.PreStopSnapshot,
 		})
@@ -207,10 +210,14 @@ func (p *Pipeline) runChange(ctx context.Context, stack stacks.Stack, c change) 
 		"in_place", c.rollbackInPlace)
 	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), orDefault(p.RollbackTimeout, DefaultRollbackTimeout))
 	defer cancel()
+	// The restore's phases show as "rollback: ...".
+	p.phase("rollback")
+	p.phasePrefix = "rollback: "
 	rres, rerr := p.Restore(rctx, stack, RestoreOptions{
 		SnapshotID: res.Snapshot, SkipSafetySnapshot: true, PinImages: true, CarryOver: c.carryOver,
 		InPlace: c.rollbackInPlace,
 	})
+	p.phasePrefix = ""
 	res.OldDir = rres.OldDir
 	if rerr != nil {
 		log.Error("ROLLBACK FAILED; manual intervention required", "snapshot", res.Snapshot, "error", rerr)
@@ -236,6 +243,7 @@ func (p *Pipeline) upAndVerify(ctx context.Context, log *slog.Logger, dir string
 	uctx, cancel := context.WithTimeout(base, orDefault(p.StartTimeout, DefaultStartTimeout))
 	defer cancel()
 	log.Info("starting stack (compose up)", "services", start)
+	p.phase("recreating services")
 	if err := p.Docker.Up(uctx, dir, nil, start); err != nil {
 		return fmt.Errorf("starting stack: %w", err)
 	}
@@ -245,6 +253,7 @@ func (p *Pipeline) upAndVerify(ctx context.Context, log *slog.Logger, dir string
 	hctx, hcancel := context.WithTimeout(base, orDefault(p.UpdateHealthTimeout, DefaultUpdateHealthTimeout))
 	defer hcancel()
 	log.Info("waiting until the services run and are healthy", "services", verify)
+	p.phase("waiting until healthy")
 	if err := p.Docker.WaitHealthy(hctx, dir, verify); err != nil {
 		return fmt.Errorf("stack is not healthy: %w", err)
 	}

@@ -13,6 +13,7 @@ import (
 func (p *Pipeline) Stop(ctx context.Context, stack stacks.Stack) error {
 	log := p.logger().With("stack", stack.Name, "job", "stop")
 	log.Info("stopping stack")
+	p.phase("stopping stack")
 	if err := p.Docker.Stop(ctx, stack.Dir); err != nil {
 		return fmt.Errorf("stopping stack: %w", err)
 	}
@@ -73,6 +74,7 @@ func (p *Pipeline) Restart(ctx context.Context, stack stacks.Stack) (err error) 
 		}
 	}()
 	log.Info("stopping stack")
+	p.phase("stopping stack")
 	if err := p.Docker.Stop(ctx, stack.Dir); err != nil {
 		return fmt.Errorf("stopping stack: %w", err)
 	}

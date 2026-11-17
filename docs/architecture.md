@@ -128,7 +128,8 @@ manager sets them with `docker run -e NAME` (name only), so the values come
 from the docker CLI's own environment and never appear in a command line or
 a file. The worker writes `status.json` atomically (state, timestamps,
 snapshot ids, previous directory, error; see `jobs.Status`) when the job
-starts and when it ends, and `log.txt` as JSON lines. Both log and error are
+starts and when it ends, `log.txt` as JSON lines, and `progress.json`
+while it runs (see "Job progress"). Both log and error are
 filtered for the credential values. If the spec is invalid, the worker
 still writes a `failed` status with the reason. The manager reads these files
 and mirrors them into SQLite. Files, not the DB, are the handoff channel
@@ -755,6 +756,33 @@ meta) to work with the strict CSP: no injected indicator styles, no
 the npm packages `@xterm/xterm@6.0.0` and `@xterm/addon-fit@0.11.0`,
 tarball integrity checked against the registry) are loaded only by the
 shell page.
+
+## Job progress
+
+While a job runs, the job page shows what it is doing (issue #5): the
+current phase ("pre-stop snapshot", "stopping stack", "final snapshot",
+"restoring", "recreating services", "waiting until healthy", ...) and,
+while restic backs up or restores, a progress bar with percent, bytes and
+files done, average speed and (backups only, restic reports it) the
+remaining time. During the rollback of an update or compose apply every
+phase is prefixed "rollback: ".
+
+- The pipeline reports phases to `Pipeline.Progress` (`jobs.ProgressReporter`;
+  nil reports nothing). `restic.CLI.Progress` receives restic's `--json`
+  status lines of `backup` and `restore` (restic >= 0.17 for restore;
+  skipped bytes of an in-place restore count as done). With it set,
+  restic runs with `RESTIC_PROGRESS_FPS=1`, so it prints one status line
+  per second instead of up to 60; the first comes after one second, so
+  transfers shorter than that show no numbers.
+- In the worker both feed `jobs.FileProgress`, which writes
+  `progress.json` into the job directory: atomically (temporary file and
+  rename, owner like the other job files), phases and details at once,
+  transfer numbers at most once per second (the first of a phase at once).
+  Write errors are ignored: progress never fails a job.
+- The manager reads it (`jobs.ReadProgress`) only for running jobs and
+  renders it in the job details section, which the live stream already
+  re-sends when it changes (`details` event, checked every 500 ms). The bar
+  is a native `<progress>` element (no inline styles, CSP unchanged).
 
 ## Live logs
 
