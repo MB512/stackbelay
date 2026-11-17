@@ -30,6 +30,16 @@ func TestSchedules(t *testing.T) {
 	if _, err := s.CreateSchedule(ctx, Schedule{StackID: db.ID, CronExpr: "@hourly", Type: jobs.TypeBackup}); err != nil {
 		t.Fatal(err)
 	}
+	nb, err := s.CreateSchedule(ctx, Schedule{StackID: db.ID, CronExpr: "@weekly", Type: jobs.TypeUpdate, NoBackup: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sc, err := s.ScheduleByID(ctx, nb); err != nil || !sc.NoBackup || sc.Type != jobs.TypeUpdate {
+		t.Fatalf("update without backup: %+v, %v", sc, err)
+	}
+	if err := s.DeleteSchedule(ctx, db.ID, nb); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := s.CreateSchedule(ctx, Schedule{StackID: 999, CronExpr: "@daily", Type: jobs.TypeBackup}); !errors.Is(err, ErrNotFound) {
 		t.Errorf("unknown stack: err = %v, want ErrNotFound", err)
 	}
@@ -37,6 +47,9 @@ func TestSchedules(t *testing.T) {
 		{StackID: db.ID, CronExpr: "@daily", Type: jobs.TypeRestore},
 		{StackID: db.ID, CronExpr: "@daily"},
 		{StackID: db.ID, CronExpr: "@daily", Type: jobs.TypeBackup, RollbackInPlace: true},
+		{StackID: db.ID, CronExpr: "@daily", Type: jobs.TypeBackup, NoBackup: true},
+		{StackID: db.ID, CronExpr: "@daily", Type: jobs.TypeUpdate, NoBackup: true, RollbackInPlace: true},
+		{StackID: db.ID, CronExpr: "@daily", Type: jobs.TypeUpdate, NoBackup: true, PreStop: true},
 	} {
 		if _, err := s.CreateSchedule(ctx, bad); err == nil {
 			t.Errorf("accepted %+v", bad)

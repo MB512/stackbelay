@@ -177,6 +177,19 @@ func TestFire(t *testing.T) {
 		}
 	})
 
+	t.Run("queues a confirmed update without backup", func(t *testing.T) {
+		e := newEnv(t)
+		e.s.Fire(ctx, e.scheduleOf(t, store.Schedule{StackID: e.db.ID, CronExpr: "@daily", Type: jobs.TypeUpdate, NoBackup: true}))
+		got := e.queue.submitted()
+		if want := (store.JobOptions{OnlyIfNew: true, NoBackup: true}); len(got) != 1 || got[0].Options != want {
+			t.Fatalf("submitted %+v, want options %+v", got, want)
+		}
+		audit, _ := e.st.ListAudit(ctx, 10)
+		if len(audit) != 1 || !strings.Contains(audit[0].Detail, "without backup") {
+			t.Errorf("audit = %+v", audit)
+		}
+	})
+
 	skips := []struct {
 		name  string
 		setup func(t *testing.T, e *env) int64

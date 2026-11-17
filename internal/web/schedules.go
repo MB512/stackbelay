@@ -76,6 +76,7 @@ func (s *Server) createSchedule(w http.ResponseWriter, r *http.Request) {
 		PreStop:  r.PostFormValue("pre_stop") == "on",
 	}
 	in.RollbackInPlace = in.Update && r.PostFormValue("rollback_in_place") == "on" // updates only
+	in.ConfirmNoBackup = r.PostFormValue("confirm_no_backup") == "on"
 	expr := in.CronExpr
 	fail := func(msg string) {
 		s.renderSettings(w, r, st, settingsView{Status: http.StatusBadRequest, Error: msg, NewSchedule: in})
@@ -101,6 +102,21 @@ func (s *Server) createSchedule(w http.ResponseWriter, r *http.Request) {
 		RollbackInPlace: in.RollbackInPlace}
 	if in.Update {
 		sc.Type = jobs.TypeUpdate
+		hasRepo, err := s.hasRepository(ctx, st)
+		if err != nil {
+			s.internalError(w, r, "loading repository", err)
+			return
+		}
+		if !hasRepo {
+			// Like a manual update: without repository only after the
+			// explicit confirmation, and then without snapshots and
+			// rollback.
+			if !in.ConfirmNoBackup {
+				fail("This stack has no repository: confirm that its scheduled updates run without backup and without rollback.")
+				return
+			}
+			sc.NoBackup, sc.PreStop, sc.RollbackInPlace = true, false, false
+		}
 	}
 	id, err := s.Store.CreateSchedule(ctx, sc)
 	if err != nil {
@@ -108,8 +124,8 @@ func (s *Server) createSchedule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(r, store.AuditEntry{UserID: authFrom(ctx).User.ID, Action: "schedule.create", StackID: st.ID,
-		Detail: fmt.Sprintf("schedule %d: %s %s, pre-stop snapshot: %t, rollback in place: %t",
-			id, sc.Type, expr, sc.PreStop, sc.RollbackInPlace)})
+		Detail: fmt.Sprintf("schedule %d: %s %s, pre-stop snapshot: %t, rollback in place: %t, without backup: %t",
+			id, sc.Type, expr, sc.PreStop, sc.RollbackInPlace, sc.NoBackup)})
 	s.reloadSchedules(ctx)
 	http.Redirect(w, r, settingsURL(st), http.StatusSeeOther) //nolint:gosec // G710: same-site path, see settingsURL
 }

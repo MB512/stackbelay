@@ -175,6 +175,14 @@ func (s *Scheduler) Fire(ctx context.Context, scheduleID int64) {
 		job.Options = store.JobOptions{PreStop: sc.PreStop}
 		detail = fmt.Sprintf("pre-stop snapshot: %t", sc.PreStop)
 	case jobs.TypeUpdate:
+		if sc.NoBackup {
+			// Confirmed when the schedule was created: while the stack has
+			// no repository, the update runs without backup and rollback
+			// (the dispatcher still backs up if it has one by then).
+			job.Options = store.JobOptions{OnlyIfNew: true, NoBackup: true}
+			detail = "only if new, without backup if the stack has no repository"
+			break
+		}
 		job.Options = store.JobOptions{OnlyIfNew: true, NoPreStop: !sc.PreStop, RollbackInPlace: sc.RollbackInPlace}
 		detail = fmt.Sprintf("only if new, pre-stop snapshot: %t, rollback in place: %t", sc.PreStop, sc.RollbackInPlace)
 	default:

@@ -68,7 +68,8 @@
   </form>
 
   {{- if and .Schedules (not .Repo.Exists)}}
-  <p class="warning">This stack has no repository: scheduled backups and updates will fail until one is added.</p>
+  <p class="warning">This stack has no repository: scheduled backups fail until one is added. Scheduled updates run
+    without backup and without rollback if that was confirmed for the schedule, otherwise they fail.</p>
   {{- end}}
   {{- if .Schedules}}
   <table>
@@ -78,7 +79,8 @@
       <tr>
         <td><code>{{.CronExpr}}</code>{{if not .Enabled}} <span class="badge">disabled</span>{{end}}</td>
         <td>{{if eq .Type "update"}}Update{{else}}Backup{{end}}</td>
-        <td>{{if eq .Type "update"}}only if new{{if .PreStop}}, pre-stop snapshot{{end}}{{if .RollbackInPlace}}, rollback in place{{end}}
+        <td>{{if eq .Type "update"}}only if new{{if .NoBackup}}, <strong>without backup and rollback</strong> while the stack has no repository{{end}}
+          {{- if .PreStop}}, pre-stop snapshot{{end}}{{if .RollbackInPlace}}, rollback in place{{end}}
           {{- else}}{{if .PreStop}}pre-stop snapshot{{else}}<span class="muted">–</span>{{end}}{{end}}</td>
         <td>{{if .Next.IsZero}}<span class="muted">—</span>{{else}}{{when .Next}}{{end}}</td>
         <td class="actions">
@@ -105,7 +107,9 @@
   <p class="hint">No schedules: this stack is only backed up and updated manually.</p>
   {{- end}}
 
-  <form method="post" action="/stacks/{{.Stack.Name}}/schedules" class="card wide" autocomplete="off">
+  {{- /* data-confirm-when: static/confirm.js asks only for update schedules. */}}
+  <form method="post" action="/stacks/{{.Stack.Name}}/schedules" class="card wide" autocomplete="off"
+        {{- if not .Repo.Exists}} data-confirm="Schedule updates of {{.Stack.Name}} without backup? It has no repository: a failed update is not rolled back and leaves the stack as it is." data-confirm-when="job_type=update"{{end}}>
     <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
     <label>Cron expression
       <input name="cron_expr" required maxlength="100" spellcheck="false" placeholder="0 3 * * *"
@@ -122,15 +126,24 @@
         Update (only if there is a new image; with backup and automatic rollback)</label>
       <p class="hint">A scheduled update pulls the images of the running services and only continues if one of them is
         new (or runs a version pinned by a restore): then it backs up, recreates and verifies the services and rolls back
-        if they do not come up. It needs a repository and a running stack.</p>
+        if they do not come up. It needs a running stack; without repository it runs without backup and without
+        rollback, which you have to confirm below.</p>
     </fieldset>
     <label class="check"><input type="checkbox" name="pre_stop"{{if .NewSchedule.PreStop}} checked{{end}}>
       Snapshot before stopping (shorter downtime for large stacks)</label>
     <label class="check"><input type="checkbox" name="rollback_in_place"{{if .NewSchedule.RollbackInPlace}} checked{{end}}>
       Updates: roll back in place (only files changed since the backup are restored; for large stacks)</label>
+    {{- if not .Repo.Exists}}
+    <p class="warning">This stack has no repository. A scheduled update then runs <strong>without backup and without
+      rollback</strong>: a failed update leaves the stack as it is, not even the old images are started. Snapshot and
+      rollback options are ignored. Once the stack has a repository, its updates are backed up again.</p>
+    <label class="check"><input type="checkbox" name="confirm_no_backup"{{if .NewSchedule.ConfirmNoBackup}} checked{{end}}>
+      Updates: I understand: no backup and no rollback.</label>
+    {{- end}}
     <div><button type="submit">Add schedule</button></div>
   </form>
 </section>
+<script src="/static/confirm.js" defer></script>
 
 <section>
   <h2>Permissions</h2>

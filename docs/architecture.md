@@ -464,8 +464,9 @@ cancel):
      job fails and the stack stays as it is.
 
 Without a repository the update is only possible after explicit
-confirmation on the confirmation page ("no backup and no rollback";
-`JobOptions.NoBackup`). The dispatcher decides when the job starts: a stack
+confirmation ("no backup and no rollback", `JobOptions.NoBackup`): on the
+update page a required checkbox plus a confirmation dialog, for update
+schedules when the schedule is created (see "Scheduler"). The dispatcher decides when the job starts: a stack
 that has a repository by then is always backed up; one without repository
 and without confirmation fails. The worker gets `no_backup` in the spec
 explicitly; without it, missing repository settings fail the job instead of
@@ -851,9 +852,16 @@ runs. A schedule has a job type (Settings tab, admins):
 - **update**, always with "only if new" (a scheduled update never stops or
   backs up a stack when no running service gets a new image or is pinned),
   with the options "pre-stop snapshot" (`no_pre_stop` in the job when off)
-  and "roll back in place". It needs a repository: without one the job
-  fails (nobody confirms an update without backup), and it fails if the
-  stack is not running.
+  and "roll back in place". It fails if the stack is not running. On a
+  stack without repository, creating an update schedule requires the same
+  confirmation as a manual update ("no backup and no rollback": a checkbox
+  checked by the server, and a dialog, `static/confirm.js` with
+  `data-confirm-when="job_type=update"`). The schedule stores it
+  (`schedules.no_backup`) and queues its updates with
+  `JobOptions.NoBackup`; snapshot and rollback options are dropped. If the
+  stack has a repository when the job starts, it is backed up as usual (see
+  "Update pipeline"). An update schedule without that confirmation (e.g.
+  created while the stack had a repository that was removed later) fails.
 
 - Expressions: the standard 5 fields (minute hour day-of-month month
   day-of-week) or descriptors (`@daily`, `@weekly`, `@every 6h`, ...).

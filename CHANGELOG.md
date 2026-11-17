@@ -18,6 +18,16 @@ All notable changes to StackVault. The format is based on
   as worker jobs with a new per-stack right "Operate" (admins always).
   StackVault's own stack can be restarted but not stopped.
 - Worker commands `worker stop|start|restart <stack>`.
+- Scheduled updates on stacks without repository: creating the schedule
+  asks for the same "no backup, no rollback" confirmation as a manual
+  update (checkbox and dialog); such schedules then update without backup.
+  The manual update without repository also asks in a dialog now.
+
+### Fixed
+
+- Scheduled updates on a stack without repository always failed ("the
+  stack has no repository"), and the job page listed "no snapshot before
+  stopping" for updates that make no snapshot at all.
 
 ### Changed
 

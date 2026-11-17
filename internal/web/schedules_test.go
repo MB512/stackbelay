@@ -185,3 +185,83 @@ func TestScheduleLimit(t *testing.T) {
 		t.Errorf("limit error not shown:\n%s", r.body)
 	}
 }
+
+// An update schedule on a stack without repository needs the explicit
+// "no backup, no rollback" confirmation and then runs without backup.
+func TestUpdateScheduleWithoutRepository(t *testing.T) {
+	e := newEnv(t, true, true)
+	ctx := context.Background()
+	e.server.Schedules = &fakeReloader{}
+	if err := e.st.SyncStacks(ctx, []string{"web", "db"}); err != nil {
+		t.Fatal(err)
+	}
+	web, _ := e.st.StackByName(ctx, "web")
+	db, _ := e.st.StackByName(ctx, "db") // no repository
+	if _, err := e.st.SetRepository(ctx, web.ID, "/srv/restic/web", "repo-pw", nil); err != nil {
+		t.Fatal(err)
+	}
+	e.loginAdmin()
+
+	r := e.get("/stacks/db/settings")
+	for _, want := range []string{`name="confirm_no_backup"`, `data-confirm-when="job_type=update"`,
+		`data-confirm="Schedule updates of db without backup?`, "/static/confirm.js"} {
+		if !strings.Contains(r.body, want) {
+			t.Errorf("settings of db lack %q", want)
+		}
+	}
+	if r := e.get("/stacks/web/settings"); strings.Contains(r.body, "confirm_no_backup") || strings.Contains(r.body, "data-confirm-when") {
+		t.Error("no-backup confirmation offered on a stack with repository")
+	}
+
+	token := e.csrf("/stacks/db/settings")
+	form := func(stack string, extra url.Values) response {
+		v := url.Values{"csrf_token": {token}, "cron_expr": {"0 4 * * *"}, "job_type": {"update"},
+			"pre_stop": {"on"}, "rollback_in_place": {"on"}}
+		for k, vs := range extra {
+			v[k] = vs
+		}
+		return e.post("/stacks/"+stack+"/schedules", v)
+	}
+	r = form("db", nil)
+	if r.status != http.StatusBadRequest || !strings.Contains(r.body, "confirm that its scheduled updates run without backup") {
+		t.Fatalf("unconfirmed: %d", r.status)
+	}
+	expect(t, form("db", url.Values{"confirm_no_backup": {"on"}}), http.StatusSeeOther, "/stacks/db/settings")
+	list, _ := e.st.ListSchedules(ctx, db.ID)
+	if len(list) != 1 || !list[0].NoBackup || list[0].PreStop || list[0].RollbackInPlace {
+		t.Fatalf("stored: %+v", list)
+	}
+	if r := e.get("/stacks/db/settings"); !strings.Contains(r.body, "without backup and rollback</strong> while the stack has no repository") {
+		t.Fatalf("schedule list:\n%s", r.body)
+	}
+
+	// With a repository the confirmation is ignored: backup as usual.
+	expect(t, form("web", url.Values{"confirm_no_backup": {"on"}}), http.StatusSeeOther, "/stacks/web/settings")
+	list, _ = e.st.ListSchedules(ctx, web.ID)
+	if len(list) != 1 || list[0].NoBackup || !list[0].PreStop || !list[0].RollbackInPlace {
+		t.Fatalf("stored on web: %+v", list)
+	}
+	// Backup schedules need no confirmation (they fail without repository).
+	r = e.post("/stacks/db/schedules", url.Values{"csrf_token": {token}, "cron_expr": {"0 5 * * *"}, "job_type": {"backup"}})
+	expect(t, r, http.StatusSeeOther, "/stacks/db/settings")
+}
+
+// The job page of an update without backup does not list "no snapshot
+// before stopping": there are no snapshots at all.
+func TestJobPageUpdateWithoutBackup(t *testing.T) {
+	e := newEnv(t, true, true)
+	e.setupStacks()
+	ctx := context.Background()
+	st, _ := e.st.StackByName(ctx, "db")
+	if err := e.st.CreateJob(ctx, store.Job{ID: "01M7M8Q4T1R4WKXGJEHRRFD980", StackID: st.ID, Type: jobs.TypeUpdate,
+		Trigger: store.TriggerSchedule, QueuedAt: e.clock(),
+		Options: store.JobOptions{OnlyIfNew: true, NoBackup: true, NoPreStop: true}}); err != nil {
+		t.Fatal(err)
+	}
+	e.loginAdmin()
+	r := e.get("/jobs/01M7M8Q4T1R4WKXGJEHRRFD980")
+	expect(t, r, http.StatusOK, "")
+	if strings.Contains(r.body, "no snapshot before stopping") || !strings.Contains(r.body, "without backup") {
+		t.Fatalf("job page:\n%s", r.body)
+	}
+}

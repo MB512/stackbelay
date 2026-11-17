@@ -66,7 +66,8 @@
       recreates running services.</p>
   </div>
 
-  <form method="post" action="/stacks/{{.Stack.Name}}/update" class="card wide">
+  <form method="post" action="/stacks/{{.Stack.Name}}/update" class="card wide"
+        {{- if not .HasRepo}} data-confirm="Update {{.Stack.Name}} without backup? It has no repository: a failed update is not rolled back and leaves the stack as it is."{{end}}>
     <input type="hidden" name="csrf_token" value="{{.CSRF}}">
     {{- with .Problem}}<p class="error" role="alert">{{.}}</p>{{end}}
     <label class="check"><input type="checkbox" name="only_if_new" checked>
@@ -95,4 +96,5 @@
   </form>
 </section>
 {{- end}}
+<script src="/static/confirm.js" defer></script>
 {{end}}

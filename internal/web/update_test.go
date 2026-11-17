@@ -45,7 +45,7 @@ func TestUpdateJob(t *testing.T) {
 			t.Errorf("update page lacks %s", want)
 		}
 	}
-	if strings.Contains(r.body, "confirm_no_backup") {
+	if strings.Contains(r.body, "confirm_no_backup") || strings.Contains(r.body, "data-confirm") {
 		t.Fatal("no-backup confirmation with repository")
 	}
 
@@ -82,7 +82,8 @@ func TestUpdateJob(t *testing.T) {
 
 	// Without repository (db, admin): warning, explicit confirmation required.
 	r = e.get("/stacks/db/update")
-	if !strings.Contains(r.body, "not rolled back") || !strings.Contains(r.body, `name="confirm_no_backup"`) {
+	if !strings.Contains(r.body, "not rolled back") || !strings.Contains(r.body, `name="confirm_no_backup"`) ||
+		!strings.Contains(r.body, `data-confirm="Update db without backup?`) {
 		t.Fatalf("update page without repository:\n%s", r.body)
 	}
 	adminToken := e.csrf("/stacks/db/update")

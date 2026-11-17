@@ -23,28 +23,37 @@ type Schedule struct {
 	// RollbackInPlace (updates): restore the final snapshot in place if
 	// the update is rolled back.
 	RollbackInPlace bool
-	Enabled         bool
+	// NoBackup (updates): the admin confirmed that the update runs without
+	// backup and without rollback while the stack has no repository. A
+	// stack that has a repository when the job starts is backed up anyway.
+	NoBackup bool
+	Enabled  bool
 }
 
-const scheduleSelect = `SELECT sc.id, sc.stack_id, s.name, sc.cron_expr, sc.job_type, sc.pre_stop, sc.rollback_in_place, sc.enabled
+const scheduleSelect = `SELECT sc.id, sc.stack_id, s.name, sc.cron_expr, sc.job_type, sc.pre_stop, sc.rollback_in_place, sc.no_backup, sc.enabled
 	FROM schedules sc JOIN stacks s ON s.id = sc.stack_id `
 
 func scanSchedule(row interface{ Scan(...any) error }, sc *Schedule) error {
-	return row.Scan(&sc.ID, &sc.StackID, &sc.StackName, &sc.CronExpr, &sc.Type, &sc.PreStop, &sc.RollbackInPlace, &sc.Enabled)
+	return row.Scan(&sc.ID, &sc.StackID, &sc.StackName, &sc.CronExpr, &sc.Type, &sc.PreStop, &sc.RollbackInPlace, &sc.NoBackup, &sc.Enabled)
 }
 
 // CreateSchedule inserts sc (StackID, CronExpr, Type, PreStop,
-// RollbackInPlace) as an enabled schedule and returns its id.
+// RollbackInPlace, NoBackup) as an enabled schedule and returns its id.
 func (s *Store) CreateSchedule(ctx context.Context, sc Schedule) (int64, error) {
 	switch {
 	case sc.Type != jobs.TypeBackup && sc.Type != jobs.TypeUpdate:
 		return 0, fmt.Errorf("creating schedule: invalid job type %q", sc.Type)
 	case sc.RollbackInPlace && sc.Type != jobs.TypeUpdate:
 		return 0, errors.New("creating schedule: rollback_in_place is only for updates")
+	case sc.NoBackup && sc.Type != jobs.TypeUpdate:
+		return 0, errors.New("creating schedule: no_backup is only for updates")
+	case sc.NoBackup && (sc.RollbackInPlace || sc.PreStop):
+		return 0, errors.New("creating schedule: an update without backup has no snapshots and no rollback")
 	}
 	res, err := s.db.ExecContext(ctx,
-		`INSERT INTO schedules (stack_id, cron_expr, job_type, pre_stop, rollback_in_place, enabled) VALUES (?, ?, ?, ?, ?, 1)`,
-		sc.StackID, sc.CronExpr, sc.Type, sc.PreStop, sc.RollbackInPlace)
+		`INSERT INTO schedules (stack_id, cron_expr, job_type, pre_stop, rollback_in_place, no_backup, enabled)
+		 VALUES (?, ?, ?, ?, ?, ?, 1)`,
+		sc.StackID, sc.CronExpr, sc.Type, sc.PreStop, sc.RollbackInPlace, sc.NoBackup)
 	if err != nil {
 		if isForeignKeyError(err) {
 			return 0, fmt.Errorf("stack %d: %w", sc.StackID, ErrNotFound)

@@ -302,6 +302,7 @@ type newSchedule struct {
 	Update          bool // job type update (default: backup)
 	PreStop         bool
 	RollbackInPlace bool
+	ConfirmNoBackup bool // update on a stack without repository: "no backup, no rollback" confirmed
 }
 
 // renderSettings renders the Settings tab.

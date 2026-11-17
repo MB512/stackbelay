@@ -41,7 +41,7 @@
       {{- if .ComposeFile}}<tr><th>Compose file</th><td><code>{{.ComposeFile}}</code>, new content <code>{{printf "%.12s" .ComposeSHA256}}</code> (SHA-256); the replaced file is kept in the job directory as <code>compose.previous</code></td></tr>{{end}}
       {{- if .NoBackup}}<tr><th>Options</th><td>without backup if the stack has no repository: no rollback on failure</td></tr>{{end}}
       {{- if .OnlyIfNew}}<tr><th>Options</th><td>only if there is a new image</td></tr>{{end}}
-      {{- if .NoPreStop}}<tr><th>Options</th><td>no snapshot before stopping</td></tr>{{end}}
+      {{- if and .NoPreStop (not .NoBackup)}}<tr><th>Options</th><td>no snapshot before stopping</td></tr>{{end}}
       {{- if .RollbackInPlace}}<tr><th>Rollback</th><td>in place (if needed)</td></tr>{{end}}
       {{- end}}
       {{- with .Job.Snapshot}}<tr><th>Snapshot</th><td><code>{{printf "%.8s" .}}</code></td></tr>{{end}}

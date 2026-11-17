@@ -67,7 +67,9 @@ CREATE TABLE schedules (
   enabled     INTEGER NOT NULL DEFAULT 1,
   -- migration 0008:
   job_type    TEXT NOT NULL DEFAULT 'backup' CHECK (job_type IN ('backup', 'update')),
-  rollback_in_place INTEGER NOT NULL DEFAULT 0 -- updates: roll back in place
+  rollback_in_place INTEGER NOT NULL DEFAULT 0, -- updates: roll back in place
+  -- migration 0010:
+  no_backup   INTEGER NOT NULL DEFAULT 0    -- updates: "no backup, no rollback" confirmed (stack had no repository)
 );
 
 CREATE TABLE jobs (
