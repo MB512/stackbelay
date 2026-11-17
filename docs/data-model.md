@@ -55,6 +55,7 @@ CREATE TABLE permissions (
   can_restore INTEGER NOT NULL DEFAULT 0,
   can_logs    INTEGER NOT NULL DEFAULT 0,   -- live container logs; migration 0005
   can_update  INTEGER NOT NULL DEFAULT 0,   -- update job; migration 0006
+  can_operate INTEGER NOT NULL DEFAULT 0,   -- stop/start/restart jobs; migration 0009
   PRIMARY KEY (user_id, stack_id)
 );
 
@@ -72,7 +73,7 @@ CREATE TABLE schedules (
 CREATE TABLE jobs (
   id            TEXT PRIMARY KEY,           -- ULID
   stack_id      INTEGER NOT NULL REFERENCES stacks(id),
-  type          TEXT NOT NULL,              -- backup | restore | update | compose-apply
+  type          TEXT NOT NULL,              -- backup | restore | update | compose-apply | stop | start | restart
   trigger       TEXT NOT NULL,              -- manual | schedule
   requested_by  INTEGER REFERENCES users(id), -- NULL for schedule
   state         TEXT NOT NULL,              -- queued | running | succeeded | failed | cancelled
@@ -113,9 +114,10 @@ CREATE TABLE audit_log (
 - Admin: may manage users, stacks, repositories, schedules, and may do
   everything on every stack.
 - Non-admin: may start a backup only if `can_backup`, a restore only if
-  `can_restore` for that stack, an update only if `can_update`, and may
-  view its live container logs only if `can_logs` (logs are not redacted). Viewing a stack's status/snapshots
-  requires at least one of the flags.
+  `can_restore` for that stack, an update only if `can_update`, a stop,
+  start or restart only if `can_operate`, and may view its live container
+  logs only if `can_logs` (logs are not redacted). Viewing a stack's
+  status/snapshots requires at least one of the flags.
 - Checks happen server-side on every request and again when the job is created.
   The worker never decides permissions.
 - `permissions` only holds grants: setting all flags to 0 deletes the row,

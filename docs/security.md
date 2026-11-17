@@ -19,7 +19,8 @@ attackers reaching the UI, a leaked database file.
 ## Rules
 
 1. **No free-form execution.** Users can only trigger predefined job types
-   (`backup`, `restore`, `update`, `compose-apply`) on discovered stacks.
+   (`backup`, `restore`, `update`, `compose-apply`, `stop`, `start`,
+   `restart`) on discovered stacks.
    The one exception is the container shell (rule 13). All external
    commands use `exec.CommandContext` with argument lists, never a shell.
 2. **Input validation.** Stack names must match the discovered set. Snapshot IDs
@@ -43,7 +44,10 @@ attackers reaching the UI, a leaked database file.
    that could be read as a flag or contain control characters are
    rejected. Container logs are not redacted, so viewing them is a separate
    per-stack right (`can_logs`).
-   Everything that changes a stack runs in a worker job.
+   Everything that changes a stack runs in a worker job, also stopping,
+   starting and restarting it (own right `can_operate`; these jobs get no
+   repository credentials). The manager's own stack cannot be stopped from
+   the UI (nobody could start it again there); restarting it is allowed.
    Editing a compose file is admin-only (it is equivalent to root on the
    host); the manager only validates it, the file is written by the
    compose-apply job in a worker, after a backup. The new content is

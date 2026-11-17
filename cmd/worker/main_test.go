@@ -43,6 +43,9 @@ func TestRunUsageAndConfigErrors(t *testing.T) {
 		{"restore without snapshot", []string{"restore", "web"}, getenv, 2, "restore expects"},
 		{"run without dir", []string{"run"}, getenv, 2, "run expects"},
 		{"update without stack", []string{"update", "--no-backup"}, getenv, 2, "update expects"},
+		{"stop without stack", []string{"stop"}, getenv, 2, "stop expects"},
+		{"restart with flag", []string{"restart", "--force"}, getenv, 2, "restart expects"},
+		{"start with two stacks", []string{"start", "a", "b"}, getenv, 2, "start expects"},
 		{"unknown stack", []string{"backup", "../etc"}, getenv, 1, "stack not found"},
 	}
 	for _, tt := range tests {
@@ -183,5 +186,37 @@ func TestParseUpdateArgs(t *testing.T) {
 	}
 	if _, _, err := parseArgs([]string{"update", "--no-backup", "--rollback-in-place", "web"}); !errors.Is(err, errUsage) {
 		t.Fatalf("no-backup with rollback-in-place: %v", err)
+	}
+}
+
+func TestParseControlArgs(t *testing.T) {
+	for _, cmd := range []string{"stop", "start", "restart"} {
+		spec, _, err := parseArgs([]string{cmd, "web"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := (jobs.Spec{Type: jobs.Type(cmd), Stack: "web"}); spec != want {
+			t.Fatalf("got %+v, want %+v", spec, want)
+		}
+	}
+}
+
+func TestNeedsRepository(t *testing.T) {
+	for _, tt := range []struct {
+		spec jobs.Spec
+		want bool
+	}{
+		{jobs.Spec{Type: jobs.TypeBackup}, true},
+		{jobs.Spec{Type: jobs.TypeRestore}, true},
+		{jobs.Spec{Type: jobs.TypeUpdate}, true},
+		{jobs.Spec{Type: jobs.TypeUpdate, NoBackup: true}, false},
+		{jobs.Spec{Type: jobs.TypeComposeApply, NoBackup: true}, false},
+		{jobs.Spec{Type: jobs.TypeStop}, false},
+		{jobs.Spec{Type: jobs.TypeStart}, false},
+		{jobs.Spec{Type: jobs.TypeRestart}, false},
+	} {
+		if got := needsRepository(tt.spec); got != tt.want {
+			t.Errorf("%+v: %v, want %v", tt.spec, got, tt.want)
+		}
 	}
 }

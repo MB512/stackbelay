@@ -634,3 +634,45 @@ func TestComposeApplyHandoff(t *testing.T) {
 		t.Fatalf("unconfirmed without repository: %+v", got)
 	}
 }
+
+// Stop, start and restart run without repository: they get no credentials
+// even if the stack has a repository, and they work on stacks without one.
+func TestControlJobsGetNoRepository(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	e.d.MaxRunning = 10
+	var ids []string
+	for _, tc := range []struct {
+		stack string
+		typ   jobs.Type
+	}{{"web", jobs.TypeStop}, {"norepo", jobs.TypeStart}, {"web", jobs.TypeRestart}} {
+		ids = append(ids, e.submit(tc.stack, tc.typ, store.JobOptions{}).ID)
+	}
+	e.d.Step(ctx)
+	// The restart waits for the stop: one job per stack at a time.
+	if got := e.job(ids[2]).State; got != jobs.StateQueued {
+		t.Fatalf("restart while the stop runs: %s", got)
+	}
+	e.workerDone(ids[0], jobs.Status{State: jobs.StateSucceeded})
+	e.d.Step(ctx)
+	e.d.Step(ctx)
+	for _, id := range ids {
+		if got := e.job(id); got.State == jobs.StateQueued {
+			t.Fatalf("job %s still queued", id)
+		}
+		spec, err := jobs.ReadSpec(filepath.Join(e.jobsDir, id))
+		if err != nil || !spec.Type.Control() || spec.NoBackup || spec.CarryOverJobs != "" {
+			t.Fatalf("spec: %+v %v", spec, err)
+		}
+		for _, cs := range e.docker.started {
+			if cs.Name != ContainerName(id) {
+				continue
+			}
+			for k := range cs.Env {
+				if strings.HasPrefix(k, "RESTIC_") && k != "RESTIC_CACHE_DIR" {
+					t.Errorf("job %s (%s) got %s", id, spec.Type, k)
+				}
+			}
+		}
+	}
+}

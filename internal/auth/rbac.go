@@ -13,6 +13,7 @@ const (
 	ActionRestore               // start a restore
 	ActionLogs                  // view the live container logs
 	ActionUpdate                // update the stack (pull, back up, recreate)
+	ActionOperate               // stop, start and restart the stack (no backup)
 )
 
 func (a Action) String() string {
@@ -27,6 +28,8 @@ func (a Action) String() string {
 		return "logs"
 	case ActionUpdate:
 		return "update"
+	case ActionOperate:
+		return "operate"
 	}
 	return "unknown"
 }
@@ -40,7 +43,7 @@ func Allowed(user store.User, perm store.Permission, action Action) bool {
 		return false
 	}
 	if user.IsAdmin {
-		return action >= ActionView && action <= ActionUpdate
+		return action >= ActionView && action <= ActionOperate
 	}
 	if perm.UserID != user.ID {
 		return false // a permission of someone else
@@ -56,6 +59,8 @@ func Allowed(user store.User, perm store.Permission, action Action) bool {
 		return perm.CanLogs
 	case ActionUpdate:
 		return perm.CanUpdate
+	case ActionOperate:
+		return perm.CanOperate
 	}
 	return false
 }

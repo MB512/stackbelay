@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/MB512/stackvault/internal/auth"
+	"github.com/MB512/stackvault/internal/jobs"
 	"github.com/MB512/stackvault/internal/store"
 )
 
@@ -68,6 +69,9 @@ type Server struct {
 	Stopping <-chan struct{}
 	// StreamInterval is how often live streams look for news; default 500ms.
 	StreamInterval time.Duration
+	// OwnStack is the stack the manager itself belongs to ("" if none).
+	// It cannot be stopped from the UI: nobody could start it again there.
+	OwnStack string
 	// Hostname is this host's restic --host (STACKVAULT_HOSTNAME). Only
 	// snapshots of a stack made on this host are listed and restorable.
 	// Empty: snapshots of all hosts.
@@ -136,6 +140,9 @@ func (s *Server) Handler() (http.Handler, error) {
 			r.Get("/stacks/{name}/backups", s.stackBackups)
 			r.Post("/stacks/{name}/snapshots/refresh", s.refreshStackSnapshots)
 			r.Post("/stacks/{name}/backup", s.startBackup)
+			r.Post("/stacks/{name}/stop", s.startControl(jobs.TypeStop))
+			r.Post("/stacks/{name}/start", s.startControl(jobs.TypeStart))
+			r.Post("/stacks/{name}/restart", s.startControl(jobs.TypeRestart))
 			r.Get("/stacks/{name}/logs", s.stackLogsPage)
 			r.Get("/stacks/{name}/logs/events", s.stackLogEvents)
 			r.Get("/stacks/{name}/restore", s.restoreForm)

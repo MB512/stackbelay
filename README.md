@@ -33,9 +33,12 @@ see [Upgrading from 0.1](#upgrading-from-01-move-the-secret-key-into-the-data-di
   pulling); "only if new" skips everything when nothing changed.
 - **Schedules** (cron expressions) per stack for backups and updates, plus
   manual runs. Jobs are queued; one job per stack at a time.
+- **Status page** per stack: containers with state, health and update
+  check, recent jobs; **stop, start and restart** a stack (without backup).
 - **Live container logs** per stack, with a filter per container.
 - **Compose editor** and an opt-in **container shell** for admins.
-- **Multi-user** with per-stack rights (backup, restore, update, logs);
+- **Multi-user** with per-stack rights (backup, restore, update, operate,
+  logs);
   admins manage users, repositories, schedules and rights.
 - **Live job logs** in the browser, job history, audit log.
 - Backup and restore run in a separate, short-lived **worker container**.

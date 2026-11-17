@@ -7,6 +7,7 @@ import (
 
 	"github.com/MB512/stackvault/internal/auth"
 	"github.com/MB512/stackvault/internal/docker"
+	"github.com/MB512/stackvault/internal/jobs"
 	"github.com/MB512/stackvault/internal/store"
 )
 
@@ -24,9 +25,12 @@ const pollHeader = "X-Stackvault-Poll"
 // statusTab is the data of the "Status" tab, the home of a stack.
 type statusTab struct {
 	stackHeader
-	CSRF            string
-	CanBackup       bool
-	CanUpdate       bool
+	CSRF       string
+	CanBackup  bool
+	CanUpdate  bool
+	CanOperate bool // stop, start, restart
+	// OwnStackReason is set on the manager's own stack: why it has no Stop.
+	OwnStackReason  string
 	CanCheck        bool // this installation can check for updates
 	HasRepo         bool
 	JobsUnavailable string // why jobs cannot be started, or ""
@@ -67,6 +71,7 @@ func (s *Server) stackStatus(w http.ResponseWriter, r *http.Request) {
 		CSRF:            a.Session.CSRFToken,
 		CanBackup:       auth.Allowed(a.User, perm, auth.ActionBackup),
 		CanUpdate:       auth.Allowed(a.User, perm, auth.ActionUpdate),
+		CanOperate:      auth.Allowed(a.User, perm, auth.ActionOperate),
 		CanCheck:        s.Updates != nil,
 		JobsUnavailable: s.jobsUnavailable(),
 	}
@@ -76,6 +81,9 @@ func (s *Server) stackStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page.HasRepo = hasRepo
+	if st.Name == s.OwnStack {
+		page.OwnStackReason = ownStackStopReason
+	}
 	if page.Live, err = s.loadStatusLive(r, st, perm); err != nil {
 		s.internalError(w, r, "loading stack", err)
 		return
@@ -142,3 +150,25 @@ func (s *Server) hasRepository(ctx context.Context, st store.Stack) (bool, error
 	}
 	return err == nil, err
 }
+
+// startControl returns the handler that queues a stop, start or restart of
+// the stack (operate right). They run in a worker like every change to a
+// stack, without backup. The manager's own stack cannot be stopped: the
+// UI would be gone and nobody could start it again from there.
+func (s *Server) startControl(t jobs.Type) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		st, _, ok := s.loadStack(w, r, auth.ActionOperate)
+		if !ok {
+			return
+		}
+		if t == jobs.TypeStop && st.Name == s.OwnStack {
+			s.renderError(w, r, http.StatusConflict, ownStackStopReason)
+			return
+		}
+		s.submitJob(w, r, st, store.Job{Type: t}, string(t)+" without backup", false)
+	}
+}
+
+// ownStackStopReason explains why the manager's own stack has no Stop.
+const ownStackStopReason = "This is StackVault's own stack: stopping it would also stop this web interface, " +
+	"and nobody could start it again from here. Use Restart instead."

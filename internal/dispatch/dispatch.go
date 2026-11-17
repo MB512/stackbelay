@@ -292,25 +292,28 @@ func (d *Dispatcher) start(ctx context.Context, j store.Job) {
 		fail("starting job", fmt.Errorf("invalid job id %q", j.ID))
 		return
 	}
-	// Every job needs the repository, except an update or compose apply the
-	// user confirmed to run without backup. Such a job on a stack that has
-	// a repository always backs up, even if it had none when it was queued.
+	// Every job needs the repository, except stop/start/restart (they get
+	// no credentials at all) and an update or compose apply the user
+	// confirmed to run without backup. Such a job on a stack that has a
+	// repository always backs up, even if it had none when it was queued.
 	changes := j.Type == jobs.TypeUpdate || j.Type == jobs.TypeComposeApply
 	var resticRepo restic.Repo
 	noBackup := false
-	repo, err := d.Store.RepositoryForStack(ctx, j.StackID)
-	switch {
-	case err == nil:
-		resticRepo = repo.Restic()
-	case errors.Is(err, store.ErrNotFound) && changes && j.Options.NoBackup:
-		noBackup = true
-		log.Warn("changing the stack without backup: it has no repository (confirmed when the job was queued)")
-	case errors.Is(err, store.ErrNotFound):
-		fail("starting job", errors.New("the stack has no repository"))
-		return
-	default:
-		fail("loading repository", err)
-		return
+	if !j.Type.Control() {
+		repo, err := d.Store.RepositoryForStack(ctx, j.StackID)
+		switch {
+		case err == nil:
+			resticRepo = repo.Restic()
+		case errors.Is(err, store.ErrNotFound) && changes && j.Options.NoBackup:
+			noBackup = true
+			log.Warn("changing the stack without backup: it has no repository (confirmed when the job was queued)")
+		case errors.Is(err, store.ErrNotFound):
+			fail("starting job", errors.New("the stack has no repository"))
+			return
+		default:
+			fail("loading repository", err)
+			return
+		}
 	}
 	dir := d.jobDir(j.ID)
 	if err := os.Mkdir(dir, 0o700); err != nil {

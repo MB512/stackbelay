@@ -99,3 +99,30 @@ func TestJobsDirInStack(t *testing.T) {
 		t.Errorf("volume: %q", got)
 	}
 }
+
+func TestOwnStack(t *testing.T) {
+	for _, tt := range []struct {
+		root, dir, want string
+	}{
+		{"/home/docker", "/home/docker/stackvault", "stackvault"},
+		{"/home/docker/", "/home/docker/stackvault/", "stackvault"},
+		{"/home/docker", "/home/docker/a/b", ""},     // not directly under STACKS_ROOT
+		{"/home/docker", "/srv/stackvault", ""},      // elsewhere
+		{"/home/docker", "/home/docker/.hidden", ""}, // not a valid stack name
+		{"/home/docker", "stackvault", ""},           // relative
+		{"/home/docker", "", ""},                     // not started by compose
+	} {
+		if got := ownStack(tt.root, tt.dir); got != tt.want {
+			t.Errorf("ownStack(%q, %q) = %q, want %q", tt.root, tt.dir, got, tt.want)
+		}
+	}
+	cfg := TemplateConfig{StacksRoot: "/home/docker", JobsDir: "/data/jobs"}
+	tpl, err := NewTemplate(cfg, &docker.SelfInfo{ImageID: "sha256:self", ComposeWorkingDir: "/home/docker/sv",
+		Mounts: []docker.Mount{
+			{Type: "bind", Source: "/home/docker", Target: "/home/docker"},
+			{Type: "bind", Source: "/home/docker/sv/data", Target: "/data"},
+		}})
+	if err != nil || tpl.OwnStack != "sv" {
+		t.Fatalf("OwnStack = %q, %v", tpl.OwnStack, err)
+	}
+}

@@ -57,6 +57,10 @@ func (s ContainerState) Running() bool {
 type SelfInfo struct {
 	ImageID string // "sha256:..."
 	Mounts  []Mount
+	// ComposeWorkingDir is the directory of the compose project the
+	// container belongs to (label com.docker.compose.project.working_dir),
+	// "" if it was not started by compose.
+	ComposeWorkingDir string
 }
 
 // dockerEnv are the variables the docker CLI inherits from the manager. The
@@ -222,9 +226,16 @@ func (c *CLI) InspectSelf(ctx context.Context, id string) (SelfInfo, error) {
 	return parseSelf(out)
 }
 
+// composeWorkingDirLabel is the label compose puts on every container of a
+// project: the project's directory.
+const composeWorkingDirLabel = "com.docker.compose.project.working_dir"
+
 func parseSelf(out []byte) (SelfInfo, error) {
 	var raw struct {
 		Image  string `json:"Image"`
+		Config struct {
+			Labels map[string]string `json:"Labels"`
+		} `json:"Config"`
 		Mounts []struct {
 			Type        string `json:"Type"`
 			Name        string `json:"Name"`
@@ -236,7 +247,7 @@ func parseSelf(out []byte) (SelfInfo, error) {
 	if err := json.Unmarshal(bytes.TrimSpace(out), &raw); err != nil {
 		return SelfInfo{}, fmt.Errorf("parsing container inspect: %w", err)
 	}
-	info := SelfInfo{ImageID: raw.Image}
+	info := SelfInfo{ImageID: raw.Image, ComposeWorkingDir: raw.Config.Labels[composeWorkingDirLabel]}
 	for _, m := range raw.Mounts {
 		mt := Mount{Type: m.Type, Target: m.Destination, ReadOnly: !m.RW}
 		switch m.Type {

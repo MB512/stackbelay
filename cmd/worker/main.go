@@ -1,6 +1,6 @@
-// Command worker executes a single backup, restore, update or compose-apply
-// job and exits (compose-apply only through "run": its new compose file is
-// in the job directory).
+// Command worker executes a single backup, restore, update, compose-apply,
+// stop, start or restart job and exits (compose-apply only through "run":
+// its new compose file is in the job directory).
 //
 // Usage:
 //
@@ -8,10 +8,12 @@
 //	worker backup  [--pre-stop] <stack>
 //	worker restore [--no-safety-snapshot] [--no-start] [--pin-images] [--in-place] <stack> <snapshot-id>
 //	worker update  [--no-backup] [--only-if-new] [--rollback-in-place] [--no-pre-stop] <stack>
+//	worker stop|start|restart <stack>
 //
 // "run" is how the manager starts a job: the job is described by
 // <job-dir>/spec.json, and the worker writes status.json and log.txt there.
-// "backup", "restore" and "update" are for manual use and tests.
+// The other commands are for manual use and tests. stop, start and restart
+// run without backup and need no repository.
 //
 // Flags must come before positional arguments. Configuration and repository
 // credentials are read from the environment (see internal/config). Exit
@@ -45,6 +47,7 @@ const usage = `usage:
   worker backup  [--pre-stop] <stack>
   worker restore [--no-safety-snapshot] [--no-start] [--pin-images] [--in-place] <stack> <snapshot-id>
   worker update  [--no-backup] [--only-if-new] [--rollback-in-place] [--no-pre-stop] <stack>
+  worker stop|start|restart <stack>
 `
 
 func main() {
@@ -209,6 +212,12 @@ func parseArgs(args []string) (jobs.Spec, string, error) {
 		return jobs.Spec{Type: jobs.TypeUpdate, Stack: fs.Arg(0), NoBackup: *noBackup, OnlyIfNew: *onlyIfNew,
 			RollbackInPlace: *rollbackInPlace, NoPreStop: *noPreStop}, "", nil
 
+	case "stop", "start", "restart":
+		if len(args) != 2 || strings.HasPrefix(args[1], "-") {
+			return jobs.Spec{}, "", fmt.Errorf("%w: %s expects <stack>", errUsage, args[0])
+		}
+		return jobs.Spec{Type: jobs.Type(args[0]), Stack: args[1]}, "", nil
+
 	default:
 		return jobs.Spec{}, "", fmt.Errorf("%w: unknown command %q", errUsage, args[0])
 	}
@@ -220,10 +229,7 @@ func execute(ctx context.Context, p *jobs.Pipeline, cfg config.Worker, spec jobs
 	if err != nil {
 		return err
 	}
-	// Only an update or compose apply explicitly marked "no backup" runs
-	// without repository.
-	changes := spec.Type == jobs.TypeUpdate || spec.Type == jobs.TypeComposeApply
-	if needsRepo := !changes || !spec.NoBackup; needsRepo && !cfg.HasRepo() {
+	if needsRepository(spec) && !cfg.HasRepo() {
 		return errors.New("no repository configured (RESTIC_REPOSITORY and RESTIC_PASSWORD(_FILE) are required for this job)")
 	}
 	switch spec.Type {
@@ -260,9 +266,26 @@ func execute(ctx context.Context, p *jobs.Pipeline, cfg config.Worker, spec jobs
 		})
 		recordChange(status, res)
 		return err
+	case jobs.TypeStop:
+		return p.Stop(ctx, stack)
+	case jobs.TypeStart:
+		return p.Start(ctx, stack)
+	case jobs.TypeRestart:
+		return p.Restart(ctx, stack)
 	default:
 		return fmt.Errorf("unknown job type %q", spec.Type)
 	}
+}
+
+// needsRepository reports whether the job needs repository settings. Stop,
+// start and restart never touch the repository; of the other jobs only an
+// update or compose apply explicitly marked "no backup" runs without one.
+func needsRepository(spec jobs.Spec) bool {
+	if spec.Type.Control() {
+		return false
+	}
+	changes := spec.Type == jobs.TypeUpdate || spec.Type == jobs.TypeComposeApply
+	return !changes || !spec.NoBackup
 }
 
 // recordChange stores the result of an update or compose apply in status.

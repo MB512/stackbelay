@@ -137,7 +137,7 @@
   {{- if .Permissions}}
   <p class="hint">Administrators may do everything and are not listed. Users with any permission can see the stack.</p>
   <table>
-    <thead><tr><th>User</th><th>Backup</th><th>Restore</th><th>Update</th><th>Logs</th><th></th></tr></thead>
+    <thead><tr><th>User</th><th>Backup</th><th>Restore</th><th>Update</th><th title="Stop, start and restart without backup">Operate</th><th>Logs</th><th></th></tr></thead>
     <tbody>
       {{- range .Permissions}}{{template "perm-row" .}}{{end}}
     </tbody>
@@ -158,6 +158,7 @@
   <td><input type="checkbox" name="can_backup" form="perm-{{.User.ID}}" aria-label="Backup"{{if .Perm.CanBackup}} checked{{end}}></td>
   <td><input type="checkbox" name="can_restore" form="perm-{{.User.ID}}" aria-label="Restore"{{if .Perm.CanRestore}} checked{{end}}></td>
   <td><input type="checkbox" name="can_update" form="perm-{{.User.ID}}" aria-label="Update"{{if .Perm.CanUpdate}} checked{{end}}></td>
+  <td><input type="checkbox" name="can_operate" form="perm-{{.User.ID}}" aria-label="Operate"{{if .Perm.CanOperate}} checked{{end}}></td>
   <td><input type="checkbox" name="can_logs" form="perm-{{.User.ID}}" aria-label="Logs"{{if .Perm.CanLogs}} checked{{end}}></td>
   <td>
     <form id="perm-{{.User.ID}}" method="post" action="/stacks/{{.StackName}}/permissions"

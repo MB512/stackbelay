@@ -22,7 +22,9 @@
        "details" event of the live stream. */}}
 {{define "job-details"}}
 <section id="job-details">
-  <h1>{{if eq (print .Job.Type) "restore"}}Restore{{else if eq (print .Job.Type) "update"}}Update{{else if eq (print .Job.Type) "compose-apply"}}Compose change{{else}}Backup{{end}} of
+  <h1>{{if eq (print .Job.Type) "restore"}}Restore{{else if eq (print .Job.Type) "update"}}Update{{else if eq (print .Job.Type) "compose-apply"}}Compose change
+    {{- else if eq (print .Job.Type) "stop"}}Stop{{else if eq (print .Job.Type) "start"}}Start
+    {{- else if eq (print .Job.Type) "restart"}}Restart{{else}}Backup{{end}} of
     <a href="/stacks/{{.Job.StackName}}">{{.Job.StackName}}</a> {{template "job-state" .Job.State}}</h1>
 
   <table class="details">

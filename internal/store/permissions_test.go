@@ -34,6 +34,7 @@ func TestPermissions(t *testing.T) {
 		{UserID: bob, StackID: web, CanRestore: true},
 		{UserID: bob, StackID: db, CanLogs: true}, // logs alone is a grant
 		{UserID: alice, StackID: other, CanUpdate: true},
+		{UserID: bob, StackID: other, CanOperate: true}, // operate alone is a grant
 	} {
 		if err := s.SetPermission(ctx, p); err != nil {
 			t.Fatal(err)
@@ -66,8 +67,14 @@ func TestPermissions(t *testing.T) {
 	if p, _ := s.Permission(ctx, bob, db); !p.CanLogs || p.CanBackup || p.CanRestore || p.None() {
 		t.Fatalf("logs-only grant: %+v", p)
 	}
-	if p, _ := s.Permission(ctx, alice, other); !p.CanUpdate || p.CanLogs || p.None() {
+	if p, _ := s.Permission(ctx, alice, other); !p.CanUpdate || p.CanLogs || p.CanOperate || p.None() {
 		t.Fatalf("update-only grant: %+v", p)
+	}
+	if p, _ := s.Permission(ctx, bob, other); !p.CanOperate || p.CanUpdate || p.None() {
+		t.Fatalf("operate-only grant: %+v", p)
+	}
+	if byUser, _ := s.PermissionsForStack(ctx, other); !byUser[bob].CanOperate || byUser[alice].CanOperate {
+		t.Fatalf("PermissionsForStack with operate: %+v", byUser)
 	}
 
 	if err := s.SetPermission(ctx, Permission{UserID: 999, StackID: web, CanBackup: true}); !errors.Is(err, ErrNotFound) {

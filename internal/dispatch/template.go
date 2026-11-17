@@ -14,6 +14,7 @@ import (
 	"github.com/MB512/stackvault/internal/docker"
 	"github.com/MB512/stackvault/internal/jobs"
 	"github.com/MB512/stackvault/internal/restic"
+	"github.com/MB512/stackvault/internal/stacks"
 )
 
 // Fixed parts of the worker container template.
@@ -51,6 +52,10 @@ type Template struct {
 	Socket   string
 	Hostname string // STACKVAULT_HOSTNAME for restic --host
 	LogLevel string // STACKVAULT_LOG_LEVEL, optional
+	// OwnStack is the name of the stack the manager itself belongs to (its
+	// compose project directory is a stack directory under STACKS_ROOT),
+	// or "" if it is not one of the stacks.
+	OwnStack string
 }
 
 // Spec returns the container for one job. Credentials are passed as
@@ -142,6 +147,7 @@ func NewTemplate(cfg TemplateConfig, self *docker.SelfInfo) (Template, error) {
 	if t.Image == "" {
 		t.Image = self.ImageID
 	}
+	t.OwnStack = ownStack(cfg.StacksRoot, self.ComposeWorkingDir)
 
 	// STACKS_ROOT must be mounted at the same path as on the host, so
 	// relative paths in compose files resolve identically.
@@ -165,6 +171,19 @@ func NewTemplate(cfg TemplateConfig, self *docker.SelfInfo) (Template, error) {
 		t.Jobs = docker.Mount{Type: "volume", Source: m.Source, SubPath: path.Join(m.SubPath, rel)}
 	}
 	return t, nil
+}
+
+// ownStack returns the stack name of a compose working directory if it is a
+// stack directory directly under stacksRoot, else "".
+func ownStack(stacksRoot, workingDir string) string {
+	if workingDir == "" || !path.IsAbs(workingDir) {
+		return ""
+	}
+	dir := path.Clean(workingDir)
+	if path.Dir(dir) != path.Clean(stacksRoot) || !stacks.ValidName(path.Base(dir)) {
+		return ""
+	}
+	return path.Base(dir)
 }
 
 // mountFor finds the mount whose target contains p (the longest match) and

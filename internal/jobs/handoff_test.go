@@ -63,6 +63,27 @@ func TestComposeApplySpecRoundTrip(t *testing.T) {
 	}
 }
 
+func TestControlSpecRoundTrip(t *testing.T) {
+	for _, typ := range []Type{TypeStop, TypeStart, TypeRestart} {
+		dir := t.TempDir()
+		want := Spec{ID: testJobID, Type: typ, Stack: "web", Trigger: "manual", Requester: "carol"}
+		if err := WriteSpec(dir, want); err != nil {
+			t.Fatal(err)
+		}
+		got, err := ReadSpec(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want.Version = 1
+		if got != want || !got.Type.Control() {
+			t.Fatalf("got %+v, want %+v", got, want)
+		}
+	}
+	if TypeBackup.Control() || TypeUpdate.Control() {
+		t.Fatal("Control() true for a job with backup")
+	}
+}
+
 func TestReadSpecRejects(t *testing.T) {
 	tests := []struct {
 		name string
@@ -97,6 +118,12 @@ func TestReadSpecRejects(t *testing.T) {
 		{"compose checksum on an update", `{"version":1,"id":"` + testJobID + `","type":"update","stack":"web","compose_sha256":"` + strings.Repeat("a", 64) + `"}`},
 		{"compose-apply with bad checksum", `{"version":1,"id":"` + testJobID + `","type":"compose-apply","stack":"web","compose_sha256":"../x","compose_base_sha256":"` + strings.Repeat("a", 64) + `"}`},
 		{"carry-over on a backup", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"web","carry_over_jobs":"data/jobs"}`},
+		{"stop with pre-stop option", `{"version":1,"id":"` + testJobID + `","type":"stop","stack":"web","pre_stop":true}`},
+		{"start with snapshot", `{"version":1,"id":"` + testJobID + `","type":"start","stack":"web","snapshot_id":"0123abcd"}`},
+		{"restart with carry-over", `{"version":1,"id":"` + testJobID + `","type":"restart","stack":"web","carry_over_jobs":"data/jobs"}`},
+		{"restart without backup flag", `{"version":1,"id":"` + testJobID + `","type":"restart","stack":"web","no_backup":true}`},
+		{"stop with update option", `{"version":1,"id":"` + testJobID + `","type":"stop","stack":"web","only_if_new":true}`},
+		{"start with compose checksum", `{"version":1,"id":"` + testJobID + `","type":"start","stack":"web","compose_sha256":"` + strings.Repeat("a", 64) + `"}`},
 		{"bad trigger", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"web","trigger":"cron"}`},
 		{"control chars in requester", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"web","requester":"a\nb"}`},
 		{"too large", `{"version":1,"x":"` + strings.Repeat("a", 70<<10) + `"}`},

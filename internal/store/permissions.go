@@ -16,10 +16,13 @@ type Permission struct {
 	CanRestore bool
 	CanLogs    bool // view the live container logs
 	CanUpdate  bool // update the stack (pull, back up, recreate)
+	CanOperate bool // stop, start and restart the stack (no backup)
 }
 
 // None reports whether the permission grants nothing.
-func (p Permission) None() bool { return !p.CanBackup && !p.CanRestore && !p.CanLogs && !p.CanUpdate }
+func (p Permission) None() bool {
+	return !p.CanBackup && !p.CanRestore && !p.CanLogs && !p.CanUpdate && !p.CanOperate
+}
 
 // SetPermission stores a permission. A permission that grants nothing
 // deletes the row, so the table only holds actual grants.
@@ -29,11 +32,12 @@ func (s *Store) SetPermission(ctx context.Context, p Permission) error {
 		_, err = s.db.ExecContext(ctx, `DELETE FROM permissions WHERE user_id = ? AND stack_id = ?`, p.UserID, p.StackID)
 	} else {
 		_, err = s.db.ExecContext(ctx,
-			`INSERT INTO permissions (user_id, stack_id, can_backup, can_restore, can_logs, can_update) VALUES (?, ?, ?, ?, ?, ?)
+			`INSERT INTO permissions (user_id, stack_id, can_backup, can_restore, can_logs, can_update, can_operate)
+			 VALUES (?, ?, ?, ?, ?, ?, ?)
 			 ON CONFLICT (user_id, stack_id) DO UPDATE SET
 			   can_backup = excluded.can_backup, can_restore = excluded.can_restore,
-			   can_logs = excluded.can_logs, can_update = excluded.can_update`,
-			p.UserID, p.StackID, p.CanBackup, p.CanRestore, p.CanLogs, p.CanUpdate)
+			   can_logs = excluded.can_logs, can_update = excluded.can_update, can_operate = excluded.can_operate`,
+			p.UserID, p.StackID, p.CanBackup, p.CanRestore, p.CanLogs, p.CanUpdate, p.CanOperate)
 		if err != nil && isForeignKeyError(err) {
 			return fmt.Errorf("permission for user %d on stack %d: %w", p.UserID, p.StackID, ErrNotFound)
 		}
@@ -49,8 +53,9 @@ func (s *Store) SetPermission(ctx context.Context, p Permission) error {
 func (s *Store) Permission(ctx context.Context, userID, stackID int64) (Permission, error) {
 	p := Permission{UserID: userID, StackID: stackID}
 	err := s.db.QueryRowContext(ctx,
-		`SELECT can_backup, can_restore, can_logs, can_update FROM permissions WHERE user_id = ? AND stack_id = ?`, userID, stackID,
-	).Scan(&p.CanBackup, &p.CanRestore, &p.CanLogs, &p.CanUpdate)
+		`SELECT can_backup, can_restore, can_logs, can_update, can_operate FROM permissions WHERE user_id = ? AND stack_id = ?`,
+		userID, stackID,
+	).Scan(&p.CanBackup, &p.CanRestore, &p.CanLogs, &p.CanUpdate, &p.CanOperate)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return Permission{}, fmt.Errorf("loading permission for user %d on stack %d: %w", userID, stackID, err)
 	}
@@ -83,7 +88,7 @@ func (s *Store) PermissionsForStack(ctx context.Context, stackID int64) (map[int
 	return byUser, nil
 }
 
-const permColumns = `user_id, stack_id, can_backup, can_restore, can_logs, can_update`
+const permColumns = `user_id, stack_id, can_backup, can_restore, can_logs, can_update, can_operate`
 
 // queryPermissions runs a query that selects permColumns.
 func (s *Store) queryPermissions(ctx context.Context, query string, arg int64) ([]Permission, error) {
@@ -95,7 +100,7 @@ func (s *Store) queryPermissions(ctx context.Context, query string, arg int64) (
 	var out []Permission
 	for rows.Next() {
 		var p Permission
-		if err := rows.Scan(&p.UserID, &p.StackID, &p.CanBackup, &p.CanRestore, &p.CanLogs, &p.CanUpdate); err != nil {
+		if err := rows.Scan(&p.UserID, &p.StackID, &p.CanBackup, &p.CanRestore, &p.CanLogs, &p.CanUpdate, &p.CanOperate); err != nil {
 			return nil, fmt.Errorf("listing permissions: %w", err)
 		}
 		out = append(out, p)

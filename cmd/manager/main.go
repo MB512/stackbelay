@@ -115,6 +115,12 @@ func run(ctx context.Context, getenv func(string) string, readFile func(string) 
 	var sched *scheduler.Scheduler
 	if disp != nil {
 		srv.Jobs = disp
+		// The manager's own stack gets no Stop button (nobody could start
+		// it again from the UI).
+		srv.OwnStack = disp.Template.OwnStack
+		if disp.Template.OwnStack != "" {
+			log.Info("the manager belongs to stack", "stack", disp.Template.OwnStack)
+		}
 		sched = &scheduler.Scheduler{Store: st, Queue: disp, Logger: log}
 		srv.Schedules = sched
 	} else {

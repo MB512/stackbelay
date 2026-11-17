@@ -14,6 +14,10 @@ All notable changes to StackVault. The format is based on
   The update check moved there: its result is a column of the services
   table and stays visible to everyone who may view the stack until the
   next check.
+- **Stop, start and restart** a stack from the Status tab, without backup,
+  as worker jobs with a new per-stack right "Operate" (admins always).
+  StackVault's own stack can be restarted but not stopped.
+- Worker commands `worker stop|start|restart <stack>`.
 
 ### Changed
 

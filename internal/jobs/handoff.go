@@ -48,7 +48,16 @@ const (
 	TypeUpdate  Type = "update"
 	// TypeComposeApply applies an edited compose file (compose editor).
 	TypeComposeApply Type = "compose-apply"
+	// TypeStop, TypeStart and TypeRestart stop, start or restart a stack
+	// without backup (see Pipeline.Stop, Start, Restart).
+	TypeStop    Type = "stop"
+	TypeStart   Type = "start"
+	TypeRestart Type = "restart"
 )
+
+// Control reports whether t only stops and/or starts the stack, without
+// backup and without repository.
+func (t Type) Control() bool { return t == TypeStop || t == TypeStart || t == TypeRestart }
 
 // State is the state of a job.
 type State string
@@ -177,6 +186,11 @@ func (s Spec) Validate() error {
 		}
 		if s.Type == TypeComposeApply && (!sha256Pattern.MatchString(s.ComposeSHA256) || !sha256Pattern.MatchString(s.ComposeBaseSHA256)) {
 			return errors.New("invalid compose checksums")
+		}
+	case TypeStop, TypeStart, TypeRestart:
+		if s.PreStop || s.SnapshotID != "" || s.SkipSafetySnapshot || s.NoStart || s.PinImages || s.InPlace ||
+			s.CarryOverJobs != "" || s.NoBackup {
+			return fmt.Errorf("options set on a job of type %s", s.Type)
 		}
 	default:
 		return fmt.Errorf("unknown job type %q", truncate(string(s.Type)))

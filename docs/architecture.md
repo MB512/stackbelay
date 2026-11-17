@@ -174,7 +174,8 @@ A loop in the manager (every 2 s, and immediately when a job is queued):
 2. Claim queued jobs (oldest first, stack not locked, at most
    `STACKVAULT_MAX_JOBS` running in total), write `spec.json`, start the
    worker container. Start errors (no repository, `docker run` failed) fail
-   the job and release the lock.
+   the job and release the lock. Stop, start and restart jobs get no
+   repository credentials at all.
 
 All state is in the DB and the job directories, so a manager that was
 stopped by its own backup continues where it left off: running jobs are
@@ -509,6 +510,38 @@ argument lists:
 
 At most one check per user and three in total run at a time. The check is
 a preview: the update job pulls and compares again itself ("only if new").
+## Stop, start and restart
+
+Job types `stop`, `start` and `restart` (decided in issue #18), queued from
+the Status tab by users with the operate right (`can_operate`; admins
+always). They run in a worker like every change to a stack, take the
+per-stack lock like every job (so they never run in the middle of a
+backup, update or restore of the same stack), are audited (`job.create`)
+and have a job log. They make **no backup** and need no repository: the
+dispatcher passes no repository credentials to their worker.
+
+- **Stop** (`jobs.Pipeline.Stop`): `docker compose stop`. Containers,
+  networks and volumes are kept; never `compose down`, no
+  `--remove-orphans`.
+- **Start** (`jobs.Pipeline.Start`): `docker compose start` of every
+  service that has a container (like `docker compose start` by hand), then
+  the usual health wait (a warning only, as after a backup). It creates no
+  containers: a stack without containers fails ("create them once with
+  `docker compose up`").
+- **Restart** (`jobs.Pipeline.Restart`): records the running services,
+  stops the stack and starts those services again. The start is registered
+  with `defer` before the stop, so it also runs when the stop fails or the
+  job is cancelled. A stack with no running service is refused before
+  anything is stopped (use Start).
+
+The manager's own stack (`dispatch.Template.OwnStack`: its compose project
+directory, from the label `com.docker.compose.project.working_dir` of its
+container, is a stack directory) has **no Stop**: the button is disabled
+with the reason, and `POST /stacks/{name}/stop` answers 409. Stopping it
+would also stop the web UI, with nobody able to start it again from there.
+Restarting it works like a self-backup: the worker stops and starts the
+manager, which picks the job up again when it is back.
+
 ## Compose editor
 
 The admin-only "Compose" tab edits the stack's main compose file (the one
@@ -614,6 +647,7 @@ with a light and a dark set; the job log is a dark panel in both modes.
 | `GET /stacks/{name}/status/live` | view right | the self-refreshing part of the Status tab (HTMX fragment, polled every 10 s) |
 | `GET /stacks/{name}/backups` | view right | "Backups" tab: repository location, cached snapshots (same for every user) |
 | `POST /stacks/{name}/backup` | backup right | queue a backup (option: pre-stop snapshot) |
+| `POST /stacks/{name}/stop`, `/start`, `/restart` | operate right | queue a stop, start or restart without backup, see "Stop, start and restart" (no stop for the manager's own stack) |
 | `GET /stacks/{name}/logs` | logs right | "Logs" tab: container checkboxes and live log panel |
 | `GET /stacks/{name}/logs/events` | logs right | live container logs (SSE), see "Container logs" |
 | `GET /stacks/{name}/update` | update right | update page (no tab, linked from Status): last check, unpin, update form (only if new, rollback method); without repository it requires confirming "no backup, no rollback" |
@@ -623,7 +657,7 @@ with a light and a dark set; the job log is a dark panel in both modes.
 | `POST /stacks/{name}/restore` | restore right | queue a restore of a cached, not removed snapshot; only admins may skip the safety snapshot |
 | `GET /jobs/{id}` | view right on the job's stack | job details and log; followed live by `static/joblog.js` while not final |
 | `GET /jobs/{id}/events` | view right on the job's stack | live stream of the job (SSE), see "Live logs" |
-| `POST /jobs/{id}/cancel` | backup/restore/update right (by job type; compose-apply: admin) | cancel a queued or running job |
+| `POST /jobs/{id}/cancel` | backup/restore/update/operate right (by job type; compose-apply: admin) | cancel a queued or running job |
 | `POST /stacks/{name}/snapshots/refresh` | view right | refresh the snapshot cache (read-only restic; at most once per 10 s per stack; HTMX: returns the snapshot section) |
 | `GET /stacks/{name}/shell?container=<id>` | admin, opt-in | shell page (no tab, linked per container from Status): terminal of a running container; without `container` a redirect to Status |
 | `GET /stacks/{name}/shell/ws` | admin, opt-in | WebSocket of a shell session, see "Container shell" |
@@ -671,7 +705,9 @@ after the project owner check): name, service, state with health and
 docker's status text, image and, after an update check, its result.
 Below them the recent jobs of the stack. Users with the backup right get
 "Back up now" there, users with the update right "Check for updates" and
-"Update…" (the update page); every action checks its own right. Each
+"Update…" (the update page), users with the operate right "Restart",
+"Stop" and "Start" (Stop and Restart ask for confirmation,
+`static/confirm.js`); every action checks its own right. Each
 container row links to the Logs tab with only that container selected
 (logs right) and, for admins with `STACKVAULT_ENABLE_SHELL`, to a shell in
 it (shown disabled while the container is not running).
@@ -897,13 +933,15 @@ requires restic >= 0.17.
 worker run <job-dir>
 worker backup  [--pre-stop] <stack>
 worker restore [--no-safety-snapshot] [--no-start] [--pin-images] [--in-place] <stack> <snapshot-id>
-worker update  [--no-backup] <stack>
+worker update  [--no-backup] [--only-if-new] [--rollback-in-place] [--no-pre-stop] <stack>
+worker stop|start|restart <stack>
 ```
 
-`run` is the manager's interface (see "Job handoff"); `backup`, `restore`
-and `update` are for manual use and tests. The repository settings
+`run` is the manager's interface (see "Job handoff"); the other commands
+are for manual use and tests. The repository settings
 (`RESTIC_REPOSITORY`, `RESTIC_PASSWORD(_FILE)`) are optional in the worker's
-configuration, but every job needs them except `update --no-backup`.
+configuration, but every job needs them except `update --no-backup`,
+`stop`, `start` and `restart`.
 
 Flags go before positional arguments. Exit codes: 0 success, 1 job failed,
 2 usage/configuration error. Logs are JSON lines (`log/slog`) on stderr.

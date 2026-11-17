@@ -26,7 +26,7 @@ type stackRow struct {
 // rightsText lists the actions besides viewing that user may perform with perm.
 func rightsText(user store.User, perm store.Permission) string {
 	var names []string
-	for _, act := range []auth.Action{auth.ActionBackup, auth.ActionRestore, auth.ActionUpdate, auth.ActionLogs} {
+	for _, act := range []auth.Action{auth.ActionBackup, auth.ActionRestore, auth.ActionUpdate, auth.ActionOperate, auth.ActionLogs} {
 		if auth.Allowed(user, perm, act) {
 			names = append(names, act.String())
 		}
@@ -395,14 +395,15 @@ func (s *Server) setPermission(w http.ResponseWriter, r *http.Request) {
 		CanRestore: r.PostFormValue("can_restore") == "on",
 		CanLogs:    r.PostFormValue("can_logs") == "on",
 		CanUpdate:  r.PostFormValue("can_update") == "on",
+		CanOperate: r.PostFormValue("can_operate") == "on",
 	}
 	if err := s.Store.SetPermission(r.Context(), p); err != nil {
 		s.internalError(w, r, "saving permission", err)
 		return
 	}
 	s.audit(r, store.AuditEntry{UserID: a.User.ID, Action: "permission.update", StackID: st.ID,
-		Detail: fmt.Sprintf("user %q: backup=%t restore=%t update=%t logs=%t",
-			user.Username, p.CanBackup, p.CanRestore, p.CanUpdate, p.CanLogs)})
+		Detail: fmt.Sprintf("user %q: backup=%t restore=%t update=%t operate=%t logs=%t",
+			user.Username, p.CanBackup, p.CanRestore, p.CanUpdate, p.CanOperate, p.CanLogs)})
 
 	if isHTMX(r) {
 		s.renderPartial(w, "stack_settings.html", "perm-row",

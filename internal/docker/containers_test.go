@@ -68,7 +68,7 @@ func TestRunArgsRejects(t *testing.T) {
 }
 
 func TestParseSelf(t *testing.T) {
-	out := []byte(`{"Image":"sha256:feed","Mounts":[
+	out := []byte(`{"Image":"sha256:feed","Config":{"Labels":{"com.docker.compose.project.working_dir":"/srv/stacks/stackvault"}},"Mounts":[
 		{"Type":"bind","Source":"/home/docker","Destination":"/home/docker","RW":true},
 		{"Type":"volume","Name":"stackvault_data","Source":"/var/lib/docker/volumes/stackvault_data/_data","Destination":"/data","RW":true},
 		{"Type":"bind","Source":"/var/run/docker.sock","Destination":"/var/run/docker.sock","RW":false},
@@ -77,7 +77,7 @@ func TestParseSelf(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := SelfInfo{ImageID: "sha256:feed", Mounts: []Mount{
+	want := SelfInfo{ImageID: "sha256:feed", ComposeWorkingDir: "/srv/stacks/stackvault", Mounts: []Mount{
 		{Type: "bind", Source: "/home/docker", Target: "/home/docker"},
 		{Type: "volume", Source: "stackvault_data", Target: "/data"},
 		{Type: "bind", Source: "/var/run/docker.sock", Target: "/var/run/docker.sock", ReadOnly: true},
