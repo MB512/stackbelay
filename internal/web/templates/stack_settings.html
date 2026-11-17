@@ -5,7 +5,8 @@
 <section>
   <h2>Repository</h2>
   {{- with .Repo}}
-  <form method="post" action="/stacks/{{$.Data.Stack.Name}}/repository" class="card wide" autocomplete="off">
+  <form method="post" action="/stacks/{{$.Data.Stack.Name}}/repository" class="card wide" autocomplete="off"
+        data-busy="Saving and checking access…">
     <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
     <label>Location
       <input name="location" required maxlength="1024" value="{{.Location}}" spellcheck="false"
@@ -37,7 +38,8 @@
     <div><button type="submit">{{if .Exists}}Save repository{{else}}Add repository{{end}}</button>
       <span class="hint">Saving checks access by listing the snapshots.</span></div>
   </form>
-  <form method="post" action="/stacks/{{$.Data.Stack.Name}}/repository/init" class="card wide{{if .OfferInit}} init{{end}}">
+  <form method="post" action="/stacks/{{$.Data.Stack.Name}}/repository/init" class="card wide{{if .OfferInit}} init{{end}}"
+        data-busy="Initializing…">
     <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
     {{- if .OfferInit}}
     <p>Create a new, empty restic repository at <code>{{.Location}}</code> with the stored password?
@@ -107,7 +109,7 @@
   <p class="hint">No schedules: this stack is only backed up and updated manually.</p>
   {{- end}}
 
-  {{- /* data-confirm-when: static/confirm.js asks only for update schedules. */}}
+  {{- /* data-confirm-when: static/forms.js asks only for update schedules. */}}
   <form method="post" action="/stacks/{{.Stack.Name}}/schedules" class="card wide" autocomplete="off"
         {{- if not .Repo.Exists}} data-confirm="Schedule updates of {{.Stack.Name}} without backup? It has no repository: a failed update is not rolled back and leaves the stack as it is." data-confirm-when="job_type=update"{{end}}>
     <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
@@ -143,7 +145,6 @@
     <div><button type="submit">Add schedule</button></div>
   </form>
 </section>
-<script src="/static/confirm.js" defer></script>
 
 <section>
   <h2>Permissions</h2>

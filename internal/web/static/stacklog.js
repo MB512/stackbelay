@@ -210,14 +210,22 @@
 	}
 
 	function connect() {
+		if (!since) {
+			status("connecting…");
+		}
 		source = new EventSource(since ? url + "?since=" + encodeURIComponent(since) : url);
 
+		// Until the first line arrives (compose may take a moment for the
+		// history), say that the view is waiting.
 		source.onopen = function () {
-			status("live");
+			status(log.children.length ? "live" : "live, waiting for the first lines…");
 		};
 
 		source.addEventListener("line", function (e) {
 			delay = 1000;
+			if (log.children.length === 0) {
+				status("live");
+			}
 			var atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 8;
 			var line = insertLine(e.data);
 			var name = line.getAttribute("data-c");

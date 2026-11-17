@@ -20,7 +20,7 @@
   </form>
   {{- end}}
   {{- if .CanOperate}}
-  {{- /* data-confirm: static/confirm.js asks before submitting. */}}
+  {{- /* data-confirm: static/forms.js asks before submitting. */}}
   <form method="post" action="/stacks/{{.Stack.Name}}/restart" class="inline"
         data-confirm="Restart {{.Stack.Name}}? Its running services are stopped and started again, without backup.">
     <input type="hidden" name="csrf_token" value="{{.CSRF}}">
@@ -56,13 +56,13 @@
           hx-disabled-elt="find button">
       <input type="hidden" name="csrf_token" value="{{.CSRF}}">
       <button type="submit" class="secondary"{{if not .CanCheck}} disabled{{end}}>Check for updates</button>
+      <span class="hint busy-text">asking the registries…</span>
     </form>
     {{- if not .CanCheck}}<span class="hint">Update checks are not available in this installation.</span>{{end}}
     {{- end}}
   </div>
 {{template "status-live" .Live}}
 </section>
-<script src="/static/confirm.js" defer></script>
 {{- end}}
 {{end}}
 

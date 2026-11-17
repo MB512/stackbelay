@@ -16,7 +16,7 @@
   {{- with .Problem}}<p class="error" role="alert">{{.}}</p>{{end}}
   {{- /* The line break after <textarea> is dropped by the browser, so a
          file that starts with an empty line keeps it. */}}
-  <form method="post" action="/stacks/{{.Stack.Name}}/compose">
+  <form method="post" action="/stacks/{{.Stack.Name}}/compose" data-busy="Validating…">
     <input type="hidden" name="csrf_token" value="{{.CSRF}}">
     <input type="hidden" name="base_sha256" value="{{.BaseSHA256}}">
     <textarea class="code" name="content" aria-label="{{.FileName}}" spellcheck="false" autocomplete="off"

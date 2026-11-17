@@ -162,3 +162,17 @@ body.log-fullscreen { overflow: hidden; }
 body.term-fullscreen { overflow: hidden; }
 button[disabled] { opacity: .5; cursor: not-allowed; }
 .log:empty { display: none; }
+
+/* Busy state (static/forms.js, HTMX): a spinner in the submit button while
+   the server works; .busy-text appears next to an HTMX form's button. */
+@keyframes spin { to { transform: rotate(360deg); } }
+button.busy::before, form.htmx-request button::before {
+  content: ""; display: inline-block; width: .8em; height: .8em; margin-right: .45em; vertical-align: -.1em;
+  border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  button.busy::before, form.htmx-request button::before { animation-duration: 2.4s; }
+}
+.busy-text { display: none; }
+form.htmx-request .busy-text { display: inline; }

@@ -168,3 +168,29 @@ func TestStatusLogsLink(t *testing.T) {
 		t.Fatal("Logs link without the logs right")
 	}
 }
+
+// Every page loads static/forms.js (confirmations, busy buttons); slow
+// forms name what they are doing while the button is busy.
+func TestBusyForms(t *testing.T) {
+	e := newEnv(t, true, true)
+	e.setupStacks()
+	e.setupLogs() // stack directories with a compose file (compose editor)
+	e.loginAdmin()
+	for path, wants := range map[string][]string{
+		"/stacks/web":          {`<script src="/static/forms.js" defer>`, `<span class="hint busy-text">asking the registries…</span>`},
+		"/stacks/web/backups":  {`<span class="hint busy-text">reading the repository…</span>`},
+		"/stacks/web/settings": {`data-busy="Saving and checking access…"`, `data-busy="Initializing…"`},
+		"/stacks/web/compose":  {`data-busy="Validating…"`},
+		"/":                    {`<script src="/static/forms.js" defer>`},
+	} {
+		r := e.get(path)
+		for _, want := range wants {
+			if !strings.Contains(r.body, want) {
+				t.Errorf("%s lacks %q", path, want)
+			}
+		}
+	}
+	if r := e.get("/static/forms.js"); r.status != http.StatusOK || !strings.Contains(r.body, "data-confirm") {
+		t.Fatalf("forms.js: %d", r.status)
+	}
+}

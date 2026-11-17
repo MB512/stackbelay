@@ -31,6 +31,7 @@
           hx-disabled-elt="find button">
       <input type="hidden" name="csrf_token" value="{{.CSRF}}">
       <button type="submit" class="secondary"{{if not .Repo}} disabled{{end}}>Refresh</button>
+      <span class="hint busy-text">reading the repository…</span>
     </form>
     {{- with .Repo}}<span class="hint">Last refreshed: {{when .SnapshotsRefreshedAt}}</span>{{end}}
   </div>

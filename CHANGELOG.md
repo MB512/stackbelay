@@ -18,6 +18,10 @@ All notable changes to StackVault. The format is based on
   as worker jobs with a new per-stack right "Operate" (admins always).
   StackVault's own stack can be restarted but not stopped.
 - Worker commands `worker stop|start|restart <stack>`.
+- Buttons of slow actions (saving or initializing a repository, compose
+  validation, update check, snapshot refresh, …) show a spinner and a short
+  message while the server works, and cannot be clicked twice. The Logs tab
+  says when it is still waiting for the first lines.
 - Logs tab: each container's lines have their own color (name and a bar
   at the left), with a matching swatch next to its checkbox.
 - Scheduled updates on stacks without repository: creating the schedule

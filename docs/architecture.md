@@ -637,6 +637,17 @@ stable layout and users see what exists. Only what a user has no
 permission for (admin tabs, backup/restore controls without the right) is
 hidden.
 
+Feedback while the server works (issue #7): `static/forms.js` (loaded on
+every page) marks the submit button of a plain form busy when it is
+submitted: a spinner (`button.busy`), disabled against a second click, and
+the form's `data-busy` text if it has one ("Saving and checking access…",
+"Initializing…", "Validating…"). HTMX forms (update check, snapshot
+refresh) get the same spinner from the `htmx-request` class HTMX sets
+during the request, and show their `.busy-text` ("asking the
+registries…"). The Logs tab says "connecting…" and "waiting for the first
+lines…" until the first line arrives. The same script asks the
+`data-confirm` questions. Without JavaScript forms work unchanged.
+
 All times are shown in the manager's time zone (`TZ`, `Server.Location`):
 the `when` template function (job, snapshot and schedule times, with the
 zone abbreviation, e.g. `2026-11-13 04:00 CET`), job log and container log
@@ -715,7 +726,7 @@ Below them the recent jobs of the stack. Users with the backup right get
 "Back up now" there, users with the update right "Check for updates" and
 "Update…" (the update page), users with the operate right "Restart",
 "Stop" and "Start" (Stop and Restart ask for confirmation,
-`static/confirm.js`); every action checks its own right. Each
+`static/forms.js`); every action checks its own right. Each
 container row links to the Logs tab with only that container selected
 (logs right) and, for admins with `STACKVAULT_ENABLE_SHELL`, to a shell in
 it (shown disabled while the container is not running).
@@ -870,7 +881,7 @@ runs. A schedule has a job type (Settings tab, admins):
   and "roll back in place". It fails if the stack is not running. On a
   stack without repository, creating an update schedule requires the same
   confirmation as a manual update ("no backup and no rollback": a checkbox
-  checked by the server, and a dialog, `static/confirm.js` with
+  checked by the server, and a dialog, `static/forms.js` with
   `data-confirm-when="job_type=update"`). The schedule stores it
   (`schedules.no_backup`) and queues its updates with
   `JobOptions.NoBackup`; snapshot and rollback options are dropped. If the

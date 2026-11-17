@@ -33,7 +33,7 @@ func TestControlJobs(t *testing.T) {
 	}
 	r := e.do(carol, http.MethodGet, "/stacks/web", nil, nil)
 	for _, want := range []string{`action="/stacks/web/restart"`, `action="/stacks/web/stop"`, `action="/stacks/web/start"`,
-		`data-confirm="Stop web?`, "/static/confirm.js"} {
+		`data-confirm="Stop web?`, "/static/forms.js"} {
 		if !strings.Contains(r.body, want) {
 			t.Errorf("Status tab of carol lacks %q", want)
 		}

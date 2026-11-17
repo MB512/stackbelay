@@ -204,7 +204,7 @@ func TestUpdateScheduleWithoutRepository(t *testing.T) {
 
 	r := e.get("/stacks/db/settings")
 	for _, want := range []string{`name="confirm_no_backup"`, `data-confirm-when="job_type=update"`,
-		`data-confirm="Schedule updates of db without backup?`, "/static/confirm.js"} {
+		`data-confirm="Schedule updates of db without backup?`, "/static/forms.js"} {
 		if !strings.Contains(r.body, want) {
 			t.Errorf("settings of db lack %q", want)
 		}
