@@ -126,7 +126,7 @@ func run(args []string, getenv func(string) string, stderr io.Writer) int {
 	if jobDir != "" {
 		// progress.json for the job page: phases from the pipeline,
 		// transfer numbers straight from restic's status lines, pending
-		// services from docker.
+		// services and pull progress from docker.
 		progress := &jobs.FileProgress{Dir: jobDir}
 		p.Progress = progress
 		resticCLI.Progress = progress.Transfer
@@ -137,6 +137,17 @@ func run(args []string, getenv func(string) string, stderr io.Writer) int {
 				return
 			}
 			progress.Detail("waiting for: " + strings.Join(services, ", "))
+		}
+		// Image pulls (update): bytes for the bar, per-image summary as
+		// detail.
+		// Without known sizes (nothing downloading yet, or images too
+		// small to report any) there is no bar, only the summary.
+		dockerCLI.Pulling = func(s docker.PullStatus) {
+			if s.BytesTotal > 0 {
+				progress.Transfer(restic.Progress{Percent: float64(s.BytesDone) / float64(s.BytesTotal),
+					BytesDone: s.BytesDone, TotalBytes: s.BytesTotal, SecondsElapsed: s.SecondsElapsed})
+			}
+			progress.Detail(s.Summary())
 		}
 	}
 	err = execute(ctx, p, cfg, spec, jobDir, &status, log)

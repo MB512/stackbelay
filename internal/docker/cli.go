@@ -26,6 +26,19 @@ type CLI struct {
 	// still waiting for (sorted; empty when done). The worker shows them
 	// as the detail of the job's phase.
 	Pending func(services []string)
+	// Pulling, if set, receives the progress of Pull (about once per
+	// second); Pull then runs "compose --progress json pull" and reads its
+	// output while it runs.
+	Pulling func(PullStatus)
+	// Now defaults to time.Now (tests override it).
+	Now func() time.Time
+}
+
+func (c *CLI) now() time.Time {
+	if c.Now == nil {
+		return time.Now()
+	}
+	return c.Now()
 }
 
 func (c *CLI) pollInterval() time.Duration {
@@ -307,6 +320,9 @@ func (c *CLI) Up(ctx context.Context, dir string, composeFiles, services []strin
 func (c *CLI) Pull(ctx context.Context, dir string, services []string) error {
 	if len(services) == 0 {
 		return nil // "compose pull" without services would pull everything
+	}
+	if c.Pulling != nil {
+		return c.pullWithProgress(ctx, dir, services)
 	}
 	_, err := c.compose(ctx, dir, append([]string{"pull", "--ignore-buildable", "--quiet", "--"}, services...)...)
 	return err

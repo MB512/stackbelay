@@ -54,7 +54,8 @@ type ProgressReporter interface {
 	Phase(name string)
 	// Detail describes the current phase further ("" clears it).
 	Detail(detail string)
-	// Transfer reports restic's progress in the current phase.
+	// Transfer reports bytes moved in the current phase: restic's backup or
+	// restore, or an image pull (the same shape is reused for it).
 	Transfer(p restic.Progress)
 }
 

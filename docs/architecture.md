@@ -784,7 +784,16 @@ the running (or earlier queued) job of its stack, or a free slot when
   `compose ps` every 2 s while `compose stop` waits for the containers
   (each up to its stop timeout) and reports the services still running.
   The worker turns them into the detail of the current phase.
-- In the worker all three feed `jobs.FileProgress`, which writes
+- Image pulls of an update (issue #6): with `docker.CLI.Pulling` set,
+  `Pull` runs `docker compose --progress json pull` and reads its JSON
+  lines (stderr) while it runs: per image and layer, the bytes downloaded
+  of the layers whose size is known. It reports at most once per second
+  (at once when an image is done): the bytes as transfer (bar and speed;
+  no bar while no size is known) and a summary per image as detail
+  ("nginx:1.27 12.3 MiB of 20.1 MiB, alpine:3.20 done"). The single
+  `docker pull` of a pinned restore (`EnsureImage`) only shows its phase
+  ("getting image ..."): its plain-text output has no stable format.
+- In the worker all of them feed `jobs.FileProgress`, which writes
   `progress.json` into the job directory: atomically (temporary file and
   rename, owner like the other job files), phases and details at once,
   transfer numbers at most once per second (the first of a phase at once).
