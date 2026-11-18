@@ -1,6 +1,6 @@
 // Command worker executes a single backup, restore, update, compose-apply,
-// stop, start or restart job and exits (compose-apply only through "run":
-// its new compose file is in the job directory).
+// stop, start, restart or cleanup job and exits (compose-apply only
+// through "run": its new compose file is in the job directory).
 //
 // Usage:
 //
@@ -9,11 +9,13 @@
 //	worker restore [--no-safety-snapshot] [--no-start] [--pin-images] [--in-place] <stack> <snapshot-id>
 //	worker update  [--no-backup] [--only-if-new] [--rollback-in-place] [--no-pre-stop] <stack>
 //	worker stop|start|restart <stack>
+//	worker cleanup [--image-min-age <duration>]
 //
 // "run" is how the manager starts a job: the job is described by
 // <job-dir>/spec.json, and the worker writes status.json and log.txt there.
 // The other commands are for manual use and tests. stop, start and restart
-// run without backup and need no repository.
+// run without backup and need no repository. cleanup is a host job (stopped
+// orphan containers of all stacks, old dangling images; no repository).
 //
 // Flags must come before positional arguments. Configuration and repository
 // credentials are read from the environment (see internal/config). Exit
@@ -48,6 +50,7 @@ const usage = `usage:
   worker restore [--no-safety-snapshot] [--no-start] [--pin-images] [--in-place] <stack> <snapshot-id>
   worker update  [--no-backup] [--only-if-new] [--rollback-in-place] [--no-pre-stop] <stack>
   worker stop|start|restart <stack>
+  worker cleanup [--image-min-age <duration>]
 `
 
 func main() {
@@ -241,6 +244,15 @@ func parseArgs(args []string) (jobs.Spec, string, error) {
 		return jobs.Spec{Type: jobs.TypeUpdate, Stack: fs.Arg(0), NoBackup: *noBackup, OnlyIfNew: *onlyIfNew,
 			RollbackInPlace: *rollbackInPlace, NoPreStop: *noPreStop}, "", nil
 
+	case "cleanup":
+		fs := flag.NewFlagSet("cleanup", flag.ContinueOnError)
+		fs.SetOutput(io.Discard)
+		minAge := fs.Duration("image-min-age", 7*24*time.Hour, "keep dangling images pulled or tagged more recently")
+		if err := fs.Parse(args[1:]); err != nil || fs.NArg() != 0 || *minAge < 0 {
+			return jobs.Spec{}, "", fmt.Errorf("%w: cleanup expects [--image-min-age <duration>]", errUsage)
+		}
+		return jobs.Spec{Type: jobs.TypeCleanup, ImageMinAgeHours: int(minAge.Hours())}, "", nil
+
 	case "stop", "start", "restart":
 		if len(args) != 2 || strings.HasPrefix(args[1], "-") {
 			return jobs.Spec{}, "", fmt.Errorf("%w: %s expects <stack>", errUsage, args[0])
@@ -254,6 +266,9 @@ func parseArgs(args []string) (jobs.Spec, string, error) {
 
 // execute runs the job and records its results in status.
 func execute(ctx context.Context, p *jobs.Pipeline, cfg config.Worker, spec jobs.Spec, jobDir string, status *jobs.Status, log *slog.Logger) error {
+	if spec.Type == jobs.TypeCleanup {
+		return cleanup(ctx, p, cfg, spec, status)
+	}
 	stack, err := stacks.Lookup(cfg.StacksRoot, spec.Stack)
 	if err != nil {
 		return err
@@ -306,11 +321,27 @@ func execute(ctx context.Context, p *jobs.Pipeline, cfg config.Worker, spec jobs
 	}
 }
 
+// cleanup runs the host cleanup over all discovered stacks.
+func cleanup(ctx context.Context, p *jobs.Pipeline, cfg config.Worker, spec jobs.Spec, status *jobs.Status) error {
+	list, err := stacks.Discover(cfg.StacksRoot)
+	if err != nil {
+		return err
+	}
+	cleaner, ok := p.Docker.(jobs.Cleaner)
+	if !ok {
+		return errors.New("the docker client cannot clean up")
+	}
+	res, err := p.Cleanup(ctx, cleaner, list, jobs.CleanupOptions{
+		ImageMinAge: time.Duration(spec.ImageMinAgeHours) * time.Hour, KeepImages: spec.KeepImages})
+	status.RemovedContainers, status.RemovedImages, status.FreedBytes = res.RemovedContainers, res.RemovedImages, res.FreedBytes
+	return err
+}
+
 // needsRepository reports whether the job needs repository settings. Stop,
 // start and restart never touch the repository; of the other jobs only an
 // update or compose apply explicitly marked "no backup" runs without one.
 func needsRepository(spec jobs.Spec) bool {
-	if spec.Type.Control() {
+	if spec.Type.Control() || spec.Type.Host() {
 		return false
 	}
 	changes := spec.Type == jobs.TypeUpdate || spec.Type == jobs.TypeComposeApply

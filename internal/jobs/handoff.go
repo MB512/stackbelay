@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/MB512/stackvault/internal/docker"
 	"github.com/MB512/stackvault/internal/restic"
 	"github.com/MB512/stackvault/internal/stacks"
 )
@@ -30,6 +31,12 @@ const (
 	// (written by the worker, for a manual revert).
 	ComposeNewFile      = "compose.new"
 	ComposePreviousFile = "compose.previous"
+)
+
+// Limits of the cleanup options in a spec (it is at most maxSpecBytes).
+const (
+	MaxImageMinAgeHours = 24 * 3650
+	MaxKeepImages       = 500
 )
 
 const (
@@ -126,6 +133,10 @@ type Spec struct {
 	// RollbackInPlace (update, compose-apply): see UpdateOptions.RollbackInPlace.
 	RollbackInPlace bool `json:"rollback_in_place,omitempty"`
 
+	// Cleanup options (host job, Stack is empty): see CleanupOptions.
+	ImageMinAgeHours int      `json:"image_min_age_hours,omitempty"`
+	KeepImages       []string `json:"keep_images,omitempty"`
+
 	// Compose-apply options: SHA-256 (hex) of the new content (in
 	// ComposeNewFile) and of the file the editor started from.
 	ComposeSHA256     string `json:"compose_sha256,omitempty"`
@@ -145,8 +156,13 @@ func (s Spec) Validate() error {
 		return fmt.Errorf("unsupported spec version %d", s.Version)
 	case !ValidJobID(s.ID):
 		return fmt.Errorf("invalid job id %q", truncate(s.ID))
-	case !stacks.ValidName(s.Stack):
+	case s.Type.Host() && s.Stack != "":
+		return errors.New("a host job has no stack")
+	case !s.Type.Host() && !stacks.ValidName(s.Stack):
 		return fmt.Errorf("invalid stack name %q", truncate(s.Stack))
+	}
+	if !s.Type.Host() && (s.ImageMinAgeHours != 0 || len(s.KeepImages) > 0) {
+		return fmt.Errorf("cleanup options set on a job of type %s", s.Type)
 	}
 	switch {
 	case s.Trigger != "" && s.Trigger != "manual" && s.Trigger != "schedule":
@@ -195,6 +211,22 @@ func (s Spec) Validate() error {
 		if s.Type == TypeComposeApply && (!sha256Pattern.MatchString(s.ComposeSHA256) || !sha256Pattern.MatchString(s.ComposeBaseSHA256)) {
 			return errors.New("invalid compose checksums")
 		}
+	case TypeCleanup:
+		if s.PreStop || s.SnapshotID != "" || s.SkipSafetySnapshot || s.NoStart || s.PinImages || s.InPlace ||
+			s.CarryOverJobs != "" || s.NoBackup {
+			return errors.New("stack options set on a cleanup job")
+		}
+		if s.ImageMinAgeHours < 0 || s.ImageMinAgeHours > MaxImageMinAgeHours {
+			return fmt.Errorf("invalid image minimum age %d h", s.ImageMinAgeHours)
+		}
+		if len(s.KeepImages) > MaxKeepImages {
+			return fmt.Errorf("too many images to keep (%d, at most %d)", len(s.KeepImages), MaxKeepImages)
+		}
+		for _, id := range s.KeepImages {
+			if !docker.ValidImageID(id) {
+				return fmt.Errorf("invalid image id %q", truncate(id))
+			}
+		}
 	case TypeStop, TypeStart, TypeRestart:
 		if s.PreStop || s.SnapshotID != "" || s.SkipSafetySnapshot || s.NoStart || s.PinImages || s.InPlace ||
 			s.CarryOverJobs != "" || s.NoBackup {
@@ -226,6 +258,10 @@ type Status struct {
 	// they ran before.
 	ImagesChanged  []string `json:"images_changed,omitempty"`
 	ReplacedImages []string `json:"replaced_images,omitempty"`
+	// Cleanup: what was removed (FreedBytes: sizes of the removed images).
+	RemovedContainers int   `json:"removed_containers,omitempty"`
+	RemovedImages     int   `json:"removed_images,omitempty"`
+	FreedBytes        int64 `json:"freed_bytes,omitempty"`
 }
 
 // WriteSpec writes spec.json into dir (manager side).

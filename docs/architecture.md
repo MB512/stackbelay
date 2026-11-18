@@ -999,6 +999,43 @@ where it is not wanted).
   'unsafe-inline'`), because xterm.js adds `<style>` elements; scripts stay
   same-origin only.
 
+## Host cleanup
+
+Decided in issue #19. A host job (type `cleanup`, no stack; see "Host
+jobs" in data-model.md: it runs alone, nothing else runs beside it) that
+removes what updates and compose changes leave behind. It never prunes
+(`docker system/image/container prune` is not used), never touches volumes
+and never stops anything. The rules (`jobs.PlanOrphans`,
+`jobs.PlanImages`) are shared by the worker and the manager's preview; the
+job recomputes them itself.
+
+1. **Orphan containers**: for every discovered stack, after the project
+   owner check, the containers of its compose project whose
+   `com.docker.compose.service` is no longer in the compose file
+   (`docker.CLI.StackOrphans`). Stopped ones are removed with `docker
+   container rm -- <id>` (no `--force`, so docker refuses a running one);
+   running ones are only logged. A stack whose containers cannot be
+   listed (foreign project, docker-compose v1) is skipped with a warning.
+2. **Dangling images**, listed after step 1 (an orphan's image may have
+   become unused): untagged images that no container, running or stopped,
+   uses (`docker.CLI.DanglingImages`). Docker records no "dangling since"
+   time, so an image is kept if
+   - an update or compose apply replaced it within the minimum age
+     (`result.replaced_images` of the jobs; the manager passes them as
+     `keep_images` in the spec), or
+   - it was last pulled or tagged on this host (`Metadata.LastTagTime`,
+     else the build time) less than the minimum age ago
+     (`image_min_age_hours`, default 7 days).
+
+   Others are removed with `docker image rm -- <id>` (no `--force`).
+   A rollback or pinned restore that needs a removed version pulls it again
+   by digest (`EnsureImage`).
+
+A removal that fails is logged and the cleanup continues; the job then
+ends `failed`. The result records `removed_containers`, `removed_images`
+and `freed_bytes` (the sizes of the removed images; shared layers are
+counted per image, so the space freed on disk may be smaller).
+
 ## Scheduler
 
 `internal/scheduler`, using `robfig/cron/v3` in the manager. A schedule only
@@ -1114,13 +1151,14 @@ worker backup  [--pre-stop] <stack>
 worker restore [--no-safety-snapshot] [--no-start] [--pin-images] [--in-place] <stack> <snapshot-id>
 worker update  [--no-backup] [--only-if-new] [--rollback-in-place] [--no-pre-stop] <stack>
 worker stop|start|restart <stack>
+worker cleanup [--image-min-age <duration>]
 ```
 
 `run` is the manager's interface (see "Job handoff"); the other commands
 are for manual use and tests. The repository settings
 (`RESTIC_REPOSITORY`, `RESTIC_PASSWORD(_FILE)`) are optional in the worker's
 configuration, but every job needs them except `update --no-backup`,
-`stop`, `start` and `restart`.
+`stop`, `start`, `restart` and `cleanup`.
 
 Flags go before positional arguments. Exit codes: 0 success, 1 job failed,
 2 usage/configuration error. Logs are JSON lines (`log/slog`) on stderr.

@@ -58,6 +58,11 @@ type JobResult struct {
 	// ReplacedImages: update, compose apply: the image ids those services
 	// ran before; a host cleanup keeps them for a while (issue #19).
 	ReplacedImages []string `json:"replaced_images,omitempty"`
+	// Cleanup (host job): what was removed; FreedBytes sums the sizes of
+	// the removed images (shared layers counted per image).
+	RemovedContainers int   `json:"removed_containers,omitempty"`
+	RemovedImages     int   `json:"removed_images,omitempty"`
+	FreedBytes        int64 `json:"freed_bytes,omitempty"`
 }
 
 // Job is a backup or restore job. State follows jobs.State: queued ->

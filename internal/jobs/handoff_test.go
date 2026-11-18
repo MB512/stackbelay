@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -25,7 +26,7 @@ func TestSpecRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	want.Version = 1
-	if got != want {
+	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v, want %+v", got, want)
 	}
 }
@@ -41,7 +42,7 @@ func TestUpdateSpecRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	want.Version = 1
-	if got != want {
+	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v, want %+v", got, want)
 	}
 }
@@ -58,7 +59,7 @@ func TestComposeApplySpecRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	want.Version = 1
-	if got != want {
+	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v, want %+v", got, want)
 	}
 }
@@ -75,7 +76,7 @@ func TestControlSpecRoundTrip(t *testing.T) {
 			t.Fatal(err)
 		}
 		want.Version = 1
-		if got != want || !got.Type.Control() {
+		if !reflect.DeepEqual(got, want) || !got.Type.Control() {
 			t.Fatalf("got %+v, want %+v", got, want)
 		}
 	}
@@ -124,6 +125,12 @@ func TestReadSpecRejects(t *testing.T) {
 		{"restart without backup flag", `{"version":1,"id":"` + testJobID + `","type":"restart","stack":"web","no_backup":true}`},
 		{"stop with update option", `{"version":1,"id":"` + testJobID + `","type":"stop","stack":"web","only_if_new":true}`},
 		{"start with compose checksum", `{"version":1,"id":"` + testJobID + `","type":"start","stack":"web","compose_sha256":"` + strings.Repeat("a", 64) + `"}`},
+		{"cleanup with a stack", `{"version":1,"id":"` + testJobID + `","type":"cleanup","stack":"web"}`},
+		{"cleanup with stack options", `{"version":1,"id":"` + testJobID + `","type":"cleanup","pre_stop":true}`},
+		{"cleanup with negative age", `{"version":1,"id":"` + testJobID + `","type":"cleanup","image_min_age_hours":-1}`},
+		{"cleanup keeping a bad id", `{"version":1,"id":"` + testJobID + `","type":"cleanup","keep_images":["--force"]}`},
+		{"cleanup options on a backup", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"web","image_min_age_hours":5}`},
+		{"stack job without stack", `{"version":1,"id":"` + testJobID + `","type":"backup"}`},
 		{"bad trigger", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"web","trigger":"cron"}`},
 		{"control chars in requester", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"web","requester":"a\nb"}`},
 		{"too large", `{"version":1,"x":"` + strings.Repeat("a", 70<<10) + `"}`},
@@ -183,5 +190,30 @@ func TestStateFinal(t *testing.T) {
 		if s.Final() != want {
 			t.Errorf("%s.Final() = %v", s, !want)
 		}
+	}
+}
+
+func TestCleanupSpecRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	want := Spec{ID: testJobID, Type: TypeCleanup, ImageMinAgeHours: 168,
+		KeepImages: []string{"sha256:" + strings.Repeat("a", 64)}, Trigger: "schedule"}
+	if err := WriteSpec(dir, want); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ReadSpec(dir)
+	want.Version = handoffVersion
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %+v, %v", got, err)
+	}
+	if !got.Type.Host() || TypeBackup.Host() {
+		t.Fatal("Host wrong")
+	}
+	tooMany := want
+	tooMany.KeepImages = make([]string, MaxKeepImages+1)
+	for i := range tooMany.KeepImages {
+		tooMany.KeepImages[i] = want.KeepImages[0]
+	}
+	if err := WriteSpec(t.TempDir(), tooMany); err == nil {
+		t.Fatal("too many images to keep accepted")
 	}
 }

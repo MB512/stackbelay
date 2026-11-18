@@ -422,7 +422,8 @@ func resultOf(st jobs.Status) store.JobResult {
 	return store.JobResult{
 		PreStopSnapshot: st.PreStopSnapshot, SafetySnapshot: st.SafetySnapshot, PreviousDir: st.PreviousDir,
 		RolledBack: st.RolledBack, Unchanged: st.Unchanged, ImagesChanged: st.ImagesChanged,
-		ReplacedImages: st.ReplacedImages,
+		ReplacedImages:    st.ReplacedImages,
+		RemovedContainers: st.RemovedContainers, RemovedImages: st.RemovedImages, FreedBytes: st.FreedBytes,
 	}
 }
 

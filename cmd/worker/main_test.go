@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -170,7 +171,7 @@ func TestParseRestoreArgs(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := jobs.Spec{Type: jobs.TypeRestore, Stack: "web", SnapshotID: "0123abcd", PinImages: true, InPlace: true}
-	if spec != want {
+	if !reflect.DeepEqual(spec, want) {
 		t.Fatalf("got %+v, want %+v", spec, want)
 	}
 }
@@ -181,7 +182,7 @@ func TestParseUpdateArgs(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := jobs.Spec{Type: jobs.TypeUpdate, Stack: "web", OnlyIfNew: true, RollbackInPlace: true, NoPreStop: true}
-	if spec != want {
+	if !reflect.DeepEqual(spec, want) {
 		t.Fatalf("got %+v, want %+v", spec, want)
 	}
 	if _, _, err := parseArgs([]string{"update", "--no-backup", "--rollback-in-place", "web"}); !errors.Is(err, errUsage) {
@@ -195,7 +196,7 @@ func TestParseControlArgs(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if want := (jobs.Spec{Type: jobs.Type(cmd), Stack: "web"}); spec != want {
+		if want := (jobs.Spec{Type: jobs.Type(cmd), Stack: "web"}); !reflect.DeepEqual(spec, want) {
 			t.Fatalf("got %+v, want %+v", spec, want)
 		}
 	}
@@ -218,5 +219,26 @@ func TestNeedsRepository(t *testing.T) {
 		if got := needsRepository(tt.spec); got != tt.want {
 			t.Errorf("%+v: %v, want %v", tt.spec, got, tt.want)
 		}
+	}
+}
+
+func TestParseCleanupArgs(t *testing.T) {
+	spec, _, err := parseArgs([]string{"cleanup", "--image-min-age", "48h"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (jobs.Spec{Type: jobs.TypeCleanup, ImageMinAgeHours: 48}); !reflect.DeepEqual(spec, want) {
+		t.Fatalf("got %+v, want %+v", spec, want)
+	}
+	if spec, _, err := parseArgs([]string{"cleanup"}); err != nil || spec.ImageMinAgeHours != 7*24 {
+		t.Fatalf("default: %+v, %v", spec, err)
+	}
+	for _, args := range [][]string{{"cleanup", "web"}, {"cleanup", "--image-min-age", "-1h"}} {
+		if _, _, err := parseArgs(args); !errors.Is(err, errUsage) {
+			t.Errorf("%v: %v", args, err)
+		}
+	}
+	if needsRepository(jobs.Spec{Type: jobs.TypeCleanup}) {
+		t.Error("cleanup needs no repository")
 	}
 }
