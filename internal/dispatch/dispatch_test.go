@@ -598,9 +598,11 @@ func TestUpdateRepositoryHandling(t *testing.T) {
 		t.Fatalf("rolled-back update: %+v", got)
 	}
 	// A successful update keeps the services whose image changed.
-	e.workerDone(confirmed.ID, jobs.Status{State: jobs.StateSucceeded, ImagesChanged: []string{"app"}})
+	e.workerDone(confirmed.ID, jobs.Status{State: jobs.StateSucceeded, ImagesChanged: []string{"app"},
+		ReplacedImages: []string{"sha256:" + strings.Repeat("ab", 32)}})
 	e.d.Step(ctx)
-	if got := e.job(confirmed.ID); got.State != jobs.StateSucceeded || !slices.Equal(got.Result.ImagesChanged, []string{"app"}) {
+	if got := e.job(confirmed.ID); got.State != jobs.StateSucceeded || !slices.Equal(got.Result.ImagesChanged, []string{"app"}) ||
+		len(got.Result.ReplacedImages) != 1 {
 		t.Fatalf("successful update: %+v", got)
 	}
 }

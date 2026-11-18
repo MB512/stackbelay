@@ -55,6 +55,9 @@ type JobResult struct {
 	// ImagesChanged: update, compose apply: services whose running image
 	// (image id) differs after the change.
 	ImagesChanged []string `json:"images_changed,omitempty"`
+	// ReplacedImages: update, compose apply: the image ids those services
+	// ran before; a host cleanup keeps them for a while (issue #19).
+	ReplacedImages []string `json:"replaced_images,omitempty"`
 }
 
 // Job is a backup or restore job. State follows jobs.State: queued ->
@@ -296,6 +299,28 @@ func (s *Store) lastSucceeded(ctx context.Context, typ jobs.Type, imagesChanged 
 func (s *Store) ActiveJobs(ctx context.Context) ([]Job, error) {
 	return s.queryJobs(ctx, `SELECT `+jobColumns+jobFrom+`WHERE j.state IN (?, ?) ORDER BY j.state = ? DESC, j.id`,
 		jobs.StateRunning, jobs.StateQueued, jobs.StateRunning)
+}
+
+// ReplacedImagesSince returns the image ids that update and compose-apply
+// jobs finished at or after since replaced (result.replaced_images), each
+// once. A host cleanup keeps these images (issue #19).
+func (s *Store) ReplacedImagesSince(ctx context.Context, since time.Time) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT DISTINCT r.value FROM jobs j, json_each(j.result, '$.replaced_images') r
+		 WHERE j.finished_at >= ? ORDER BY r.value`, formatTime(since))
+	if err != nil {
+		return nil, fmt.Errorf("listing replaced images: %w", err)
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("listing replaced images: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
 }
 
 // JobsInState returns all jobs in a state, oldest first.

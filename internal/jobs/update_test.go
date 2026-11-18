@@ -104,7 +104,8 @@ func TestUpdate(t *testing.T) {
 				e.docker.servicesAfter[0].ImageID = "sha256:new"
 			},
 			wantCalls: []string{check, svcs, pull, prestop, stop, final, up, healthy, after},
-			wantRes:   ChangeResult{PreStopSnapshot: "snap-pre-stop", Snapshot: "snap-final", ImagesChanged: []string{"app"}},
+			wantRes: ChangeResult{PreStopSnapshot: "snap-pre-stop", Snapshot: "snap-final", ImagesChanged: []string{"app"},
+				ReplacedImages: []string{"sha256:cd34cd34cd34cd34cd34cd34cd34cd34cd34cd34cd34cd34cd34cd34cd34cd34"}},
 		},
 		{
 			name:      "reading the state after the update fails: success, nothing recorded",

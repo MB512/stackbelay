@@ -321,7 +321,7 @@ func needsRepository(spec jobs.Spec) bool {
 func recordChange(status *jobs.Status, res jobs.ChangeResult) {
 	status.Snapshot, status.PreStopSnapshot = res.Snapshot, res.PreStopSnapshot
 	status.PreviousDir, status.RolledBack, status.Unchanged = res.OldDir, res.RolledBack, res.Unchanged
-	status.ImagesChanged = res.ImagesChanged
+	status.ImagesChanged, status.ReplacedImages = res.ImagesChanged, res.ReplacedImages
 }
 
 // readComposeNew reads the new compose file of a compose-apply job from its

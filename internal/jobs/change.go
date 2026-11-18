@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/MB512/stackvault/internal/docker"
@@ -36,6 +37,10 @@ type ChangeResult struct {
 	// another image (image id) after it. Only set when the change
 	// succeeded.
 	ImagesChanged []string
+	// ReplacedImages are the image ids those services ran before. A host
+	// cleanup keeps them for a while (issue #19), so the old version is
+	// still there for a manual rollback.
+	ReplacedImages []string
 }
 
 // errUnchanged is returned by change.prepare when there is nothing to
@@ -198,8 +203,8 @@ func (p *Pipeline) runChange(ctx context.Context, stack stacks.Stack, c change) 
 			return res, nil
 		}
 		if failure = p.upAndVerify(ctx, log, stack.Dir, start, verify); failure == nil {
-			res.ImagesChanged = p.imagesChanged(ctx, log, stack.Dir, services)
-			log.Info(c.name+" done", "images_changed", res.ImagesChanged)
+			res.ImagesChanged, res.ReplacedImages = p.imagesChanged(ctx, log, stack.Dir, services)
+			log.Info(c.name+" done", "images_changed", res.ImagesChanged, "replaced_images", res.ReplacedImages)
 			return res, nil
 		}
 	}
@@ -267,13 +272,14 @@ func (p *Pipeline) upAndVerify(ctx context.Context, log *slog.Logger, dir string
 
 // imagesChanged returns the services of before that were running and now
 // run another image (compared by image id, i.e. content digest, so an
-// image pulled earlier by another stack counts as well). A failure to read
-// the state only warns: the change itself succeeded.
-func (p *Pipeline) imagesChanged(ctx context.Context, log *slog.Logger, dir string, before []docker.ServiceState) []string {
+// image pulled earlier by another stack counts as well), and the image ids
+// they ran before (each once). A failure to read the state only warns: the
+// change itself succeeded.
+func (p *Pipeline) imagesChanged(ctx context.Context, log *slog.Logger, dir string, before []docker.ServiceState) (services, replaced []string) {
 	after, err := p.Docker.Services(context.WithoutCancel(ctx), dir)
 	if err != nil {
 		log.Warn("reading the stack state after the change; image changes are not recorded", "error", err)
-		return nil
+		return nil, nil
 	}
 	now := make(map[string]string, len(after))
 	for _, s := range after {
@@ -281,13 +287,15 @@ func (p *Pipeline) imagesChanged(ctx context.Context, log *slog.Logger, dir stri
 			now[s.Name] = s.ImageID
 		}
 	}
-	var changed []string
 	for _, s := range before {
 		if id, ok := now[s.Name]; ok && s.Running() && s.ImageID != "" && id != "" && id != s.ImageID {
-			changed = append(changed, s.Name)
+			services = append(services, s.Name)
+			if docker.ValidImageID(s.ImageID) && !slices.Contains(replaced, s.ImageID) {
+				replaced = append(replaced, s.ImageID)
+			}
 		}
 	}
-	return changed
+	return services, replaced
 }
 
 // shortID shortens a snapshot id for messages.

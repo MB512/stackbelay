@@ -208,3 +208,26 @@ func TestHostSchedules(t *testing.T) {
 		t.Fatalf("host schedule not deleted: %+v", host)
 	}
 }
+
+func TestReplacedImagesSince(t *testing.T) {
+	s := openTest(t)
+	ctx := context.Background()
+	web := stackID(t, s, "web")
+	t0 := time.Date(2026, 11, 18, 10, 0, 0, 0, time.UTC)
+	finish := func(id string, at time.Time, replaced ...string) {
+		t.Helper()
+		newJob(t, s, id, web, jobs.TypeUpdate, at)
+		if err := s.FinishJob(ctx, id, jobs.StateSucceeded, "", "", JobResult{ReplacedImages: replaced}, at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	finish("01AAAAAAAAAAAAAAAAAAAAAAA1", t0.Add(-10*24*time.Hour), "sha256:old")
+	finish("01AAAAAAAAAAAAAAAAAAAAAAA2", t0.Add(-2*24*time.Hour), "sha256:b", "sha256:a")
+	finish("01AAAAAAAAAAAAAAAAAAAAAAA3", t0, "sha256:a")
+	finish("01AAAAAAAAAAAAAAAAAAAAAAA4", t0)
+	newJob(t, s, "01AAAAAAAAAAAAAAAAAAAAAAA5", web, jobs.TypeUpdate, t0) // still queued
+	got, err := s.ReplacedImagesSince(ctx, t0.Add(-7*24*time.Hour))
+	if err != nil || len(got) != 2 || got[0] != "sha256:a" || got[1] != "sha256:b" {
+		t.Fatalf("replaced images = %v, %v", got, err)
+	}
+}

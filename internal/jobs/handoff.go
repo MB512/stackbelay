@@ -222,8 +222,10 @@ type Status struct {
 	RolledBack      bool   `json:"rolled_back,omitempty"`       // update: failed and restored to Snapshot
 	Unchanged       bool   `json:"unchanged,omitempty"`         // update "only if new": no new image, nothing done
 	// ImagesChanged: update, compose apply: services whose running image
-	// (image id) differs after the change.
-	ImagesChanged []string `json:"images_changed,omitempty"`
+	// (image id) differs after the change. ReplacedImages: the image ids
+	// they ran before.
+	ImagesChanged  []string `json:"images_changed,omitempty"`
+	ReplacedImages []string `json:"replaced_images,omitempty"`
 }
 
 // WriteSpec writes spec.json into dir (manager side).

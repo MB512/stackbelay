@@ -451,7 +451,9 @@ cancel):
    digest; also for a compose apply). Whether the job pulled the image
    does not matter: another stack's update may have pulled it before. A
    job with a non-empty list is a "real" update for the stack list's
-   tooltip (issue #23); a failure to read the state only warns.
+   tooltip (issue #23); a failure to read the state only warns. The image
+   ids those services ran before go into `result.replaced_images`: the host
+   cleanup keeps them for a while (see "Host cleanup").
 7. Failure in 6:
    - with repository: **automatic rollback** = the restore pipeline on the
      final snapshot without safety snapshot (the final snapshot already is
