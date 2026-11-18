@@ -61,3 +61,43 @@
   </tbody>
 </table>
 {{- end}}
+
+{{- /* Live log view of the Logs tab and the global log view:
+       static/stacklog.js fills #stack-log from the event stream and shows
+       or hides lines with the container checkboxes. Dot is a logPanel. */}}
+{{define "log-panel"}}
+<section id="stack-logs" data-events="{{.Events}}"{{if .Unavailable}} data-unavailable{{end}}>
+  {{- with .Unavailable}}
+  <p class="error">{{.}}</p>
+  {{- else}}
+  <fieldset class="containers" id="log-containers">
+    <legend>Containers</legend>
+    {{- range .Containers}}
+    <label class="check"><input type="checkbox" value="{{.}}"{{if or (not $.Selected) (eq . $.Selected)}} checked{{end}}> {{.}}</label>
+    {{- else}}
+    <p class="hint" id="log-containers-empty">No containers yet.</p>
+    {{- end}}
+    <span class="actions">
+      <button type="button" class="secondary" id="log-show-all">Show all</button>
+      <button type="button" class="secondary" id="log-hide-all">Hide all</button>
+    </span>
+  </fieldset>
+  <p class="hint">Live output of <code>docker compose logs</code>: the last {{.Tail}} lines of every container, then new lines as they come.
+    Times are in {{timeZone}}. <span id="stack-log-live" aria-live="polite"></span></p>
+  <div class="log-controls">
+    <label class="check"><input type="checkbox" id="log-wrap" checked> Wrap lines</label>
+    <button type="button" class="secondary" id="log-fullscreen">Full screen</button>
+  </div>
+  {{- /* In full screen the frame covers the whole browser window and shows
+         only the log and a bar with the container filter (moved there by
+         stacklog.js) and the exit button (Esc also exits). */}}
+  <div class="log-frame" id="stack-log-frame">
+    <div class="log-bar" id="log-bar" hidden>
+      <button type="button" class="secondary log-exit" id="log-exit-fullscreen">Exit full screen</button>
+    </div>
+    <div class="log" id="stack-log" role="log"></div>
+  </div>
+  <noscript><p class="hint">The live log view needs JavaScript.</p></noscript>
+  {{- end}}
+</section>
+{{- end}}

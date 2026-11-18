@@ -677,6 +677,8 @@ with a light and a dark set; the job log is a dark panel in both modes.
 | `POST /stacks/{name}/stop`, `/start`, `/restart` | operate right | queue a stop, start or restart without backup, see "Stop, start and restart" (no stop for the manager's own stack) |
 | `GET /stacks/{name}/logs` | logs right | "Logs" tab: container checkboxes and live log panel |
 | `GET /stacks/{name}/logs/events` | logs right | live container logs (SSE), see "Container logs" |
+| `GET /logs` | logs right on the chosen stacks | global log view: choose up to 4 stacks (`?stack=a&stack=b`), see "Global log view" |
+| `GET /logs/events` | logs right on every `?stack=` | merged live container logs of those stacks (SSE) |
 | `GET /stacks/{name}/update` | update right | update page (no tab, linked from Status): last check, unpin, update form (only if new, rollback method); without repository it requires confirming "no backup, no rollback" |
 | `POST /stacks/{name}/update/check` | update right | check for newer images (registry query, no pull), see "Update check"; HTMX: returns the Status tab's fragment |
 | `POST /stacks/{name}/update` | update right | queue an update, see "Update pipeline" |
@@ -934,6 +936,30 @@ too.
 - Logs are **not** redacted: applications may log secrets, hence the
   separate right. A new stream (without `since`) is audited as
   `stack.logs`; reconnects are not.
+
+### Global log view
+
+Decided in issue #21. `GET /logs` (header link "Logs", shown to users with
+the logs right on at least one stack) follows the container logs of
+several stacks in one view, with the same panel and script as the Logs tab
+(`log-panel` in `partials.html`, `static/stacklog.js`).
+
+- The page lists the stacks with the logs right (missing stack
+  directories disabled); a plain GET form puts the choice into the URL
+  (`?stack=a&stack=b`), so the view can be bookmarked. Every name must be a
+  discovered stack with the logs right, else 404 like the stack pages (also
+  for the stream); more than 4 answer 400.
+- `GET /logs/events?stack=…` runs one `compose logs` per stack (the same
+  command, with `--tail 100`) and merges their lines into one SSE stream
+  (`streamLogs`, shared with the Logs tab). Lines carry `data-c` =
+  `<stack>/<container>`, so the container filter and colors work across
+  stacks; compose's own lines show the stack name. When the logs of one
+  stack end or fail (`failed` names the stack), the whole stream ends and
+  the browser reconnects with `?since=` for all stacks.
+- Each stack counts as one stream against the limits (4 per user, 20 in
+  total); a view reserves all of them at once or gets 429.
+- Rights are checked on the page and on every (re)connect. A new stream is
+  audited as `stack.logs` per stack (detail `global log view`).
 
 ## Container shell
 

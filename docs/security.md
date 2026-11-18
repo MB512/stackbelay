@@ -37,8 +37,9 @@ attackers reaching the UI, a leaked database file.
    discovered stacks, with fixed argument lists: `ps` for the Status tab,
    `config --format json` and `ps` for the State column of the stack list
    (cached 5 s per stack, at most 4 at a time, always after the project
-   owner check), `logs` and `ps` for the log view (after checking that the compose project belongs to the stack
-   directory; at most 4 streams per user, 20 in total) and `config --quiet`
+   owner check), `logs` and `ps` for the log views (after checking that the compose project belongs to the stack
+   directory; one stream per stack, the global log view merges up to 4; at
+   most 4 streams per user, 20 in total) and `config --quiet`
    on a temporary copy outside the stack to validate an edited compose
    file. For the update check it also runs `docker image inspect` and
    `docker buildx imagetools inspect -- <ref>` (registry query, no pull) on

@@ -23,15 +23,13 @@ var staticFS embed.FS
 
 // pages are the page templates; each is combined with base.html and
 // partials.html.
-var pages = []string{"login.html", "password.html", "error.html", "stacks.html", "stack_status.html", "stack.html", "stack_settings.html", "users.html", "job.html", "restore.html", "stack_logs.html", "stack_update.html", "stack_compose.html", "stack_shell.html", "admin_jobs.html", "admin_audit.html"}
+var pages = []string{"login.html", "password.html", "error.html", "stacks.html", "stack_status.html", "stack.html", "stack_settings.html", "users.html", "job.html", "restore.html", "stack_logs.html", "stack_update.html", "stack_compose.html", "stack_shell.html", "admin_jobs.html", "admin_audit.html", "logs.html"}
 
 // templateFuncs returns the functions available in all templates. Times
 // are shown in the manager's time zone (s.loc).
 func (s *Server) templateFuncs() template.FuncMap {
 	loc := s.loc()
 	return template.FuncMap{
-		// logTail is how many lines per container the Logs tab starts with.
-		"logTail": func() int { return logTailLines },
 		// version is the build version, shown in the page footer.
 		"version": func() string { return buildinfo.Version },
 		// imageVersion formats an image version for the update check: the
@@ -78,6 +76,9 @@ type pageData struct {
 	Error string
 	Info  string
 	Data  any // page-specific
+	// GlobalLogs shows the "Logs" link in the header (the user has the
+	// logs right on some stack); set by render.
+	GlobalLogs bool
 }
 
 // render executes a page into a buffer first, so a template error never
@@ -85,6 +86,7 @@ type pageData struct {
 func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, page string, d pageData) {
 	if a := authFrom(r.Context()); a != nil {
 		d.User, d.CSRF = &a.User, a.Session.CSRFToken
+		d.GlobalLogs = s.mayViewSomeLogs(r.Context(), a.User)
 	}
 	t, ok := s.templates[page]
 	if !ok {

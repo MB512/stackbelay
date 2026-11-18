@@ -1,0 +1,31 @@
+{{define "content"}}
+<h1>Logs</h1>
+{{- with .Data}}
+{{- if .Stacks}}
+{{- /* A plain GET form: the selection is part of the URL (?stack=a&stack=b),
+       so the view can be bookmarked and reloaded. */}}
+<form method="get" action="/logs" class="card wide">
+  <fieldset class="containers">
+    <legend>Stacks (at most {{.Max}} at once)</legend>
+    {{- range .Stacks}}
+    <label class="check"><input type="checkbox" name="stack" value="{{.Name}}"
+      {{- if .Selected}} checked{{end}}{{if not .Present}} disabled{{end}}> {{.Name}}
+      {{- if not .Present}} <span class="badge warn" title="The stack directory is missing">missing</span>{{end}}</label>
+    {{- end}}
+  </fieldset>
+  <p class="hint">Follows the container logs of the chosen stacks in one view, ordered by time. Each stack counts as one
+    of your {{.Max}} open log views.</p>
+  <div><button type="submit">Show logs</button></div>
+</form>
+{{- range .Problems}}
+<p class="warning">{{.}}</p>
+{{- end}}
+{{- if .Selected}}
+{{template "log-panel" .Panel}}
+<script src="/static/stacklog.js" defer></script>
+{{- end}}
+{{- else}}
+<p class="hint">You may not read the logs of any stack.</p>
+{{- end}}
+{{- end}}
+{{end}}

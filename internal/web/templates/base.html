@@ -23,6 +23,9 @@
     {{- with .User}}
     <nav>
       <a href="/">Stacks</a>
+      {{- if $.GlobalLogs}}
+      <a href="/logs">Logs</a>
+      {{- end}}
       {{- if .IsAdmin}}
       <a href="/admin/users">Admin</a>
       {{- end}}

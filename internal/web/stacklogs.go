@@ -46,46 +46,74 @@ type streamLimiter struct {
 // user or total streams are open. Every successful acquire must be
 // followed by release.
 func (l *streamLimiter) acquire(userID int64, perUser, total int) bool {
+	return l.acquireN(userID, 1, perUser, total)
+}
+
+func (l *streamLimiter) release(userID int64) { l.releaseN(userID, 1) }
+
+// acquireN reserves n streams at once, or none (false) if that would
+// exceed perUser streams of the user or total streams. Every successful
+// acquireN must be followed by releaseN with the same n.
+func (l *streamLimiter) acquireN(userID int64, n, perUser, total int) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.byUser == nil {
 		l.byUser = map[int64]int{}
 	}
-	if l.total >= total || l.byUser[userID] >= perUser {
+	if l.total+n > total || l.byUser[userID]+n > perUser {
 		return false
 	}
-	l.total++
-	l.byUser[userID]++
+	l.total += n
+	l.byUser[userID] += n
 	return true
 }
 
-func (l *streamLimiter) release(userID int64) {
+func (l *streamLimiter) releaseN(userID int64, n int) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	l.total--
-	if l.byUser[userID]--; l.byUser[userID] <= 0 {
+	l.total -= n
+	if l.byUser[userID] -= n; l.byUser[userID] <= 0 {
 		delete(l.byUser, userID)
 	}
 }
 
-// logsTab is the data of the "Logs" tab.
-type logsTab struct {
-	stackHeader
-	Containers  []string
-	Unavailable string // why logs cannot be shown, or ""
+// logPanel is the live log view (template "log-panel", filled by
+// static/stacklog.js), used by the Logs tab and the global log view.
+type logPanel struct {
+	Events      string   // URL of the event stream
+	Containers  []string // filter keys, see containerLogLine.Key
+	Tail        int      // history lines per container
+	Unavailable string   // why logs cannot be shown, or ""
 	// Selected is the only container shown at first (?container=, the
 	// "Logs" link of a container on the Status tab); "" shows all.
 	Selected string
 }
 
-// containerLogLine is one line of the Logs tab; also sent as a "line"
-// event of the live stream.
+// logsTab is the data of the "Logs" tab.
+type logsTab struct {
+	stackHeader
+	Panel logPanel
+}
+
+// containerLogLine is one line of a log view; also sent as a "line" event
+// of the live stream.
 type containerLogLine struct {
+	Stack     string // only in the global log view
 	Container string
 	Time      string // in the manager's time zone, "2006-01-02 15:04:05"; "" if the line has none
 	ID        string // see logLineID; data-t of the line, for sorting in the browser
 	Text      string
 	Cut       bool
+}
+
+// Key identifies the container in the browser's filter (data-c): the
+// container name, in the global view "<stack>/<container>"; "" for lines
+// without container (compose's own messages).
+func (l containerLogLine) Key() string {
+	if l.Container == "" || l.Stack == "" {
+		return l.Container
+	}
+	return l.Stack + "/" + l.Container
 }
 
 // logLineIDFormat is RFC 3339 in UTC with always nine fraction digits, so
@@ -103,8 +131,8 @@ func logLineID(t time.Time) string {
 	return t.UTC().Format(logLineIDFormat)
 }
 
-func newContainerLogLine(l docker.LogLine, loc *time.Location) containerLogLine {
-	out := containerLogLine{Container: l.Container, ID: logLineID(l.Time), Text: l.Text, Cut: l.Cut}
+func newContainerLogLine(stack string, l docker.LogLine, loc *time.Location) containerLogLine {
+	out := containerLogLine{Stack: stack, Container: l.Container, ID: logLineID(l.Time), Text: l.Text, Cut: l.Cut}
 	if !l.Time.IsZero() {
 		out.Time = l.Time.In(loc).Format("2006-01-02 15:04:05")
 	}
@@ -132,24 +160,20 @@ func (s *Server) stackLogsPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a := authFrom(r.Context())
-	page := logsTab{stackHeader: s.newStackHeader(a.User, perm, st, tabLogs)}
+	page := logsTab{stackHeader: s.newStackHeader(a.User, perm, st, tabLogs),
+		Panel: logPanel{Events: "/stacks/" + st.Name + "/logs/events", Tail: logTailLines}}
 	dir, found := s.stackDir(st)
 	switch {
 	case s.Logs == nil:
-		page.Unavailable = "Container logs are not available in this installation."
+		page.Panel.Unavailable = logsUnavailable
 	case !found:
-		page.Unavailable = "The stack directory is missing."
+		page.Panel.Unavailable = "The stack directory is missing."
 	default:
-		ctx, cancel := context.WithTimeout(r.Context(), containerListTimeout)
-		names, err := s.Logs.Containers(ctx, dir)
-		cancel()
-		if err != nil {
-			s.Logger.Warn("listing containers", "stack", st.Name, "error", err)
-			page.Unavailable = "Listing the containers failed: " + truncate(err.Error(), 300)
-		}
-		page.Containers = names
+		names, problem := s.listLogContainers(r.Context(), st.Name, dir)
+		page.Panel.Unavailable = problem
+		page.Panel.Containers = names
 		if c := r.URL.Query().Get("container"); slices.Contains(names, c) {
-			page.Selected = c
+			page.Panel.Selected = c
 		}
 	}
 	s.render(w, r, http.StatusOK, "stack_logs.html", pageData{Title: st.Name + " logs", Data: page})
@@ -179,14 +203,9 @@ func (s *Server) stackLogEvents(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "logs unavailable", http.StatusServiceUnavailable)
 		return
 	}
-	var since time.Time
-	if v := r.URL.Query().Get("since"); v != "" {
-		t, err := time.Parse(time.RFC3339Nano, v)
-		if err != nil {
-			http.Error(w, "invalid since", http.StatusBadRequest)
-			return
-		}
-		since = t.Add(time.Nanosecond) // the line at "since" was already shown
+	since, ok := parseSince(w, r)
+	if !ok {
+		return
 	}
 	if !s.logStreams.acquire(a.User.ID, maxLogStreamsPerUser, maxLogStreams) {
 		http.Error(w, "too many open log views", http.StatusTooManyRequests)
@@ -196,7 +215,65 @@ func (s *Server) stackLogEvents(w http.ResponseWriter, r *http.Request) {
 	if since.IsZero() {
 		s.audit(r, store.AuditEntry{UserID: a.User.ID, Action: "stack.logs", StackID: st.ID})
 	}
+	s.streamLogs(w, r, []logSource{{Dir: dir}}, logTailLines, since)
+}
 
+// logsUnavailable is shown when the manager has no log reader.
+const logsUnavailable = "Container logs are not available in this installation."
+
+// listLogContainers lists the containers of a stack for a log view. If
+// that fails, problem is a message for the page.
+func (s *Server) listLogContainers(ctx context.Context, stack, dir string) (names []string, problem string) {
+	ctx, cancel := context.WithTimeout(ctx, containerListTimeout)
+	defer cancel()
+	names, err := s.Logs.Containers(ctx, dir)
+	if err != nil {
+		s.Logger.Warn("listing containers", "stack", stack, "error", err)
+		return names, "Listing the containers failed: " + truncate(err.Error(), 300)
+	}
+	return names, ""
+}
+
+// parseSince reads ?since= of a log stream: the id of the newest line the
+// browser has, so a reconnect resumes after it. Zero without it; on an
+// invalid value it answers 400 and returns false.
+func parseSince(w http.ResponseWriter, r *http.Request) (time.Time, bool) {
+	v := r.URL.Query().Get("since")
+	if v == "" {
+		return time.Time{}, true
+	}
+	t, err := time.Parse(time.RFC3339Nano, v)
+	if err != nil {
+		http.Error(w, "invalid since", http.StatusBadRequest)
+		return time.Time{}, false
+	}
+	return t.Add(time.Nanosecond), true // the line at "since" was already shown
+}
+
+// logSource is one stack of a log stream.
+type logSource struct {
+	Stack string // name, shown in the lines; "" on the Logs tab of the stack itself
+	Dir   string // from discovery
+}
+
+// sourceLine is a log line and the stack it came from.
+type sourceLine struct {
+	stack string
+	line  docker.LogLine
+}
+
+// sourceResult is how the logs of one stack ended.
+type sourceResult struct {
+	stack string
+	err   error
+}
+
+// streamLogs streams the container logs of one or more stacks as
+// Server-Sent Events (see stackLogEvents), merged in the order they
+// arrive; the browser sorts them by time. The caller has checked the
+// rights and reserved one stream per source. When the logs of one stack
+// end or fail, the whole stream ends; the browser reconnects with ?since=.
+func (s *Server) streamLogs(w http.ResponseWriter, r *http.Request, sources []logSource, tail int, since time.Time) {
 	h := w.Header()
 	h.Set("Content-Type", "text/event-stream")
 	h.Set("Cache-Control", "no-store")
@@ -207,51 +284,60 @@ func (s *Server) stackLogEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The compose process ends with ctx: when the client goes away or the
-	// manager shuts down.
+	// The compose processes end with ctx: when the client goes away, the
+	// manager shuts down or this function returns.
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
-	// FollowLogs blocks, so it runs in its own goroutine (a lightweight
-	// thread, like Task.Run in C#) and hands the lines over through a
-	// channel (like a BlockingCollection). This goroutine alone writes to
-	// the response, which also sends the heartbeats.
-	lines := make(chan docker.LogLine, 256)
-	result := make(chan error, 1)
-	go func() {
-		result <- s.Logs.FollowLogs(ctx, dir, logTailLines, since, func(l docker.LogLine) error {
-			select {
-			case lines <- l:
-				return nil
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-		})
-	}()
+	// FollowLogs blocks, so each stack's runs in its own goroutine (a
+	// lightweight thread, like Task.Run in C#) and hands the lines over
+	// through one shared channel (like a BlockingCollection). This
+	// goroutine alone writes to the response, which also sends the
+	// heartbeats.
+	lines := make(chan sourceLine, 256)
+	results := make(chan sourceResult, len(sources))
+	for _, src := range sources {
+		go func() {
+			err := s.Logs.FollowLogs(ctx, src.Dir, tail, since, func(l docker.LogLine) error {
+				select {
+				case lines <- sourceLine{stack: src.Stack, line: l}:
+					return nil
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			})
+			results <- sourceResult{stack: src.Stack, err: err}
+		}()
+	}
 
 	heartbeat := time.NewTicker(streamHeartbeat)
 	defer heartbeat.Stop()
 	for {
 		select {
 		case l := <-lines:
-			if s.sendLogLine(sse, l) != nil {
+			if s.sendLogLine(sse, l.stack, l.line) != nil {
 				return
 			}
-		case err := <-result:
-			// All lines were handed over before FollowLogs returned; send
-			// what is still buffered.
+		case res := <-results:
+			// All lines of that stack were handed over before FollowLogs
+			// returned; send what is still buffered.
 			for len(lines) > 0 {
-				if s.sendLogLine(sse, <-lines) != nil {
+				l := <-lines
+				if s.sendLogLine(sse, l.stack, l.line) != nil {
 					return
 				}
 			}
-			switch {
+			switch err := res.err; {
 			case err == nil:
 				_ = sse.event("end", "", "")
 			case errors.Is(err, context.Canceled) || ctx.Err() != nil:
 			default:
-				s.Logger.Warn("log stream", "stack", st.Name, "error", err)
-				_ = sse.event("failed", "", truncate(err.Error(), 300))
+				s.Logger.Warn("log stream", "stack", res.stack, "error", err)
+				msg := truncate(err.Error(), 300)
+				if res.stack != "" {
+					msg = res.stack + ": " + msg
+				}
+				_ = sse.event("failed", "", msg)
 			}
 			return
 		case <-heartbeat.C:
@@ -266,8 +352,8 @@ func (s *Server) stackLogEvents(w http.ResponseWriter, r *http.Request) {
 
 // sendLogLine sends one "line" event. Its id is the line's time, which a
 // reconnect passes back as ?since=; lines without a time have no id.
-func (s *Server) sendLogLine(sse sseWriter, l docker.LogLine) error {
-	html, err := s.partialHTML("stack_logs.html", "container-log-line", newContainerLogLine(l, s.loc()))
+func (s *Server) sendLogLine(sse sseWriter, stack string, l docker.LogLine) error {
+	html, err := s.partialHTML("stack_logs.html", "container-log-line", newContainerLogLine(stack, l, s.loc()))
 	if err != nil {
 		return err
 	}

@@ -177,6 +177,8 @@ func (s *Server) Handler() (http.Handler, error) {
 			r.Get("/stacks/{name}/update", s.stackUpdate)
 			r.Post("/stacks/{name}/update", s.startUpdate)
 			r.Post("/stacks/{name}/update/check", s.checkUpdates)
+			r.Get("/logs", s.globalLogs)
+			r.Get("/logs/events", s.globalLogEvents)
 			r.Get("/jobs/{id}", s.jobDetail)
 			r.Get("/jobs/{id}/events", s.jobEvents)
 			r.Post("/jobs/{id}/cancel", s.cancelJob)

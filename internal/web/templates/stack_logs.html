@@ -2,47 +2,13 @@
 {{- with .Data}}
 {{template "stack-header" .}}
 
-{{- /* static/stacklog.js fills #stack-log from the event stream and
-       shows or hides lines with the container checkboxes. */}}
-<section id="stack-logs" data-events="/stacks/{{.Stack.Name}}/logs/events"{{if .Unavailable}} data-unavailable{{end}}>
-  {{- with .Unavailable}}
-  <p class="error">{{.}}</p>
-  {{- else}}
-  <fieldset class="containers" id="log-containers">
-    <legend>Containers</legend>
-    {{- range .Containers}}
-    <label class="check"><input type="checkbox" value="{{.}}"{{if or (not $.Data.Selected) (eq . $.Data.Selected)}} checked{{end}}> {{.}}</label>
-    {{- else}}
-    <p class="hint" id="log-containers-empty">This stack has no containers yet.</p>
-    {{- end}}
-    <span class="actions">
-      <button type="button" class="secondary" id="log-show-all">Show all</button>
-      <button type="button" class="secondary" id="log-hide-all">Hide all</button>
-    </span>
-  </fieldset>
-  <p class="hint">Live output of <code>docker compose logs</code>: the last {{logTail}} lines of every container, then new lines as they come.
-    Times are in {{timeZone}}. <span id="stack-log-live" aria-live="polite"></span></p>
-  <div class="log-controls">
-    <label class="check"><input type="checkbox" id="log-wrap" checked> Wrap lines</label>
-    <button type="button" class="secondary" id="log-fullscreen">Full screen</button>
-  </div>
-  {{- /* In full screen the frame covers the whole browser window and shows
-         only the log and a bar with the container filter (moved there by
-         stacklog.js) and the exit button (Esc also exits). */}}
-  <div class="log-frame" id="stack-log-frame">
-    <div class="log-bar" id="log-bar" hidden>
-      <button type="button" class="secondary log-exit" id="log-exit-fullscreen">Exit full screen</button>
-    </div>
-    <div class="log" id="stack-log" role="log"></div>
-  </div>
-  <noscript><p class="hint">The live log view needs JavaScript.</p></noscript>
-  {{- end}}
-</section>
+{{template "log-panel" .Panel}}
 <script src="/static/stacklog.js" defer></script>
 {{- end}}
 {{end}}
 
-{{- /* One container log line; also sent as a "line" event of the stream. */}}
+{{- /* One container log line; also sent as a "line" event of the stream
+       (also of the global log view). Dot is a containerLogLine. */}}
 {{define "container-log-line" -}}
-<div class="line" data-c="{{.Container}}"{{with .ID}} data-t="{{.}}"{{end}}>{{with .Time}}<span class="ts">{{.}}</span> {{end}}{{with .Container}}<span class="ctr">{{.}}</span> {{end}}{{.Text}}{{if .Cut}} <span class="attrs">[line cut]</span>{{end}}</div>
+<div class="line" data-c="{{.Key}}"{{with .ID}} data-t="{{.}}"{{end}}>{{with .Time}}<span class="ts">{{.}}</span> {{end}}{{with .Key}}<span class="ctr">{{.}}</span> {{else}}{{with .Stack}}<span class="ctr">{{.}}</span> {{end}}{{end}}{{.Text}}{{if .Cut}} <span class="attrs">[line cut]</span>{{end}}</div>
 {{- end}}

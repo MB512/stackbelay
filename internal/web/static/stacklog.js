@@ -1,11 +1,14 @@
-// Live container logs of a stack (templates/stack_logs.html).
+// Live container logs of a stack (Logs tab) or of several stacks (global
+// log view, /logs); the panel is "log-panel" in templates/partials.html.
 //
-// Follows /stacks/<name>/logs/events (Server-Sent Events). "line" events
-// carry one server-rendered, escaped line with data-c = container name and
-// the line's time as event id and data-t; lines are inserted in time
-// order. The container checkboxes show or hide lines in the browser only. When the stream ends ("end", "failed", or the
-// connection was lost) the script reconnects with ?since=<last id> and
-// backoff, so lines are not repeated. Plain script, no build step.
+// Follows the stream in data-events (Server-Sent Events). "line" events
+// carry one server-rendered, escaped line with data-c = container name
+// (global view: "<stack>/<container>") and the line's time as event id and
+// data-t; lines are inserted in time order. The container checkboxes show
+// or hide lines in the browser only. When the stream ends ("end",
+// "failed", or the connection was lost) the script reconnects with
+// ?since=<last id> and backoff, so lines are not repeated. Plain script,
+// no build step.
 (function () {
 	"use strict";
 
@@ -278,7 +281,7 @@
 	// retry checks the page first: no point in reconnecting when the
 	// session has ended or the right was taken away.
 	function retry() {
-		window.fetch(window.location.pathname, {credentials: "same-origin", redirect: "manual", cache: "no-store"})
+		window.fetch(window.location.pathname + window.location.search, {credentials: "same-origin", redirect: "manual", cache: "no-store"})
 			.then(function (resp) {
 				if (resp.type === "opaqueredirect" || resp.status === 401) {
 					status("logged out; reload the page to log in again");

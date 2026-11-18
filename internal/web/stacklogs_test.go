@@ -22,6 +22,10 @@ type fakeLogs struct {
 	sinces    []time.Time // since values passed to FollowLogs
 	lines     []docker.LogLine
 	followErr error
+	// together, if set (under mu), holds every FollowLogs call after its lines until
+	// all calls counted in it have sent theirs, so a merged stream has the
+	// lines of all stacks before the first one ends.
+	together *sync.WaitGroup
 }
 
 func (f *fakeLogs) Containers(_ context.Context, dir string) ([]string, error) {
@@ -32,11 +36,16 @@ func (f *fakeLogs) FollowLogs(_ context.Context, dir string, _ int, since time.T
 	f.mu.Lock()
 	f.dirs = append(f.dirs, dir)
 	f.sinces = append(f.sinces, since)
+	together := f.together
 	f.mu.Unlock()
 	for _, l := range f.lines {
 		if err := fn(l); err != nil {
 			return err
 		}
+	}
+	if together != nil {
+		together.Done()
+		together.Wait()
 	}
 	return f.followErr
 }
