@@ -25,7 +25,14 @@ type Repo struct {
 	// Values are redacted from any output and never appear on the command
 	// line.
 	Env []string
+	// LimitDownloadKiB limits downloads from the repository (restic
+	// --limit-download, KiB/s); 0 = no limit. Used for long restores from
+	// another host (issue #1).
+	LimitDownloadKiB int
 }
+
+// MaxLimitKiB is the largest accepted download limit (about 10 GiB/s).
+const MaxLimitKiB = 10 << 20
 
 // Snapshot is one entry of "restic snapshots --json".
 type Snapshot struct {

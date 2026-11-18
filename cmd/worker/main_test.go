@@ -242,3 +242,29 @@ func TestParseCleanupArgs(t *testing.T) {
 		t.Error("cleanup needs no repository")
 	}
 }
+
+func TestParseImportArgs(t *testing.T) {
+	spec, _, err := parseArgs([]string{"restore", "--import", "--no-start", "--limit-download", "4096", "web", "0123abcd"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := jobs.Spec{Type: jobs.TypeRestore, Stack: "web", SnapshotID: "0123abcd", Import: true, NoStart: true, LimitDownloadKiB: 4096}
+	if !reflect.DeepEqual(spec, want) {
+		t.Fatalf("got %+v, want %+v", spec, want)
+	}
+}
+
+// An import must not touch an existing directory: the worker refuses
+// before anything else happens.
+func TestImportRefusesExistingStack(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "web"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	env := map[string]string{"STACKS_ROOT": root, "STACKVAULT_HOSTNAME": "h", "RESTIC_REPOSITORY": "/r", "RESTIC_PASSWORD": "pw"}
+	var out bytes.Buffer
+	if code := run([]string{"restore", "--import", "web", "0123abcd"}, func(k string) string { return env[k] }, &out); code != 1 ||
+		!strings.Contains(out.String(), "already exists") {
+		t.Fatalf("code %d, output %s", code, out.String())
+	}
+}

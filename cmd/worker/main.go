@@ -6,7 +6,7 @@
 //
 //	worker run <job-dir>
 //	worker backup  [--pre-stop] <stack>
-//	worker restore [--no-safety-snapshot] [--no-start] [--pin-images] [--in-place] <stack> <snapshot-id>
+//	worker restore [--no-safety-snapshot] [--no-start] [--pin-images] [--in-place] [--import] [--limit-download <KiB/s>] <stack> <snapshot-id>
 //	worker update  [--no-backup] [--only-if-new] [--rollback-in-place] [--no-pre-stop] <stack>
 //	worker stop|start|restart <stack>
 //	worker cleanup [--image-min-age <duration>]
@@ -47,7 +47,7 @@ import (
 const usage = `usage:
   worker run <job-dir>
   worker backup  [--pre-stop] <stack>
-  worker restore [--no-safety-snapshot] [--no-start] [--pin-images] [--in-place] <stack> <snapshot-id>
+  worker restore [--no-safety-snapshot] [--no-start] [--pin-images] [--in-place] [--import] [--limit-download <KiB/s>] <stack> <snapshot-id>
   worker update  [--no-backup] [--only-if-new] [--rollback-in-place] [--no-pre-stop] <stack>
   worker stop|start|restart <stack>
   worker cleanup [--image-min-age <duration>]
@@ -222,11 +222,14 @@ func parseArgs(args []string) (jobs.Spec, string, error) {
 		noStart := fs.Bool("no-start", false, "do not start the stack after restoring")
 		pin := fs.Bool("pin-images", false, "start with the image versions recorded in the snapshot")
 		inPlace := fs.Bool("in-place", false, "restore over the stack directory instead of swapping in a restored copy")
+		imp := fs.Bool("import", false, "first restore of a stack from another host: create its directory")
+		limit := fs.Int("limit-download", 0, "limit downloads from the repository (KiB/s)")
 		if err := fs.Parse(args[1:]); err != nil || fs.NArg() != 2 {
-			return jobs.Spec{}, "", fmt.Errorf("%w: restore expects [--no-safety-snapshot] [--no-start] [--pin-images] [--in-place] <stack> <snapshot-id>", errUsage)
+			return jobs.Spec{}, "", fmt.Errorf("%w: restore expects [--no-safety-snapshot] [--no-start] [--pin-images] [--in-place] [--import] [--limit-download <KiB/s>] <stack> <snapshot-id>", errUsage)
 		}
 		return jobs.Spec{Type: jobs.TypeRestore, Stack: fs.Arg(0), SnapshotID: fs.Arg(1),
-			SkipSafetySnapshot: *noSafety, NoStart: *noStart, PinImages: *pin, InPlace: *inPlace}, "", nil
+			SkipSafetySnapshot: *noSafety, NoStart: *noStart, PinImages: *pin, InPlace: *inPlace,
+			Import: *imp, LimitDownloadKiB: *limit}, "", nil
 
 	case "update":
 		fs := flag.NewFlagSet("update", flag.ContinueOnError)
@@ -268,6 +271,22 @@ func parseArgs(args []string) (jobs.Spec, string, error) {
 func execute(ctx context.Context, p *jobs.Pipeline, cfg config.Worker, spec jobs.Spec, jobDir string, status *jobs.Status, log *slog.Logger) error {
 	if spec.Type == jobs.TypeCleanup {
 		return cleanup(ctx, p, cfg, spec, status)
+	}
+	p.Repo.LimitDownloadKiB = spec.LimitDownloadKiB
+	if spec.Import {
+		// The first restore from another host: the stack is not on disk yet,
+		// so it cannot be looked up; ImportTarget checks the name and that
+		// no such directory exists.
+		if !cfg.HasRepo() {
+			return errors.New("no repository configured (RESTIC_REPOSITORY and RESTIC_PASSWORD(_FILE) are required for this job)")
+		}
+		target, err := stacks.ImportTarget(cfg.StacksRoot, spec.Stack)
+		if err != nil {
+			return err
+		}
+		res, err := p.Import(ctx, target, jobs.RestoreOptions{SnapshotID: spec.SnapshotID, NoStart: spec.NoStart, PinImages: spec.PinImages})
+		status.Snapshot = res.Snapshot
+		return err
 	}
 	stack, err := stacks.Lookup(cfg.StacksRoot, spec.Stack)
 	if err != nil {

@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -53,12 +54,28 @@ func (c *CLI) command(ctx context.Context, repo Repo, args ...string) (*exec.Cmd
 	if err != nil {
 		return nil, err
 	}
+	args, err = withLimits(repo, args)
+	if err != nil {
+		return nil, err
+	}
 	if c.Progress != nil {
 		env = append(env, "RESTIC_PROGRESS_FPS="+progressFPS)
 	}
 	cmd := exec.CommandContext(ctx, c.binary(), args...)
 	cmd.Env = env
 	return cmd, nil
+}
+
+// withLimits puts the repository's global options (download limit) in
+// front of args.
+func withLimits(repo Repo, args []string) ([]string, error) {
+	switch {
+	case repo.LimitDownloadKiB == 0:
+		return args, nil
+	case repo.LimitDownloadKiB < 0 || repo.LimitDownloadKiB > MaxLimitKiB:
+		return nil, fmt.Errorf("invalid download limit %d KiB/s", repo.LimitDownloadKiB)
+	}
+	return append([]string{"--limit-download", strconv.Itoa(repo.LimitDownloadKiB)}, args...), nil
 }
 
 // passThroughEnv are the only variables restic inherits from our own

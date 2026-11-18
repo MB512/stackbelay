@@ -48,6 +48,8 @@ type fakeDocker struct {
 	// after the job).
 	upFiles    []string
 	upOverride string
+	// missingImages are references ImageExists reports as absent.
+	missingImages []string
 	// upFailures makes the next n Up calls fail with errBoom (besides failOn).
 	upFailures int
 	// servicesAfter, if set, is returned by Services from the second call
@@ -118,6 +120,11 @@ func (f *fakeDocker) Up(ctx context.Context, dir string, composeFiles, services 
 func (f *fakeDocker) EnsureImage(ctx context.Context, ref string) (bool, error) {
 	f.calls.add("docker.EnsureImage %s", ref)
 	return true, f.fail("EnsureImage")
+}
+
+func (f *fakeDocker) ImageExists(ctx context.Context, ref string) (bool, error) {
+	f.calls.add("docker.ImageExists %s", ref)
+	return !slices.Contains(f.missingImages, ref), f.fail("ImageExists")
 }
 
 func (f *fakeDocker) WaitHealthy(ctx context.Context, dir string, services []string) error {

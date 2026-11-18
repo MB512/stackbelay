@@ -69,29 +69,14 @@ func (p *Pipeline) Restore(ctx context.Context, stack stacks.Stack, opts Restore
 	log := p.logger().With("stack", stack.Name, "job", "restore", "snapshot", opts.SnapshotID, "in_place", opts.InPlace)
 
 	// 1. Preflight: validate and resolve the snapshot before touching anything.
-	if !restic.SnapshotIDPattern.MatchString(opts.SnapshotID) {
-		return res, fmt.Errorf("invalid snapshot id %q", opts.SnapshotID)
-	}
 	if opts.CarryOver != "" && !ValidCarryOver(opts.CarryOver) {
 		return res, fmt.Errorf("invalid carry-over directory %q", truncate(opts.CarryOver))
 	}
-	if err := p.Restic.CheckRepo(ctx, p.Repo); err != nil {
-		return res, fmt.Errorf("repository not reachable: %w", err)
-	}
-	snaps, err := p.Restic.Snapshots(ctx, p.Repo, opts.SnapshotID)
-	if err != nil {
-		return res, fmt.Errorf("looking up snapshot: %w", err)
-	}
-	if len(snaps) != 1 || !strings.HasPrefix(snaps[0].ID, opts.SnapshotID) {
-		return res, fmt.Errorf("snapshot %s not found (or ambiguous)", opts.SnapshotID)
-	}
-	snap := snaps[0]
-	res.Snapshot = snap.ID
-	srcPath, err := snapshotStackPath(snap, stack.Name)
+	snap, srcPath, err := p.resolveSnapshot(ctx, log, opts.SnapshotID, stack.Name)
 	if err != nil {
 		return res, err
 	}
-	log.Info("snapshot verified", "id", snap.ID, "host", snap.Hostname, "path", srcPath, "time", snap.Time)
+	res.Snapshot = snap.ID
 
 	// target is the directory restic restores into.
 	target := stack.Dir
@@ -265,6 +250,32 @@ func (p *Pipeline) Restore(ctx context.Context, stack stacks.Stack, opts Restore
 		return res, fmt.Errorf("starting restored stack (previous version kept at %s): %w", res.OldDir, err)
 	}
 	return res, nil
+}
+
+// resolveSnapshot checks the repository and looks up the snapshot by id,
+// and returns it with the path to restore from (validated against the
+// snapshot's own paths and the stack name).
+func (p *Pipeline) resolveSnapshot(ctx context.Context, log *slog.Logger, id, stackName string) (restic.Snapshot, string, error) {
+	if !restic.SnapshotIDPattern.MatchString(id) {
+		return restic.Snapshot{}, "", fmt.Errorf("invalid snapshot id %q", id)
+	}
+	if err := p.Restic.CheckRepo(ctx, p.Repo); err != nil {
+		return restic.Snapshot{}, "", fmt.Errorf("repository not reachable: %w", err)
+	}
+	snaps, err := p.Restic.Snapshots(ctx, p.Repo, id)
+	if err != nil {
+		return restic.Snapshot{}, "", fmt.Errorf("looking up snapshot: %w", err)
+	}
+	if len(snaps) != 1 || !strings.HasPrefix(snaps[0].ID, id) {
+		return restic.Snapshot{}, "", fmt.Errorf("snapshot %s not found (or ambiguous)", id)
+	}
+	snap := snaps[0]
+	srcPath, err := snapshotStackPath(snap, stackName)
+	if err != nil {
+		return restic.Snapshot{}, "", err
+	}
+	log.Info("snapshot verified", "id", snap.ID, "host", snap.Hostname, "path", srcPath, "time", snap.Time)
+	return snap, srcPath, nil
 }
 
 // partialRestoreAdvice tells how to get out of a failed in-place restore.

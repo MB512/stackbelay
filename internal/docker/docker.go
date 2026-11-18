@@ -47,6 +47,9 @@ type Client interface {
 	// is present, otherwise it is pulled. ref is a validated
 	// "name@sha256:..." reference. pulled reports whether it was pulled.
 	EnsureImage(ctx context.Context, ref string) (pulled bool, err error)
+	// ImageExists reports whether an image is present locally (no pull).
+	// ref is a validated "name@sha256:..." reference.
+	ImageExists(ctx context.Context, ref string) (bool, error)
 	// Pull pulls the current images of the given services (compose pull).
 	// Services that are built locally (build:) are skipped. Running
 	// containers are not affected.

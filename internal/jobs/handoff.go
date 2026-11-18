@@ -117,6 +117,11 @@ type Spec struct {
 	NoStart            bool   `json:"no_start,omitempty"`
 	PinImages          bool   `json:"pin_images,omitempty"` // see RestoreOptions.PinImages
 	InPlace            bool   `json:"in_place,omitempty"`   // see RestoreOptions.InPlace
+	// Import: the first restore of a stack from another host; its
+	// directory does not exist yet (Pipeline.Import).
+	Import bool `json:"import,omitempty"`
+	// LimitDownloadKiB (restore): restic --limit-download, KiB/s; 0 = none.
+	LimitDownloadKiB int `json:"limit_download_kib,omitempty"`
 	// CarryOverJobs is set when the manager restores (or updates, for the
 	// rollback) its own stack: the manager's jobs directory, relative to
 	// the stack directory (e.g. "data/jobs"). See RestoreOptions.CarryOver.
@@ -163,6 +168,15 @@ func (s Spec) Validate() error {
 	}
 	if !s.Type.Host() && (s.ImageMinAgeHours != 0 || len(s.KeepImages) > 0) {
 		return fmt.Errorf("cleanup options set on a job of type %s", s.Type)
+	}
+	if s.Type != TypeRestore && (s.Import || s.LimitDownloadKiB != 0) {
+		return fmt.Errorf("restore options set on a job of type %s", s.Type)
+	}
+	if s.LimitDownloadKiB < 0 || s.LimitDownloadKiB > restic.MaxLimitKiB {
+		return fmt.Errorf("invalid download limit %d KiB/s", s.LimitDownloadKiB)
+	}
+	if s.Import && (s.InPlace || s.SkipSafetySnapshot || s.CarryOverJobs != "") {
+		return errors.New("an import restores into a new directory: no in-place, safety snapshot or carry-over options")
 	}
 	switch {
 	case s.Trigger != "" && s.Trigger != "manual" && s.Trigger != "schedule":

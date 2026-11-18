@@ -117,6 +117,32 @@ func Lookup(root, name string) (Stack, error) {
 	return Stack{}, fmt.Errorf("stack %q: %w", name, ErrNotFound)
 }
 
+// ErrExists is returned by ImportTarget when the stack directory (or a
+// staging directory of it) already exists.
+var ErrExists = errors.New("stack directory already exists")
+
+// ImportTarget returns the stack a first restore from another host creates
+// below root (issue #1): name must be a valid stack name, and neither the
+// directory nor its staging directory may exist. The name comes from the
+// snapshot's own path (validated by the restore), never from user input.
+func ImportTarget(root, name string) (Stack, error) {
+	if !filepath.IsAbs(root) {
+		return Stack{}, fmt.Errorf("stacks root %q is not an absolute path", root)
+	}
+	if !ValidName(name) {
+		return Stack{}, fmt.Errorf("invalid stack name %q", name)
+	}
+	s := Stack{Name: name, Dir: filepath.Join(root, name)}
+	for _, dir := range []string{s.Dir, StagingDir(s)} {
+		if _, err := os.Lstat(dir); err == nil {
+			return Stack{}, fmt.Errorf("%s: %w", dir, ErrExists)
+		} else if !errors.Is(err, fs.ErrNotExist) {
+			return Stack{}, fmt.Errorf("checking %s: %w", dir, err)
+		}
+	}
+	return s, nil
+}
+
 // HasComposeFile reports whether dir directly contains a compose file
 // (regular file, not a symlink).
 func HasComposeFile(dir string) (bool, error) {

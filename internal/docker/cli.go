@@ -409,6 +409,20 @@ func (c *CLI) EnsureImage(ctx context.Context, ref string) (bool, error) {
 	return true, nil
 }
 
+// ImageExists implements Client.
+func (c *CLI) ImageExists(ctx context.Context, ref string) (bool, error) {
+	if strings.HasPrefix(ref, "-") { // never let a reference become a flag
+		return false, fmt.Errorf("invalid image reference %q", ref)
+	}
+	if _, err := c.run(ctx, "", "image", "inspect", "--format", "{{.Id}}", "--", ref); err != nil {
+		if strings.Contains(err.Error(), "No such image") {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
 // WaitHealthy implements Client.
 func (c *CLI) WaitHealthy(ctx context.Context, dir string, services []string) error {
 	ticker := time.NewTicker(c.pollInterval())

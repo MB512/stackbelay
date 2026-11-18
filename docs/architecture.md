@@ -349,6 +349,35 @@ Automatic restores (the rollback of an update or a compose apply) use the
 swap unless the user chose "roll back in place" for that job (update form,
 compose editor).
 
+## Restore from another host
+
+Decided in issue #1: moving a stack from host A to host B (or rebuilding a
+host) through the shared repository. The stack keeps its name: the
+snapshot path's last component must equal it (`snapshotStackPath`), the
+rest of the path may differ (`/home/docker/web` on A restores into
+`$STACKS_ROOT/web` on B).
+
+- **First restore (import)**: `Pipeline.Import`, job option / spec field
+  `import`. The stack directory does not exist (`stacks.ImportTarget`:
+  valid name, neither the directory nor its staging directory exists), so
+  there is nothing to stop, to protect with a safety snapshot or to swap:
+  the snapshot is restored into the staging directory, checked (compose
+  file, directory metadata), the image digests in `metadata.txt` are
+  compared with the local images (missing ones are logged; a start pulls
+  them, by digest with pinned image versions) and the staging directory is
+  renamed to the stack directory (a rename never replaces a non-empty
+  directory). It starts only if asked; with "pin image versions"
+  (recommended for migrations). Any failure before the rename removes the
+  staging directory.
+- **Later syncs** are normal restores of the source host's newer
+  snapshots, usually in place (only changed files are read and written)
+  and without safety snapshot, not started; the last one after the final
+  backup on host A with start and pinned images. So a large stack moves
+  with repeated, ever faster syncs and a short final downtime.
+- **Download limit**: restore option `limit_download_kib` (worker flag
+  `--limit-download`), passed to every restic command of the job as
+  `--limit-download` (KiB/s, at most `restic.MaxLimitKiB`).
+
 ## Pinning image versions on restore
 
 Goal: after a restore, run the image versions that were running at backup
@@ -1174,7 +1203,7 @@ to them. `restic restore <id>:<subpath>` requires restic >= 0.17.
 ```
 worker run <job-dir>
 worker backup  [--pre-stop] <stack>
-worker restore [--no-safety-snapshot] [--no-start] [--pin-images] [--in-place] <stack> <snapshot-id>
+worker restore [--no-safety-snapshot] [--no-start] [--pin-images] [--in-place] [--import] [--limit-download <KiB/s>] <stack> <snapshot-id>
 worker update  [--no-backup] [--only-if-new] [--rollback-in-place] [--no-pre-stop] <stack>
 worker stop|start|restart <stack>
 worker cleanup [--image-min-age <duration>]

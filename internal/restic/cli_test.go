@@ -133,3 +133,19 @@ func TestErrorMessage(t *testing.T) {
 		}
 	}
 }
+
+func TestWithLimits(t *testing.T) {
+	args, err := withLimits(Repo{}, []string{"--json", "restore"})
+	if err != nil || strings.Join(args, " ") != "--json restore" {
+		t.Fatalf("no limit: %v %v", args, err)
+	}
+	args, err = withLimits(Repo{LimitDownloadKiB: 2048}, []string{"--json", "restore"})
+	if err != nil || strings.Join(args, " ") != "--limit-download 2048 --json restore" {
+		t.Fatalf("limit: %v %v", args, err)
+	}
+	for _, bad := range []int{-1, MaxLimitKiB + 1} {
+		if _, err := withLimits(Repo{LimitDownloadKiB: bad}, nil); err == nil {
+			t.Errorf("limit %d accepted", bad)
+		}
+	}
+}
