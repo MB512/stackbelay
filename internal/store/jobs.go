@@ -61,8 +61,8 @@ type JobResult struct {
 // running -> succeeded | failed | cancelled.
 type Job struct {
 	ID          string
-	StackID     int64
-	StackName   string // filled when reading
+	StackID     int64  // 0 for a host job (jobs.Type.Host)
+	StackName   string // filled when reading; "" for a host job
 	Type        jobs.Type
 	Trigger     string
 	RequestedBy int64  // 0 for scheduled jobs
@@ -80,22 +80,26 @@ type Job struct {
 	ComposeContent []byte
 }
 
-// ErrJobQueued is returned by CreateJob when the stack already has a queued
-// job of the same type.
+// ErrJobQueued is returned by CreateJob when the stack (or, for a host job,
+// the host) already has a queued job of the same type.
 var ErrJobQueued = errors.New("a job of this type is already queued for the stack")
 
-// CreateJob inserts a queued job. j.ID, StackID, Type, Trigger and QueuedAt
-// must be set.
+// CreateJob inserts a queued job. j.ID, Type, Trigger and QueuedAt must be
+// set, and StackID for every type but host jobs (which have none).
 func (s *Store) CreateJob(ctx context.Context, j Job) error {
+	if (j.StackID == 0) != j.Type.Host() {
+		return fmt.Errorf("creating job: a %s job must have a stack exactly if it is not a host job", j.Type)
+	}
 	opts, err := json.Marshal(j.Options)
 	if err != nil {
 		return fmt.Errorf("encoding job options: %w", err)
 	}
 	err = s.inTx(ctx, func(tx *sql.Tx) error {
 		var n int
+		// "IS" also matches NULL (host jobs).
 		if err := tx.QueryRowContext(ctx,
-			`SELECT COUNT(*) FROM jobs WHERE stack_id = ? AND type = ? AND state = ?`,
-			j.StackID, j.Type, jobs.StateQueued).Scan(&n); err != nil {
+			`SELECT COUNT(*) FROM jobs WHERE stack_id IS ? AND type = ? AND state = ?`,
+			nullID(j.StackID), j.Type, jobs.StateQueued).Scan(&n); err != nil {
 			return err
 		}
 		if n > 0 {
@@ -104,7 +108,7 @@ func (s *Store) CreateJob(ctx context.Context, j Job) error {
 		_, err := tx.ExecContext(ctx,
 			`INSERT INTO jobs (id, stack_id, type, trigger, requested_by, state, options, queued_at)
 			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-			j.ID, j.StackID, j.Type, j.Trigger, nullID(j.RequestedBy), jobs.StateQueued, string(opts), formatTime(j.QueuedAt))
+			j.ID, nullID(j.StackID), j.Type, j.Trigger, nullID(j.RequestedBy), jobs.StateQueued, string(opts), formatTime(j.QueuedAt))
 		if err != nil && isForeignKeyError(err) {
 			return fmt.Errorf("stack %d or user %d: %w", j.StackID, j.RequestedBy, ErrNotFound)
 		}
@@ -133,21 +137,21 @@ func (s *Store) JobComposeContent(ctx context.Context, jobID string) ([]byte, er
 	return content, nil
 }
 
-const jobColumns = `j.id, j.stack_id, s.name, j.type, j.trigger, j.requested_by, COALESCE(u.username, ''), j.state,
+const jobColumns = `j.id, j.stack_id, COALESCE(s.name, ''), j.type, j.trigger, j.requested_by, COALESCE(u.username, ''), j.state,
 	j.options, COALESCE(j.snapshot_id, ''), COALESCE(j.error, ''), j.result, j.queued_at,
 	COALESCE(j.started_at, ''), COALESCE(j.finished_at, '')`
 
-const jobFrom = ` FROM jobs j JOIN stacks s ON s.id = j.stack_id LEFT JOIN users u ON u.id = j.requested_by `
+const jobFrom = ` FROM jobs j LEFT JOIN stacks s ON s.id = j.stack_id LEFT JOIN users u ON u.id = j.requested_by `
 
 func scanJob(row interface{ Scan(...any) error }) (Job, error) {
 	var j Job
-	var requestedBy sql.NullInt64
+	var stackID, requestedBy sql.NullInt64
 	var opts, result, queued, started, finished string
-	if err := row.Scan(&j.ID, &j.StackID, &j.StackName, &j.Type, &j.Trigger, &requestedBy, &j.Requester, &j.State,
+	if err := row.Scan(&j.ID, &stackID, &j.StackName, &j.Type, &j.Trigger, &requestedBy, &j.Requester, &j.State,
 		&opts, &j.Snapshot, &j.Error, &result, &queued, &started, &finished); err != nil {
 		return Job{}, err
 	}
-	j.RequestedBy = requestedBy.Int64
+	j.StackID, j.RequestedBy = stackID.Int64, requestedBy.Int64
 	if err := json.Unmarshal([]byte(opts), &j.Options); err != nil {
 		return Job{}, fmt.Errorf("decoding job options: %w", err)
 	}
@@ -194,7 +198,7 @@ func (s *Store) ImportJob(ctx context.Context, j Job, requesterName string) erro
 		`INSERT INTO jobs (id, stack_id, type, trigger, requested_by, state, options, snapshot_id, error, result,
 		                   queued_at, started_at, finished_at)
 		 VALUES (?, ?, ?, ?, (SELECT id FROM users WHERE username = ? AND ? != ''), ?, ?, NULLIF(?, ''), NULLIF(?, ''), ?, ?, ?, ?)`,
-		j.ID, j.StackID, j.Type, j.Trigger, requesterName, requesterName, j.State, string(opts), j.Snapshot,
+		j.ID, nullID(j.StackID), j.Type, j.Trigger, requesterName, requesterName, j.State, string(opts), j.Snapshot,
 		truncateRunes(j.Error, 2000), string(res), formatTime(j.QueuedAt), opt(j.StartedAt), opt(j.FinishedAt))
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
@@ -316,11 +320,15 @@ func (s *Store) queryJobs(ctx context.Context, query string, args ...any) ([]Job
 	return out, rows.Err()
 }
 
-// ClaimNextJob marks the oldest queued job whose stack has no running job
-// as running and returns it. ok is false if there is nothing to start or
-// maxRunning jobs are already running. The unique index
-// jobs_one_running_per_stack guarantees the per-stack lock even if two
-// claims raced.
+// ClaimNextJob marks the oldest queued job that may start as running and
+// returns it. ok is false if there is nothing to start or maxRunning jobs
+// are already running.
+//
+// A stack job may start when its stack has no running job, no host job
+// runs and no host job was queued before it (so a host job is not starved
+// by a stream of stack jobs). A host job may start when no job at all runs.
+// The unique indexes jobs_one_running_per_stack and jobs_one_running_host
+// back the locks in the database; claims are serialized by BEGIN IMMEDIATE.
 func (s *Store) ClaimNextJob(ctx context.Context, maxRunning int, now time.Time) (job Job, ok bool, err error) {
 	var id string
 	err = s.inTx(ctx, func(tx *sql.Tx) error {
@@ -333,8 +341,13 @@ func (s *Store) ClaimNextJob(ctx context.Context, maxRunning int, now time.Time)
 		}
 		err := tx.QueryRowContext(ctx,
 			`SELECT q.id FROM jobs q
-			 WHERE q.state = ? AND NOT EXISTS (SELECT 1 FROM jobs r WHERE r.stack_id = q.stack_id AND r.state = ?)
-			 ORDER BY q.id LIMIT 1`, jobs.StateQueued, jobs.StateRunning).Scan(&id)
+			 WHERE q.state = :queued AND (
+			   (q.stack_id IS NULL AND NOT EXISTS (SELECT 1 FROM jobs r WHERE r.state = :running))
+			   OR (q.stack_id IS NOT NULL
+			       AND NOT EXISTS (SELECT 1 FROM jobs r WHERE r.state = :running AND (r.stack_id = q.stack_id OR r.stack_id IS NULL))
+			       AND NOT EXISTS (SELECT 1 FROM jobs h WHERE h.state = :queued AND h.stack_id IS NULL AND h.id < q.id)))
+			 ORDER BY q.id LIMIT 1`,
+			sql.Named("queued", jobs.StateQueued), sql.Named("running", jobs.StateRunning)).Scan(&id)
 		if errors.Is(err, sql.ErrNoRows) {
 			id = ""
 			return nil
@@ -388,10 +401,13 @@ func truncateRunes(s string, n int) string {
 
 // QueueState explains why a queued job has not started yet, following the
 // rules of ClaimNextJob: the oldest queued job whose stack has no running
-// job starts next, as long as fewer than the limit are running.
+// job starts next, as long as fewer than the limit are running; host jobs
+// run alone.
 type QueueState struct {
-	// Blocking is the job of the same stack the job waits for: the running
-	// one, else the oldest one queued before it. Nil if there is none.
+	// Blocking is the job the job waits for: a running job of the same
+	// stack or a running host job (for a host job: any running job), else
+	// the oldest job of the same stack or host job queued before it. Nil if
+	// there is none.
 	Blocking *Job
 	// Ahead counts the jobs of all stacks queued before this one.
 	Ahead int
@@ -408,9 +424,12 @@ func (s *Store) QueueState(ctx context.Context, j Job) (QueueState, error) {
 		return qs, fmt.Errorf("queue state of job %s: %w", j.ID, err)
 	}
 	blocking, err := s.queryJobs(ctx, `SELECT `+jobColumns+jobFrom+
-		`WHERE j.stack_id = ? AND j.id <> ? AND (j.state = ? OR (j.state = ? AND j.id < ?))
-		 ORDER BY (j.state = ?) DESC, j.id LIMIT 1`,
-		j.StackID, j.ID, jobs.StateRunning, jobs.StateQueued, j.ID, jobs.StateRunning)
+		`WHERE j.id <> :id AND (
+		   (j.state = :running AND (:stack IS NULL OR j.stack_id = :stack OR j.stack_id IS NULL))
+		   OR (j.state = :queued AND j.id < :id AND (j.stack_id IS :stack OR j.stack_id IS NULL)))
+		 ORDER BY (j.state = :running) DESC, j.id LIMIT 1`,
+		sql.Named("id", j.ID), sql.Named("stack", nullID(j.StackID)),
+		sql.Named("running", jobs.StateRunning), sql.Named("queued", jobs.StateQueued))
 	if err != nil {
 		return qs, fmt.Errorf("queue state of job %s: %w", j.ID, err)
 	}

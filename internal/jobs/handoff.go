@@ -55,6 +55,14 @@ const (
 	TypeRestart Type = "restart"
 )
 
+// TypeCleanup removes stopped orphan containers of the discovered stacks
+// and old dangling images (issue #19). It is a host job: it belongs to no
+// stack and runs alone.
+const TypeCleanup Type = "cleanup"
+
+// Host reports whether t is a host job, not tied to a stack.
+func (t Type) Host() bool { return t == TypeCleanup }
+
 // Control reports whether t only stops and/or starts the stack, without
 // backup and without repository.
 func (t Type) Control() bool { return t == TypeStop || t == TypeStart || t == TypeRestart }

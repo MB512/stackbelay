@@ -61,21 +61,22 @@ CREATE TABLE permissions (
 
 CREATE TABLE schedules (
   id          INTEGER PRIMARY KEY,
-  stack_id    INTEGER NOT NULL REFERENCES stacks(id) ON DELETE CASCADE,
+  stack_id    INTEGER REFERENCES stacks(id) ON DELETE CASCADE, -- NULL = host schedule (migration 0011)
   cron_expr   TEXT NOT NULL,
   pre_stop    INTEGER NOT NULL DEFAULT 0,   -- take pre-stop snapshot first
   enabled     INTEGER NOT NULL DEFAULT 1,
   -- migration 0008:
-  job_type    TEXT NOT NULL DEFAULT 'backup' CHECK (job_type IN ('backup', 'update')),
+  job_type    TEXT NOT NULL DEFAULT 'backup' CHECK (job_type IN ('backup', 'update', 'cleanup')),
   rollback_in_place INTEGER NOT NULL DEFAULT 0, -- updates: roll back in place
   -- migration 0010:
-  no_backup   INTEGER NOT NULL DEFAULT 0    -- updates: "no backup, no rollback" confirmed (stack had no repository)
+  no_backup   INTEGER NOT NULL DEFAULT 0,   -- updates: "no backup, no rollback" confirmed (stack had no repository)
+  CHECK ((stack_id IS NULL) = (job_type = 'cleanup'))   -- migration 0011
 );
 
 CREATE TABLE jobs (
   id            TEXT PRIMARY KEY,           -- ULID
-  stack_id      INTEGER NOT NULL REFERENCES stacks(id),
-  type          TEXT NOT NULL,              -- backup | restore | update | compose-apply | stop | start | restart
+  stack_id      INTEGER REFERENCES stacks(id), -- NULL = host job (migration 0011)
+  type          TEXT NOT NULL,              -- backup | restore | update | compose-apply | stop | start | restart | cleanup
   trigger       TEXT NOT NULL,              -- manual | schedule
   requested_by  INTEGER REFERENCES users(id), -- NULL for schedule
   state         TEXT NOT NULL,              -- queued | running | succeeded | failed | cancelled
@@ -91,6 +92,9 @@ CREATE INDEX jobs_stack_state ON jobs(stack_id, state);
 --   result TEXT NOT NULL DEFAULT '{}'  -- JSON: pre_stop_snapshot, safety_snapshot, previous_dir,
 --                                         rolled_back, unchanged, images_changed (update, compose apply)
 --   UNIQUE INDEX jobs_one_running_per_stack ON jobs(stack_id) WHERE state = 'running'
+-- migration 0011 (tables rebuilt, see below):
+--   CHECK ((stack_id IS NULL) = (type = 'cleanup'))
+--   UNIQUE INDEX jobs_one_running_host ON jobs(state) WHERE state = 'running' AND stack_id IS NULL
 
 CREATE TABLE job_compose (                -- migration 0007
   job_id  TEXT PRIMARY KEY REFERENCES jobs(id) ON DELETE CASCADE,
@@ -162,4 +166,14 @@ CREATE TABLE audit_log (
   allows at most one `running` job per stack, enforced by SQLite itself.
   `ClaimNextJob` starts the oldest queued job whose stack is free, up to a
   global limit of running jobs. A stack has at most one queued job per type.
+- Host jobs (issue #19, only `cleanup`) have `stack_id` NULL and run alone:
+  one starts only when no job runs, and no stack job starts while one runs
+  or while one is queued before it (no starving). The partial unique index
+  `jobs_one_running_host` allows one running host job; the rest is
+  `ClaimNextJob`'s rule (claims are `BEGIN IMMEDIATE`, so serialized). Host
+  schedules (`stack_id` NULL) queue them.
+- Migration 0011 rebuilt `jobs`, `job_compose` and `schedules` (SQLite
+  cannot drop `NOT NULL`). `job_compose` is saved and rebuilt first:
+  dropping `jobs` with foreign keys on would otherwise delete its rows
+  through `ON DELETE CASCADE`.
 - Job logs live in files (`/data/jobs/<id>/log.txt`), not in the DB.
