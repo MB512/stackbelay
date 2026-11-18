@@ -66,6 +66,12 @@ type Server struct {
 	// Updates checks for newer images (Update tab). If nil, the tab offers
 	// no check.
 	Updates UpdateChecker
+	// Cleanup lists what a host cleanup would remove (admin Host tab,
+	// read-only; the removal runs in a worker job). If nil, there is no
+	// preview.
+	Cleanup jobs.CleanupLister
+	// CleanupImageMinAge is STACKVAULT_CLEANUP_IMAGE_MIN_AGE (preview rules).
+	CleanupImageMinAge time.Duration
 	// Stopping is closed when the manager shuts down; open live streams
 	// then end at once instead of delaying the shutdown (clients
 	// reconnect). nil: streams only end with their client.
@@ -204,6 +210,11 @@ func (s *Server) Handler() (http.Handler, error) {
 				r.Get("/admin/jobs", s.adminJobs)
 				r.Get("/admin/jobs/live", s.adminJobsLiveFragment)
 				r.Get("/admin/audit", s.adminAudit)
+				r.Get("/admin/host", s.adminHost)
+				r.Post("/admin/host/cleanup", s.startCleanup)
+				r.Post("/admin/host/schedules", s.createHostSchedule)
+				r.Post("/admin/host/schedules/{id}/enabled", s.setHostScheduleEnabled)
+				r.Post("/admin/host/schedules/{id}/delete", s.deleteHostSchedule)
 				r.Post("/admin/users", s.createUser)
 				r.Post("/admin/users/{id}", s.updateUser)
 				r.Post("/admin/users/{id}/password", s.resetPassword)

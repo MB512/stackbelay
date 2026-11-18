@@ -18,7 +18,7 @@
       <tbody>
         {{- range .Active}}
         <tr>
-          <td><a href="/stacks/{{.StackName}}">{{.StackName}}</a></td>
+          <td>{{if .StackName}}<a href="/stacks/{{.StackName}}">{{.StackName}}</a>{{else}}<span class="muted">host</span>{{end}}</td>
           <td><a href="/jobs/{{.ID}}">{{.Type}}</a></td>
           <td>{{template "job-state" .State}}</td>
           <td>{{if .Requester}}{{.Requester}}{{else}}<span class="muted">{{.Trigger}}</span>{{end}}</td>
@@ -41,7 +41,7 @@
         {{- range .Recent}}
         <tr>
           <td><a href="/jobs/{{.ID}}">{{when .QueuedAt}}</a></td>
-          <td><a href="/stacks/{{.StackName}}">{{.StackName}}</a></td>
+          <td>{{if .StackName}}<a href="/stacks/{{.StackName}}">{{.StackName}}</a>{{else}}<span class="muted">host</span>{{end}}</td>
           <td>{{.Type}}</td>
           <td>{{template "job-state" .State}}</td>
           <td>{{if .Requester}}{{.Requester}}{{else}}<span class="muted">{{.Trigger}}</span>{{end}}</td>

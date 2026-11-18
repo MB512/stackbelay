@@ -236,6 +236,11 @@ func (s *Store) ListJobs(ctx context.Context, stackID int64, limit int) ([]Job, 
 		stackID, stackID, limit)
 }
 
+// ListHostJobs returns the newest host jobs (cleanups).
+func (s *Store) ListHostJobs(ctx context.Context, limit int) ([]Job, error) {
+	return s.queryJobs(ctx, `SELECT `+jobColumns+jobFrom+`WHERE j.stack_id IS NULL ORDER BY j.id DESC LIMIT ?`, limit)
+}
+
 // JobBrief is the short form of a job for overviews.
 type JobBrief struct {
 	ID    string // empty if there is no such job

@@ -45,8 +45,17 @@ attackers reaching the UI, a leaked database file.
    `docker buildx imagetools inspect -- <ref>` (registry query, no pull) on
    the image references of a discovered stack's compose file; references
    that could be read as a flag or contain control characters are
-   rejected. Container logs are not redacted, so viewing them is a separate
-   per-stack right (`can_logs`).
+   rejected. For the preview of the host cleanup (admin "Host" tab, issue
+   #19) it lists read-only, with fixed argument lists: `docker image ls
+   --filter dangling=true`, `docker ps --all --quiet`, `docker container
+   inspect --format {{.Image}}` and `docker image inspect` on the ids those
+   returned (validated), and per discovered stack, after the project owner
+   check, `docker ps --all --filter label=com.docker.compose.project=<name>`
+   (`web.Server.Cleanup` is a `jobs.CleanupLister`, which has no removal
+   methods). Removing runs in the cleanup job in a worker: one `docker
+   image rm -- <id>` or `docker container rm -- <id>` per validated id,
+   without `--force`; never `prune`, never volumes. Container logs are not
+   redacted, so viewing them is a separate per-stack right (`can_logs`).
    Everything that changes a stack runs in a worker job, also stopping,
    starting and restarting it (own right `can_operate`; these jobs get no
    repository credentials). The manager's own stack cannot be stopped from

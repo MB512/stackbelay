@@ -20,11 +20,12 @@
 </nav>
 {{end}}
 
-{{- /* Tabs of the admin pages. Dot is the active tab: "users", "jobs", "audit". */}}
+{{- /* Tabs of the admin pages. Dot is the active tab: "users", "jobs", "host", "audit". */}}
 {{define "admin-tabs"}}
 <nav class="tabs" aria-label="Administration sections">
   <a href="/admin/users"{{if eq . "users"}} aria-current="page"{{end}}>Users</a>
   <a href="/admin/jobs"{{if eq . "jobs"}} aria-current="page"{{end}}>Jobs</a>
+  <a href="/admin/host"{{if eq . "host"}} aria-current="page"{{end}}>Host</a>
   <a href="/admin/audit"{{if eq . "audit"}} aria-current="page"{{end}}>Audit log</a>
 </nav>
 {{end}}
@@ -34,6 +35,12 @@
 {{define "last-job"}}
 {{- if .ID}}<a href="/jobs/{{.ID}}" title="{{.SuccessLabel}}: {{when .Success}}">{{when .Time}}</a> {{template "job-state" .State}}
 {{- else}}<span class="muted">never</span>{{end}}
+{{- end}}
+
+{{- /* What a host cleanup removed. Dot is a store.JobResult. */}}
+{{define "cleanup-result"}}
+{{- .RemovedContainers}} container{{if ne .RemovedContainers 1}}s{{end}}, {{.RemovedImages}} image{{if ne .RemovedImages 1}}s{{end}}
+{{- if .FreedBytes}} ({{size .FreedBytes}}){{end}}
 {{- end}}
 
 {{- /* Badge for a job state. Dot is a jobs.State. */}}

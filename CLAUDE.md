@@ -113,10 +113,12 @@ Run `go vet` and `go test ./... -race` before every commit.
 - The web process gets no direct Docker access beyond creating worker
   containers from a fixed template and read-only compose commands for
   discovered stacks (`ps`, `logs`, `config --quiet` for validation), the
-  read-only update check (`image inspect`, `buildx imagetools inspect`), plus
-  `docker exec -it` for the opt-in admin shell, always with fixed argument
-  lists. Anything that changes a stack (stop, up, pull,
-  writing compose files) runs in a worker job. See `docs/security.md`.
+  read-only update check (`image inspect`, `buildx imagetools inspect`), the
+  read-only host cleanup preview (`image ls`, `ps`, `container inspect`,
+  `image inspect`), plus `docker exec -it` for the opt-in admin shell,
+  always with fixed argument lists. Anything that changes a stack (stop, up, pull,
+  writing compose files, removing images or containers) runs in a worker
+  job. See `docs/security.md`.
 
 ## Planning and decisions
 

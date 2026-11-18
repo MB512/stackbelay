@@ -37,20 +37,26 @@ func (s *Server) scheduleRows(ctx context.Context, st store.Stack) ([]scheduleRo
 	if err != nil {
 		return nil, err
 	}
+	return s.withNextRun(list, st.Enabled), nil
+}
+
+// withNextRun adds the next run to schedules; none if active is false
+// (the stack is disabled).
+func (s *Server) withNextRun(list []store.Schedule, active bool) []scheduleRow {
 	// Cron expressions are evaluated in the manager's time zone, like the
 	// scheduler does it.
 	now := s.now().In(s.loc())
 	rows := make([]scheduleRow, 0, len(list))
 	for _, sc := range list {
 		row := scheduleRow{Schedule: sc}
-		if sc.Enabled && st.Enabled {
+		if sc.Enabled && active {
 			if sched, err := scheduler.Parse(sc.CronExpr); err == nil {
 				row.Next = sched.Next(now)
 			}
 		}
 		rows = append(rows, row)
 	}
-	return rows, nil
+	return rows
 }
 
 // nextScheduled returns the earliest next run of the rows of job type t

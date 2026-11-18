@@ -186,6 +186,11 @@ func (s *Server) loadJob(w http.ResponseWriter, r *http.Request) (store.Job, sto
 		return store.Job{}, store.Permission{}, false
 	}
 	a := authFrom(r.Context())
+	// Host jobs belong to no stack: admins only (like the Host tab).
+	if j.Type.Host() && (!a.User.IsAdmin || a.User.Disabled) {
+		s.renderError(w, r, http.StatusNotFound, "Job not found.")
+		return store.Job{}, store.Permission{}, false
+	}
 	perm, err := s.Store.Permission(r.Context(), a.User.ID, j.StackID)
 	if err != nil {
 		s.internalError(w, r, "loading permission", err)
@@ -200,9 +205,9 @@ func (s *Server) loadJob(w http.ResponseWriter, r *http.Request) (store.Job, sto
 
 // mayRunJob reports whether user may start (and cancel) a job of type t on
 // a stack where the user has perm. Applying a compose file is admin-only:
-// it is equivalent to root on the host.
+// it is equivalent to root on the host. Host jobs (cleanup) are admin-only.
 func mayRunJob(user store.User, perm store.Permission, t jobs.Type) bool {
-	if t == jobs.TypeComposeApply {
+	if t == jobs.TypeComposeApply || t.Host() {
 		return user.IsAdmin && !user.Disabled
 	}
 	return auth.Allowed(user, perm, jobAction(t))
@@ -252,7 +257,11 @@ func (s *Server) jobDetail(w http.ResponseWriter, r *http.Request) {
 			s.Logger.Warn("reading job log", "job_id", j.ID, "error", err)
 		}
 	}
-	s.render(w, r, http.StatusOK, "job.html", pageData{Title: fmt.Sprintf("%s of %s", capitalize(string(j.Type)), j.StackName), Data: page})
+	title := fmt.Sprintf("%s of %s", capitalize(string(j.Type)), j.StackName)
+	if j.Type.Host() {
+		title = "Host cleanup"
+	}
+	s.render(w, r, http.StatusOK, "job.html", pageData{Title: title, Data: page})
 }
 
 // newJobPage returns the job page data without the log.

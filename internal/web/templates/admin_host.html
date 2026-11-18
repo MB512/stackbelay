@@ -1,0 +1,141 @@
+{{define "content"}}
+<h1>Administration</h1>
+{{template "admin-tabs" "host"}}
+{{- with .Data}}
+<section>
+  <h2>Cleanup</h2>
+  <p class="hint">A cleanup removes what updates and compose changes leave behind: <strong>stopped</strong> containers of a
+    stack whose service is no longer in its compose file (running ones are kept), and untagged images no container uses
+    that were pulled, tagged or replaced by an update more than {{.MinAgeLabel}} ago
+    (<code>STACKVAULT_CLEANUP_IMAGE_MIN_AGE</code>). Volumes are never touched. It runs as a job on its own: it waits for
+    running jobs, and other jobs wait for it.</p>
+  <div class="actions-row">
+    <form method="post" action="/admin/host/cleanup" class="inline"
+          data-confirm="Remove stopped orphan containers and old unused images now?">
+      <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+      <button type="submit"{{if .Unavailable}} disabled title="{{.Unavailable}}"{{end}}>Clean up now</button>
+    </form>
+    <form method="get" action="/admin/host" class="inline" data-busy="Listing…">
+      <input type="hidden" name="preview" value="1">
+      <button type="submit" class="secondary"{{if .NoLister}} disabled title="Not available in this installation"{{end}}>Show what would be removed</button>
+    </form>
+  </div>
+  {{- with .Unavailable}}<p class="hint">{{.}}</p>{{end}}
+</section>
+
+{{- with .PreviewError}}<p class="error">{{.}}</p>{{end}}
+{{- with .Preview}}
+<section id="cleanup-preview">
+  <h2>What a cleanup would remove now</h2>
+  {{- range .Problems}}
+  <p class="warning">Skipped: {{.}}</p>
+  {{- end}}
+  <h3>Orphan containers</h3>
+  {{- if .Orphans}}
+  <table>
+    <thead><tr><th>Stack</th><th>Container</th><th>Service</th><th>State</th><th></th></tr></thead>
+    <tbody>
+      {{- range .Orphans}}
+      <tr>
+        <td><a href="/stacks/{{.Stack}}">{{.Stack}}</a></td>
+        <td>{{.Name}}</td>
+        <td>{{.Service}}</td>
+        <td>{{.State}}</td>
+        <td>{{if .Remove}}<span class="badge warn">remove</span>{{else}}<span class="muted">keep: {{.Reason}}</span>{{end}}</td>
+      </tr>
+      {{- end}}
+    </tbody>
+  </table>
+  {{- else}}
+  <p class="hint">No orphan containers.</p>
+  {{- end}}
+  <h3>Unused untagged images</h3>
+  {{- if .Images}}
+  <table>
+    <thead><tr><th>Image</th><th>Digest</th><th>Pulled or tagged</th><th>Size</th><th></th></tr></thead>
+    <tbody>
+      {{- range .Images}}
+      <tr>
+        <td><code title="{{.ID}}">{{printf "%.12s" (slice .ID 7)}}</code></td>
+        <td>{{range $i, $d := .RepoDigests}}{{if $i}}<br>{{end}}<code>{{$d}}</code>{{else}}<span class="muted">none</span>{{end}}</td>
+        <td>{{when .Since}}</td>
+        <td>{{size .Size}}</td>
+        <td>{{if .Remove}}<span class="badge warn">remove</span>{{else}}<span class="muted">keep: {{.Reason}}</span>{{end}}</td>
+      </tr>
+      {{- end}}
+    </tbody>
+  </table>
+  <p class="hint">Removable: {{size .RemovableBytes}} (images can share layers, so less may be freed on disk). Images that
+    only a removed orphan container uses are not listed here; the cleanup removes them too if they are old enough.</p>
+  {{- else}}
+  <p class="hint">No unused untagged images.</p>
+  {{- end}}
+</section>
+{{- end}}
+
+<section>
+  <h2>Recent cleanups</h2>
+  {{- if .Jobs}}
+  <table>
+    <thead><tr><th>Queued</th><th>State</th><th>By</th><th>Removed</th></tr></thead>
+    <tbody>
+      {{- range .Jobs}}
+      <tr>
+        <td><a href="/jobs/{{.ID}}">{{when .QueuedAt}}</a></td>
+        <td>{{template "job-state" .State}}</td>
+        <td>{{if .Requester}}{{.Requester}}{{else}}<span class="muted">{{.Trigger}}</span>{{end}}</td>
+        <td>{{if .State.Final}}{{template "cleanup-result" .Result}}{{else}}<span class="muted">–</span>{{end}}</td>
+      </tr>
+      {{- end}}
+    </tbody>
+  </table>
+  {{- else}}
+  <p class="hint">No cleanups yet.</p>
+  {{- end}}
+</section>
+
+<section>
+  <h2>Schedules</h2>
+  {{- if .Schedules}}
+  <table>
+    <thead><tr><th>Schedule</th><th>Next run</th><th></th></tr></thead>
+    <tbody>
+      {{- range .Schedules}}
+      <tr>
+        <td><code>{{.CronExpr}}</code>{{if not .Enabled}} <span class="badge">disabled</span>{{end}}</td>
+        <td>{{if .Next.IsZero}}<span class="muted">—</span>{{else}}{{when .Next}}{{end}}</td>
+        <td class="actions">
+          <form method="post" action="/admin/host/schedules/{{.ID}}/enabled" class="inline">
+            <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+            {{- if .Enabled}}
+            <input type="hidden" name="enabled" value="false">
+            <button type="submit" class="secondary">Disable</button>
+            {{- else}}
+            <input type="hidden" name="enabled" value="true">
+            <button type="submit" class="secondary">Enable</button>
+            {{- end}}
+          </form>
+          <form method="post" action="/admin/host/schedules/{{.ID}}/delete" class="inline"
+                data-confirm="Delete the cleanup schedule {{.CronExpr}}?">
+            <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+            <button type="submit" class="secondary">Delete</button>
+          </form>
+        </td>
+      </tr>
+      {{- end}}
+    </tbody>
+  </table>
+  {{- end}}
+  <form method="post" action="/admin/host/schedules" class="card wide" autocomplete="off">
+    <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+    <label>Cron expression
+      <input name="cron_expr" required maxlength="100" spellcheck="false" placeholder="0 4 * * 0"
+             value="{{.NewCron}}">
+    </label>
+    <p class="hint">Five fields (e.g. <code>0 4 * * 0</code> = Sundays at 04:00) or <code>@weekly</code>. Times are in
+      the manager's time zone, {{timeZone}}.</p>
+    <div><button type="submit">Add schedule</button></div>
+  </form>
+</section>
+{{- end}}
+{{end}}

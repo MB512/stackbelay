@@ -105,9 +105,13 @@ func run(ctx context.Context, getenv func(string) string, readFile func(string) 
 		EnableShell: cfg.EnableShell,
 		// Update checks: read-only "docker buildx imagetools inspect"
 		// (asks the registry, pulls nothing) and "docker image inspect".
-		Updates:  &docker.CLI{},
-		Shells:   &docker.CLI{},
-		Hostname: cfg.Hostname,
+		Updates: &docker.CLI{},
+		// Host cleanup preview: read-only listing of dangling images and
+		// orphan containers; removing runs in a worker job.
+		Cleanup:            &docker.CLI{},
+		CleanupImageMinAge: cfg.CleanupImageMinAge,
+		Shells:             &docker.CLI{},
+		Hostname:           cfg.Hostname,
 		// All times in the UI are shown in the manager's time zone (TZ).
 		Location: cfg.TimeZone,
 		// On SIGTERM open live streams end at once (clients reconnect)

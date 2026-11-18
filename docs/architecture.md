@@ -709,6 +709,11 @@ with a light and a dark set; the job log is a dark panel in both modes.
 | `POST /admin/users/{id}/password` | admin | generate a new password (must be changed, sessions end) |
 | `GET /admin/jobs` | admin | "Jobs" admin tab: running and queued jobs of all stacks, recent jobs |
 | `GET /admin/jobs/live` | admin | HTMX fragment of the Jobs admin tab, polled every 5 s |
+| `GET /admin/host` | admin | "Host" admin tab: host cleanup, recent cleanups, host schedules; `?preview=1` lists what a cleanup would remove now |
+| `POST /admin/host/cleanup` | admin | queue a host cleanup job |
+| `POST /admin/host/schedules` | admin | add a cleanup schedule (cron expression) |
+| `POST /admin/host/schedules/{id}/enabled` | admin | enable/disable a host schedule |
+| `POST /admin/host/schedules/{id}/delete` | admin | delete a host schedule |
 | `GET /admin/audit` | admin | "Audit log" admin tab: 100 entries per page, newest first; `?before=<id>` for older ones |
 
 Repository form: the location may be a `rest:` URL with `user:password`,
@@ -796,8 +801,11 @@ so HTMX loads the login page instead of swapping it into the fragment.
 
 The header shows admins an "Admin" link to pages outside the stacks, with
 their own tabs (`admin-tabs` in `partials.html`): "Users" (`/admin/users`),
-"Jobs" (`/admin/jobs`) and "Audit log" (`/admin/audit`, read-only, 100
-entries per page with user and stack names). The Jobs tab lists the running and queued jobs
+"Jobs" (`/admin/jobs`; host jobs show "host" as stack), "Host"
+(`/admin/host`, the host cleanup: preview, "Clean up now", recent cleanups,
+schedules; see "Host cleanup") and "Audit log" (`/admin/audit`, read-only,
+100 entries per page with user and stack names). Host jobs' pages are
+admin-only too (404 for others). The Jobs tab lists the running and queued jobs
 of all stacks (running first, each oldest first) and the 50 newest jobs;
 like the Status tab it is one fragment that HTMX reloads every 5 seconds
 (`GET /admin/jobs/live`, with `X-Stackvault-Poll`). The account link in the
@@ -1037,6 +1045,12 @@ job recomputes them itself.
    starts, the dispatcher puts it into the spec together with the
    `replaced_images` of the jobs finished within it (at most 500; beyond
    that, images are protected only by their pull/tag time).
+
+**Preview** (admin "Host" tab, `?preview=1`): the manager lists the same
+read-only (`jobs.ListCleanup` with the same minimum age and the same
+replaced images) and shows what would be removed or kept and why, with
+the sizes. It is computed only on request (a button, plain GET form), not
+on every visit. The job does not use it: it lists again when it runs.
 
 A removal that fails is logged and the cleanup continues; the job then
 ends `failed`. The result records `removed_containers`, `removed_images`
