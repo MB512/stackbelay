@@ -109,7 +109,8 @@
   <p class="hint">No schedules: this stack is only backed up and updated manually.</p>
   {{- end}}
 
-  {{- /* data-confirm-when: static/forms.js asks only for update schedules. */}}
+  {{- /* data-confirm-when: static/forms.js asks only for update schedules;
+       data-enable-when: it disables update-only options for backups. */}}
   <form method="post" action="/stacks/{{.Stack.Name}}/schedules" class="card wide" autocomplete="off"
         {{- if not .Repo.Exists}} data-confirm="Schedule updates of {{.Stack.Name}} without backup? It has no repository: a failed update is not rolled back and leaves the stack as it is." data-confirm-when="job_type=update"{{end}}>
     <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
@@ -133,7 +134,8 @@
     </fieldset>
     <label class="check"><input type="checkbox" name="pre_stop"{{if .NewSchedule.PreStop}} checked{{end}}>
       Snapshot before stopping (shorter downtime for large stacks)</label>
-    <label class="check"><input type="checkbox" name="rollback_in_place"{{if .NewSchedule.RollbackInPlace}} checked{{end}}>
+    <label class="check"><input type="checkbox" name="rollback_in_place" data-enable-when="job_type=update"
+      {{- if .NewSchedule.RollbackInPlace}} checked{{end}}>
       Updates: roll back in place (only files changed since the backup are restored; for large stacks)</label>
     {{- if not .Repo.Exists}}
     <p class="warning">This stack has no repository. A scheduled update then runs <strong>without backup and without

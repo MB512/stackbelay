@@ -5,6 +5,10 @@
 //   restart a stack, an update without backup). With
 //   data-confirm-when="<field>=<value>" only if that field of the form has
 //   the value (e.g. the job type of a schedule).
+// - data-enable-when="<field>=<value>" on an input: the input is enabled
+//   only while that field of its form has the value, otherwise disabled
+//   and unchecked (e.g. an update-only option of a schedule while
+//   "Backup" is selected). The server rejects such an input anyway.
 // - Busy state: a plain form that is submitted (the browser waits for the
 //   next page) marks its submit button busy: a spinner (class "busy", see
 //   style.css), disabled against double submits, and the text of the
@@ -14,15 +18,34 @@
 (function () {
 	"use strict";
 
-	function confirmApplies(form) {
-		var when = form.getAttribute("data-confirm-when");
-		if (!when) {
-			return true;
-		}
+	// fieldIs reports whether form's field has a value, for a condition
+	// "<field>=<value>". form.elements[name] of radio buttons is a list
+	// whose value is the checked one's.
+	function fieldIs(form, when) {
 		var i = when.indexOf("=");
 		var field = form.elements[when.slice(0, i)];
 		return field !== undefined && field.value === when.slice(i + 1);
 	}
+
+	function confirmApplies(form) {
+		var when = form.getAttribute("data-confirm-when");
+		return !when || fieldIs(form, when);
+	}
+
+	function updateEnabled() {
+		var inputs = document.querySelectorAll("[data-enable-when]");
+		for (var i = 0; i < inputs.length; i++) {
+			var input = inputs[i];
+			var on = input.form !== null && fieldIs(input.form, input.getAttribute("data-enable-when"));
+			input.disabled = !on;
+			if (!on) {
+				input.checked = false;
+			}
+		}
+	}
+
+	updateEnabled();
+	document.addEventListener("change", updateEnabled);
 
 	function markBusy(form, button) {
 		if (!button) {

@@ -77,7 +77,7 @@ func (s *Server) createSchedule(w http.ResponseWriter, r *http.Request) {
 		Update:   r.PostFormValue("job_type") == string(jobs.TypeUpdate),
 		PreStop:  r.PostFormValue("pre_stop") == "on",
 	}
-	in.RollbackInPlace = in.Update && r.PostFormValue("rollback_in_place") == "on" // updates only
+	in.RollbackInPlace = r.PostFormValue("rollback_in_place") == "on"
 	in.ConfirmNoBackup = r.PostFormValue("confirm_no_backup") == "on"
 	expr := in.CronExpr
 	fail := func(msg string) {
@@ -85,6 +85,13 @@ func (s *Server) createSchedule(w http.ResponseWriter, r *http.Request) {
 	}
 	if t := r.PostFormValue("job_type"); t != "" && t != string(jobs.TypeBackup) && t != string(jobs.TypeUpdate) {
 		fail("Unknown job type.")
+		return
+	}
+	if in.RollbackInPlace && !in.Update {
+		// The form disables the checkbox for backups (static/forms.js);
+		// without JavaScript it can still arrive. Say so instead of
+		// dropping it: a backup never restores.
+		fail("Rolling back in place is only an option for update schedules.")
 		return
 	}
 	if _, err := scheduler.Parse(expr); err != nil {

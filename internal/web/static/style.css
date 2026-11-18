@@ -69,6 +69,7 @@ td.actions form.inline { display: inline-flex; margin-right: .4rem; }
 .actions-row { display: flex; gap: .8rem 1.6rem; flex-wrap: wrap; align-items: center; }
 table + form.card { margin-top: 1rem; }
 label.check { display: flex; gap: .5rem; align-items: center; }
+label.check:has(input:disabled) { color: var(--muted); }
 .card.wide { max-width: none; margin-bottom: 1.2rem; }
 code.secret { font-size: 1.1rem; user-select: all; }
 @media (max-width: 40rem) {

@@ -124,12 +124,22 @@ func TestSchedules(t *testing.T) {
 		t.Errorf("reloads = %d, want 4 (create, disable, enable, delete)", reloader.count())
 	}
 
-	// An update schedule with its options; rollback in place is ignored for
-	// backups. An update schedule is not a "next scheduled backup".
+	// An update schedule with its options; rollback in place is rejected
+	// for backups (the form disables it). An update schedule is not a
+	// "next scheduled backup".
 	expect(t, post("/stacks/web/schedules", url.Values{"cron_expr": {"@weekly"}, "job_type": {"update"},
 		"rollback_in_place": {"on"}}), http.StatusSeeOther, "/stacks/web/settings")
-	expect(t, post("/stacks/web/schedules", url.Values{"cron_expr": {"@daily"}, "job_type": {"backup"},
-		"rollback_in_place": {"on"}}), http.StatusSeeOther, "/stacks/web/settings")
+	r = post("/stacks/web/schedules", url.Values{"cron_expr": {"@daily"}, "job_type": {"backup"},
+		"pre_stop": {"on"}, "rollback_in_place": {"on"}})
+	expect(t, r, http.StatusBadRequest, "")
+	if !strings.Contains(r.body, "only an option for update schedules") {
+		t.Errorf("backup with rollback in place not explained:\n%s", r.body)
+	}
+	if !strings.Contains(r.body, `name="rollback_in_place" data-enable-when="job_type=update"`) {
+		t.Errorf("rollback option not tied to update schedules:\n%s", r.body)
+	}
+	expect(t, post("/stacks/web/schedules", url.Values{"cron_expr": {"@daily"}, "job_type": {"backup"}}),
+		http.StatusSeeOther, "/stacks/web/settings")
 	list, _ = e.st.ListSchedules(ctx, web.ID)
 	if len(list) != 2 || list[0].Type != jobs.TypeUpdate || !list[0].RollbackInPlace || list[0].PreStop ||
 		list[1].Type != jobs.TypeBackup || list[1].RollbackInPlace {
@@ -146,7 +156,7 @@ func TestSchedules(t *testing.T) {
 	r = post("/stacks/web/schedules", url.Values{"cron_expr": {"@daily"}, "job_type": {"restore"}})
 	expect(t, r, http.StatusBadRequest, "")
 	r = post("/stacks/web/schedules", url.Values{"cron_expr": {"nope"}, "job_type": {"update"}, "rollback_in_place": {"on"}})
-	if !strings.Contains(r.body, `name="job_type" value="update" checked`) || !strings.Contains(r.body, `name="rollback_in_place" checked`) {
+	if !strings.Contains(r.body, `name="job_type" value="update" checked`) || !strings.Contains(r.body, `name="rollback_in_place" data-enable-when="job_type=update" checked`) {
 		t.Errorf("update input not kept:\n%s", r.body)
 	}
 

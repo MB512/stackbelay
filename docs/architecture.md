@@ -979,6 +979,10 @@ runs. A schedule has a job type (Settings tab, admins):
   "Update pipeline"). An update schedule without that confirmation (e.g.
   created while the stack had a repository that was removed later) fails.
 
+"Roll back in place" applies to updates only: the form disables it while
+"Backup" is selected (`static/forms.js`, `data-enable-when="job_type=update"`),
+and the server rejects it for a backup schedule instead of dropping it.
+
 - Expressions: the standard 5 fields (minute hour day-of-month month
   day-of-week) or descriptors (`@daily`, `@weekly`, `@every 6h`, ...).
   `scheduler.Parse` validates them before saving: no seconds field, no
