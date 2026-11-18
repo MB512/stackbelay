@@ -6,6 +6,54 @@ All notable changes to StackVault. The format is based on
 
 ## [Unreleased]
 
+### Upgrading from 0.3
+
+The database is migrated at startup (0011 rebuilds the `jobs` and
+`schedules` tables, 0012 adds a column). Nothing else to change; the new
+setting `STACKVAULT_CLEANUP_IMAGE_MIN_AGE` is optional.
+
+### Added
+
+- **Move a stack to another host** (or rebuild a host) through its
+  repository (#1). Admins import a stack on the "Import stack" admin tab:
+  enter the repository, choose one of the stacks and hosts found in its
+  snapshots. Its first restore creates the stack directory (nothing to
+  stop, no safety snapshot), started only if asked; later restores of the
+  source host's newer snapshots sync it in place, until the final one
+  after the last backup on the old host. Per stack, the Settings tab
+  chooses the source host whose snapshots are listed and restored
+  (restoring another host's snapshots is admin-only); backups always use
+  this host's name. Worker flags `restore --import` and
+  `--limit-download`.
+- Restores can **limit their download rate** (MiB/s), and restores into a
+  stack that is not running run in the background: they do not count
+  against `STACKVAULT_MAX_JOBS`, so a long one does not hold up scheduled
+  backups.
+- **Host cleanup** (#19) on the new admin "Host" tab: removes stopped
+  orphan containers of the stacks (services no longer in the compose file)
+  and unused untagged images last pulled or replaced by an update more
+  than 7 days ago (`STACKVAULT_CLEANUP_IMAGE_MIN_AGE`). With a preview of
+  what would be removed, "Clean up now" and schedules. Never prunes, never
+  touches volumes; a cleanup runs alone. Worker command `worker cleanup`.
+- **Admin pages** with tabs: Users, **Jobs** (running and queued jobs of
+  all stacks and the recent jobs, live; #24), Host, Import stack and
+  **Audit log** (paged, with user and stack names).
+- **Global log view** (#21): the "Logs" link in the header follows the
+  container logs of up to 4 stacks in one view, in time order.
+
+### Changed
+
+- The account link in the header reads "Profile" instead of the user name
+  with "(admin)".
+- Update and compose-apply jobs record the image ids they replaced
+  (kept by the host cleanup for a while).
+
+### Fixed
+
+- Schedules: "roll back in place" could be ticked for a backup schedule
+  and was silently dropped; the option is now disabled for backups and
+  refused by the server.
+
 ## [0.3.0] - 2026-11-17
 
 ### Upgrading from 0.2
