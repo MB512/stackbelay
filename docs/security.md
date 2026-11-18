@@ -23,7 +23,16 @@ attackers reaching the UI, a leaked database file.
    `restart`) on discovered stacks.
    The one exception is the container shell (rule 13). All external
    commands use `exec.CommandContext` with argument lists, never a shell.
-2. **Input validation.** Stack names must match the discovered set. Snapshot IDs
+2. **Input validation.** Stack names must match the stack records, which
+   come from discovery or, for an admin's "Import stack" (issue #1), from
+   the snapshot paths of a repository (last component, `stacks.ValidName`;
+   the admin chooses by index from the listed names, nothing is typed in).
+   The first restore of an imported stack creates its directory only via
+   `stacks.ImportTarget` (valid name, neither the directory nor its staging
+   directory exists; the final rename never replaces a non-empty
+   directory). Between the two steps of an import the repository
+   credentials stay in the manager's memory (15 minutes, bound to the
+   admin's user id, used once), never in the page. Snapshot IDs
    must match `^[0-9a-f]{8,64}$` and are verified against `restic snapshots`.
    Cron expressions are parsed and validated before saving (see
    "Scheduler" in architecture.md); the parser runs with a recover guard.

@@ -97,8 +97,12 @@ Run `go vet` and `go test ./... -race` before every commit.
   argument list, never `sh -c`. The only interactive execution is the
   opt-in, admin-only container shell (`STACKVAULT_ENABLE_SHELL`, see
   `docs/security.md` rule 13); never widen it without discussion.
-- Stack names come only from discovery (directory scan), never free-form paths.
-  Reject anything not in the discovered set; guard against path traversal.
+- Stack names come only from discovery (directory scan) or, for the admin
+  "Import stack" (issue #1), from a repository's snapshot paths (last
+  component, validated with `stacks.ValidName`); never free-form input or
+  paths. Reject anything not in the stack records; guard against path
+  traversal. A restore creates a missing stack directory only through
+  `stacks.ImportTarget` (valid name, nothing exists there).
 - Repository passwords/credentials: encrypted in DB, passed to restic only via
   env or a tmpfs file in the worker, never as CLI args, never logged.
 - Every state-changing endpoint: auth + per-stack permission check + CSRF

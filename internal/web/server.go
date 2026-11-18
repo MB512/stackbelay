@@ -72,6 +72,10 @@ type Server struct {
 	Cleanup jobs.CleanupLister
 	// CleanupImageMinAge is STACKVAULT_CLEANUP_IMAGE_MIN_AGE (preview rules).
 	CleanupImageMinAge time.Duration
+	// RepoSnapshots lists the snapshots of a repository that is not saved
+	// yet, for "Import stack" (read-only restic). If nil, imports are not
+	// available.
+	RepoSnapshots RepoSnapshotLister
 	// Stopping is closed when the manager shuts down; open live streams
 	// then end at once instead of delaying the shutdown (clients
 	// reconnect). nil: streams only end with their client.
@@ -92,8 +96,9 @@ type Server struct {
 	Location *time.Location
 
 	templates  map[string]*template.Template
-	logStreams streamLimiter // open log streams
-	shells     streamLimiter // open shell sessions
+	logStreams streamLimiter  // open log streams
+	shells     streamLimiter  // open shell sessions
+	imports    pendingImports // "Import stack" between its two steps
 	// running update checks (not streams, but limited the same way)
 	updateChecks streamLimiter
 	// the last update check per stack
@@ -211,6 +216,9 @@ func (s *Server) Handler() (http.Handler, error) {
 				r.Get("/admin/jobs", s.adminJobs)
 				r.Get("/admin/jobs/live", s.adminJobsLiveFragment)
 				r.Get("/admin/audit", s.adminAudit)
+				r.Get("/admin/import", s.adminImport)
+				r.Post("/admin/import", s.listImport)
+				r.Post("/admin/import/confirm", s.confirmImport)
 				r.Get("/admin/host", s.adminHost)
 				r.Post("/admin/host/cleanup", s.startCleanup)
 				r.Post("/admin/host/schedules", s.createHostSchedule)

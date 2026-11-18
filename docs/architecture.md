@@ -352,7 +352,21 @@ compose editor).
 ## Restore from another host
 
 Decided in issue #1: moving a stack from host A to host B (or rebuilding a
-host) through the shared repository. The stack keeps its name: the
+host) through the shared repository.
+
+- **Import stack** (admin tab, `/admin/import`): the admin enters a
+  repository (location, password, backend variables, as on the Settings
+  tab). The manager lists its snapshots read-only (`restic snapshots`,
+  `web.RepoSnapshotLister`) and offers every stack name (last component of
+  a snapshot's single path, `stacks.ValidName`) and host, with the number
+  of snapshots and the newest. Names with a stack record or a directory on
+  this host are shown disabled. The credentials wait on the server for the
+  second step (`pendingImports`: 15 minutes, bound to the admin, used
+  once); the page only carries a random token and the index of the choice.
+  The import creates the stack record (`CreateImportedStack`: not present,
+  disabled, source host = the chosen host), saves the repository, audits
+  `stack.import` and fills the snapshot cache. Only admins see the new
+  stack until permissions are granted. The stack keeps its name: the
 snapshot path's last component must equal it (`snapshotStackPath`), the
 rest of the path may differ (`/home/docker/web` on A restores into
 `$STACKS_ROOT/web` on B).
@@ -764,6 +778,8 @@ with a light and a dark set; the job log is a dark panel in both modes.
 | `POST /admin/host/schedules` | admin | add a cleanup schedule (cron expression) |
 | `POST /admin/host/schedules/{id}/enabled` | admin | enable/disable a host schedule |
 | `POST /admin/host/schedules/{id}/delete` | admin | delete a host schedule |
+| `GET/POST /admin/import` | admin | "Import stack": list the stacks in a repository (read-only restic), see "Restore from another host" |
+| `POST /admin/import/confirm` | admin | create the chosen stack record with that repository |
 | `GET /admin/audit` | admin | "Audit log" admin tab: 100 entries per page, newest first; `?before=<id>` for older ones |
 
 Repository form: the location may be a `rest:` URL with `user:password`,
@@ -851,7 +867,8 @@ so HTMX loads the login page instead of swapping it into the fragment.
 
 The header shows admins an "Admin" link to pages outside the stacks, with
 their own tabs (`admin-tabs` in `partials.html`): "Users" (`/admin/users`),
-"Jobs" (`/admin/jobs`; host jobs show "host" as stack), "Host"
+"Jobs" (`/admin/jobs`; host jobs show "host" as stack), "Import stack"
+(`/admin/import`, see "Restore from another host"), "Host"
 (`/admin/host`, the host cleanup: preview, "Clean up now", recent cleanups,
 schedules; see "Host cleanup") and "Audit log" (`/admin/audit`, read-only,
 100 entries per page with user and stack names). Host jobs' pages are
@@ -1171,7 +1188,9 @@ main file (`stacks.MainFileNames()`). The directory name is the stack ID. Names 
 in `.restore-tmp` or containing `.old-` are reserved for the restore
 pipeline's staging and previous-version directories and are never
 discovered, so a restore does not create new stacks. Stacks can be
-disabled per stack. Discovery is the only source of stack names/paths.
+disabled per stack. Discovery is the source of stack names and paths; the
+only other source is an admin's "Import stack" from a repository's snapshot
+paths (see "Restore from another host").
 
 ## Interfaces (for testing)
 

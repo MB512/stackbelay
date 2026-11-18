@@ -90,7 +90,10 @@ func run(ctx context.Context, getenv func(string) string, readFile func(string) 
 		// "restic init" on an explicit admin action.
 		Snapshots: snapCache,
 		Repos:     resticCLI,
-		JobsDir:   cfg.JobsDir(),
+		// "Import stack": read-only "restic snapshots" of a repository
+		// entered by an admin, before it is saved.
+		RepoSnapshots: resticCLI,
+		JobsDir:       cfg.JobsDir(),
 		// Container logs: read-only "docker compose logs/ps" for
 		// discovered stacks (see docs/security.md, rule 3).
 		StacksRoot: cfg.StacksRoot,
