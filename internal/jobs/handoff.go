@@ -60,6 +60,11 @@ const (
 	TypeStop    Type = "stop"
 	TypeStart   Type = "start"
 	TypeRestart Type = "restart"
+	// TypeUp ("docker compose up --detach") and TypeDown ("docker compose
+	// down", volumes kept) create or remove the stack's containers without
+	// backup (see Pipeline.Up, Down).
+	TypeUp   Type = "up"
+	TypeDown Type = "down"
 )
 
 // TypeCleanup removes stopped orphan containers of the discovered stacks
@@ -72,7 +77,9 @@ func (t Type) Host() bool { return t == TypeCleanup }
 
 // Control reports whether t only stops and/or starts the stack, without
 // backup and without repository.
-func (t Type) Control() bool { return t == TypeStop || t == TypeStart || t == TypeRestart }
+func (t Type) Control() bool {
+	return t == TypeStop || t == TypeStart || t == TypeRestart || t == TypeUp || t == TypeDown
+}
 
 // State is the state of a job.
 type State string
@@ -241,7 +248,7 @@ func (s Spec) Validate() error {
 				return fmt.Errorf("invalid image id %q", truncate(id))
 			}
 		}
-	case TypeStop, TypeStart, TypeRestart:
+	case TypeStop, TypeStart, TypeRestart, TypeUp, TypeDown:
 		if s.PreStop || s.SnapshotID != "" || s.SkipSafetySnapshot || s.NoStart || s.PinImages || s.InPlace ||
 			s.CarryOverJobs != "" || s.NoBackup {
 			return fmt.Errorf("options set on a job of type %s", s.Type)

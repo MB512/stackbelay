@@ -67,6 +67,7 @@ button.secondary { background: transparent; color: var(--accent); border: 1px so
 form.inline { display: flex; gap: .8rem; align-items: center; }
 td.actions form.inline { display: inline-flex; margin-right: .4rem; }
 .actions-row { display: flex; gap: .8rem 1.6rem; flex-wrap: wrap; align-items: center; }
+.actions-row + .actions-row { margin-top: .8rem; }
 table + form.card { margin-top: 1rem; }
 label.check { display: flex; gap: .5rem; align-items: center; }
 label.check:has(input:disabled) { color: var(--muted); }

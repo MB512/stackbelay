@@ -92,3 +92,51 @@ func (p *Pipeline) Restart(ctx context.Context, stack stacks.Stack) (err error) 
 	}
 	return nil
 }
+
+// Up creates and starts the stack like "docker compose up --detach",
+// without backup: missing containers are created, those whose
+// configuration or image changed are recreated, the others are left alone
+// (images that are missing are pulled by compose). Then the usual health
+// wait for all services (a warning only: one-shot services exit).
+func (p *Pipeline) Up(ctx context.Context, stack stacks.Stack) error {
+	log := p.logger().With("stack", stack.Name, "job", "up")
+	services, err := p.Docker.Services(ctx, stack.Dir) // also the project owner check
+	if err != nil {
+		return fmt.Errorf("reading stack state: %w", err)
+	}
+	names := make([]string, 0, len(services))
+	for _, s := range services {
+		names = append(names, s.Name)
+	}
+	log.Info("creating and starting stack (compose up)", "services", names)
+	p.phase("starting stack")
+	if err := p.Docker.UpAll(ctx, stack.Dir); err != nil {
+		return fmt.Errorf("compose up: %w", err)
+	}
+	hctx, cancel := context.WithTimeout(ctx, orDefault(p.HealthTimeout, DefaultHealthTimeout))
+	defer cancel()
+	p.phase("waiting until healthy")
+	if err := p.Docker.WaitHealthy(hctx, stack.Dir, names); err != nil {
+		log.Warn("stack is up but not all services run or are healthy", "error", err)
+	} else {
+		log.Info("stack is up")
+	}
+	return nil
+}
+
+// Down removes the stack's containers and networks like "docker compose
+// down", without backup. Volumes, images and the stack directory are kept;
+// Up (or "docker compose up") creates the containers again.
+func (p *Pipeline) Down(ctx context.Context, stack stacks.Stack) error {
+	log := p.logger().With("stack", stack.Name, "job", "down")
+	if _, err := p.Docker.Services(ctx, stack.Dir); err != nil { // the project owner check, before removing anything
+		return fmt.Errorf("reading stack state: %w", err)
+	}
+	log.Info("removing containers and networks (compose down; volumes are kept)")
+	p.phase("removing containers")
+	if err := p.Docker.Down(ctx, stack.Dir); err != nil {
+		return fmt.Errorf("compose down: %w", err)
+	}
+	log.Info("stack is down")
+	return nil
+}

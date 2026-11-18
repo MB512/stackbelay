@@ -381,6 +381,18 @@ func (c *CLI) Up(ctx context.Context, dir string, composeFiles, services []strin
 	return err
 }
 
+// UpAll implements Client.
+func (c *CLI) UpAll(ctx context.Context, dir string) error {
+	_, err := c.compose(ctx, dir, "up", "--detach")
+	return err
+}
+
+// Down implements Client. Never with --volumes: named volumes hold data.
+func (c *CLI) Down(ctx context.Context, dir string) error {
+	_, err := c.compose(ctx, dir, "down")
+	return err
+}
+
 // Pull implements Client.
 func (c *CLI) Pull(ctx context.Context, dir string, services []string) error {
 	if len(services) == 0 {

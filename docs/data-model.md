@@ -77,7 +77,7 @@ CREATE TABLE schedules (
 CREATE TABLE jobs (
   id            TEXT PRIMARY KEY,           -- ULID
   stack_id      INTEGER REFERENCES stacks(id), -- NULL = host job (migration 0011)
-  type          TEXT NOT NULL,              -- backup | restore | update | compose-apply | stop | start | restart | cleanup
+  type          TEXT NOT NULL,              -- backup | restore | update | compose-apply | stop | start | restart | up | down | cleanup
   trigger       TEXT NOT NULL,              -- manual | schedule
   requested_by  INTEGER REFERENCES users(id), -- NULL for schedule
   state         TEXT NOT NULL,              -- queued | running | succeeded | failed | cancelled

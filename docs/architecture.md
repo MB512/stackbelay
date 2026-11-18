@@ -585,8 +585,10 @@ At most one check per user and three in total run at a time. The check is
 a preview: the update job pulls and compares again itself ("only if new").
 ## Stop, start and restart
 
-Job types `stop`, `start` and `restart` (decided in issue #18), queued from
-the Status tab by users with the operate right (`can_operate`; admins
+Job types `stop`, `start` and `restart` (decided in issue #18) and `up`
+and `down`, queued from the Status tab (first row of actions, in the order
+Up, Start, Restart, Stop, Down; backup and update in a second row) by users
+with the operate right (`can_operate`; admins
 always). They run in a worker like every change to a stack, take the
 per-stack lock like every job (so they never run in the middle of a
 backup, update or restore of the same stack), are audited (`job.create`)
@@ -605,6 +607,15 @@ dispatcher passes no repository credentials to their worker.
   compose up -d` would; existing containers are not recreated. A stack
   without any containers fails ("create them once with `docker compose
   up`").
+- **Up** (`jobs.Pipeline.Up`): `docker compose up --detach`, as by hand:
+  missing containers are created, those whose configuration or image
+  changed are recreated, the others are left alone (missing images are
+  pulled by compose). Then the health wait for all services (a warning
+  only: one-shot services exit).
+- **Down** (`jobs.Pipeline.Down`): after the project owner check, `docker
+  compose down`: containers and networks are removed; volumes, images and
+  the stack directory are kept (never `--volumes`). Up creates the
+  containers again.
 - **Restart** (`jobs.Pipeline.Restart`): records the running services,
   stops the stack and starts those services again. The start is registered
   with `defer` before the stop, so it also runs when the stop fails or the
@@ -614,7 +625,8 @@ dispatcher passes no repository credentials to their worker.
 The manager's own stack (`dispatch.Template.OwnStack`: its compose project
 directory, from the label `com.docker.compose.project.working_dir` of its
 container, is a stack directory) has **no Stop**: the button is disabled
-with the reason, and `POST /stacks/{name}/stop` answers 409. Stopping it
+with the reason (Down too), and `POST /stacks/{name}/stop` and `/down`
+answer 409. Stopping it
 would also stop the web UI, with nobody able to start it again from there.
 Restarting it works like a self-backup: the worker stops and starts the
 manager, which picks the job up again when it is back.
@@ -745,7 +757,7 @@ with a light and a dark set; the job log is a dark panel in both modes.
 | `GET /stacks/{name}/status/live` | view right | the self-refreshing part of the Status tab (HTMX fragment, polled every 10 s) |
 | `GET /stacks/{name}/backups` | view right | "Backups" tab: repository location, cached snapshots (same for every user) |
 | `POST /stacks/{name}/backup` | backup right | queue a backup (option: pre-stop snapshot) |
-| `POST /stacks/{name}/stop`, `/start`, `/restart` | operate right | queue a stop, start or restart without backup, see "Stop, start and restart" (no stop for the manager's own stack) |
+| `POST /stacks/{name}/up`, `/start`, `/restart`, `/stop`, `/down` | operate right | queue an up, start, restart, stop or down without backup, see "Stop, start and restart" (no stop or down for the manager's own stack) |
 | `GET /stacks/{name}/logs` | logs right | "Logs" tab: container checkboxes and live log panel |
 | `GET /stacks/{name}/logs/events` | logs right | live container logs (SSE), see "Container logs" |
 | `GET /logs` | logs right on the chosen stacks | global log view: choose up to 4 stacks (`?stack=a&stack=b`), see "Global log view" |
@@ -1247,7 +1259,7 @@ worker run <job-dir>
 worker backup  [--pre-stop] <stack>
 worker restore [--no-safety-snapshot] [--no-start] [--pin-images] [--in-place] [--import] [--limit-download <KiB/s>] <stack> <snapshot-id>
 worker update  [--no-backup] [--only-if-new] [--rollback-in-place] [--no-pre-stop] <stack>
-worker stop|start|restart <stack>
+worker stop|start|restart|up|down <stack>
 worker cleanup [--image-min-age <duration>]
 ```
 
@@ -1255,7 +1267,7 @@ worker cleanup [--image-min-age <duration>]
 are for manual use and tests. The repository settings
 (`RESTIC_REPOSITORY`, `RESTIC_PASSWORD(_FILE)`) are optional in the worker's
 configuration, but every job needs them except `update --no-backup`,
-`stop`, `start`, `restart` and `cleanup`.
+`stop`, `start`, `restart`, `up`, `down` and `cleanup`.
 
 Flags go before positional arguments. Exit codes: 0 success, 1 job failed,
 2 usage/configuration error. Logs are JSON lines (`log/slog`) on stderr.

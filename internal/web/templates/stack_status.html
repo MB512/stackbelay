@@ -5,6 +5,40 @@
 {{- if or .CanBackup .CanUpdate .CanOperate}}
 <section>
   <h2>Actions</h2>
+  {{- /* data-confirm: static/forms.js asks before submitting. First row:
+         the stack's containers (Operate right), in their lifecycle order;
+         second row: backup and update. */}}
+  {{- if .CanOperate}}
+  <div class="actions-row">
+  <form method="post" action="/stacks/{{.Stack.Name}}/up" class="inline"
+        data-confirm="Run docker compose up for {{.Stack.Name}}? Missing containers are created, those whose configuration or image changed are recreated, without backup.">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+    <button type="submit" class="secondary"{{if .JobsUnavailable}} disabled{{end}}>Up</button>
+  </form>
+  <form method="post" action="/stacks/{{.Stack.Name}}/start" class="inline">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+    <button type="submit" class="secondary"{{if .JobsUnavailable}} disabled{{end}}>Start</button>
+  </form>
+  <form method="post" action="/stacks/{{.Stack.Name}}/restart" class="inline"
+        data-confirm="Restart {{.Stack.Name}}? Its running services are stopped and started again, without backup.">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+    <button type="submit" class="secondary"{{if .JobsUnavailable}} disabled{{end}}>Restart</button>
+  </form>
+  <form method="post" action="/stacks/{{.Stack.Name}}/stop" class="inline"
+        data-confirm="Stop {{.Stack.Name}}? All its containers are stopped until someone starts it again.">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+    <button type="submit" class="secondary"{{if or .JobsUnavailable .OwnStackReason}} disabled{{end}}
+      {{- with .OwnStackReason}} title="{{.}}"{{end}}>Stop</button>
+  </form>
+  <form method="post" action="/stacks/{{.Stack.Name}}/down" class="inline"
+        data-confirm="Take {{.Stack.Name}} down? Its containers and networks are removed (volumes and files are kept) until someone runs Up.">
+    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+    <button type="submit" class="secondary"{{if or .JobsUnavailable .OwnStackReason}} disabled{{end}}
+      {{- with .OwnStackReason}} title="{{.}}"{{end}}>Down</button>
+  </form>
+  </div>
+  {{- end}}
+  {{- if or .CanBackup .CanUpdate}}
   <div class="actions-row">
   {{- if .CanBackup}}
   <form method="post" action="/stacks/{{.Stack.Name}}/backup" class="inline">
@@ -19,31 +53,16 @@
     <button type="submit"{{if .JobsUnavailable}} disabled{{end}}>Update…</button>
   </form>
   {{- end}}
-  {{- if .CanOperate}}
-  {{- /* data-confirm: static/forms.js asks before submitting. */}}
-  <form method="post" action="/stacks/{{.Stack.Name}}/restart" class="inline"
-        data-confirm="Restart {{.Stack.Name}}? Its running services are stopped and started again, without backup.">
-    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
-    <button type="submit" class="secondary"{{if .JobsUnavailable}} disabled{{end}}>Restart</button>
-  </form>
-  <form method="post" action="/stacks/{{.Stack.Name}}/stop" class="inline"
-        data-confirm="Stop {{.Stack.Name}}? All its containers are stopped until someone starts it again.">
-    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
-    <button type="submit" class="secondary"{{if or .JobsUnavailable .OwnStackReason}} disabled{{end}}
-      {{- with .OwnStackReason}} title="{{.}}"{{end}}>Stop</button>
-  </form>
-  <form method="post" action="/stacks/{{.Stack.Name}}/start" class="inline">
-    <input type="hidden" name="csrf_token" value="{{.CSRF}}">
-    <button type="submit" class="secondary"{{if .JobsUnavailable}} disabled{{end}}>Start</button>
-  </form>
-  {{- end}}
   </div>
+  {{- end}}
   {{- with .JobsUnavailable}}<p class="hint">{{.}}</p>
   {{- else}}{{if and .CanBackup (not .HasRepo)}}<p class="hint">Backup not possible yet: the stack has no repository.</p>{{end}}{{end}}
-  {{- if .CanBackup}}<p class="hint">A backup stops the stack and starts it again afterwards.</p>{{end}}
-  {{- if .CanOperate}}<p class="hint">Restart, Stop and Start run without backup. Start starts the existing
-    containers (like <code>docker compose start</code>); it creates none.</p>
+  {{- if .CanOperate}}<p class="hint">Up, Start, Restart, Stop and Down run without backup, like the
+    <code>docker compose</code> commands of the same name: Up creates missing containers and recreates changed ones;
+    Start starts the existing containers (and creates services added since); Down removes the containers and networks,
+    volumes and files are kept.</p>
   {{- with .OwnStackReason}}<p class="hint">{{.}}</p>{{end}}{{end}}
+  {{- if .CanBackup}}<p class="hint">A backup stops the stack and starts it again afterwards.</p>{{end}}
 </section>
 {{- end}}
 

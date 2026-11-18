@@ -28,7 +28,7 @@ func TestControlJobs(t *testing.T) {
 		t.Fatal("control buttons without the operate right")
 	}
 	aliceToken := csrfOf(e, alice, "/stacks/web")
-	for _, a := range []string{"stop", "start", "restart"} {
+	for _, a := range []string{"stop", "start", "restart", "up", "down"} {
 		expect(t, e.do(alice, http.MethodPost, "/stacks/web/"+a, url.Values{"csrf_token": {aliceToken}}, nil), http.StatusForbidden, "")
 	}
 	r := e.do(carol, http.MethodGet, "/stacks/web", nil, nil)
@@ -41,6 +41,25 @@ func TestControlJobs(t *testing.T) {
 	if strings.Contains(r.body, "Back up now") {
 		t.Error("backup button for carol")
 	}
+	// First row in lifecycle order: Up, Start, Restart, Stop, Down.
+	order := []string{`action="/stacks/web/up"`, `action="/stacks/web/start"`, `action="/stacks/web/restart"`,
+		`action="/stacks/web/stop"`, `action="/stacks/web/down"`}
+	last := -1
+	for _, a := range order {
+		i := strings.Index(r.body, a)
+		if i < last {
+			t.Fatalf("buttons out of order at %s:\n%s", a, r.body)
+		}
+		last = i
+	}
+	if !strings.Contains(r.body, `data-confirm="Take web down?`) || !strings.Contains(r.body, `data-confirm="Run docker compose up for web?`) {
+		t.Error("Up or Down without confirmation")
+	}
+	// Admins see backup and update in a second row, after the controls.
+	r = e.get("/stacks/web")
+	if i, j := strings.Index(r.body, `action="/stacks/web/down"`), strings.Index(r.body, ">Back up now<"); i < 0 || j < i {
+		t.Errorf("backup row not below the control row (%d, %d)", i, j)
+	}
 
 	// Each action queues a job of its type, without repository need (db),
 	// with CSRF token only.
@@ -49,7 +68,7 @@ func TestControlJobs(t *testing.T) {
 	for _, tc := range []struct {
 		stack string
 		typ   jobs.Type
-	}{{"web", jobs.TypeStop}, {"db", jobs.TypeStart}, {"db", jobs.TypeRestart}} {
+	}{{"web", jobs.TypeStop}, {"db", jobs.TypeStart}, {"db", jobs.TypeRestart}, {"web", jobs.TypeUp}, {"db", jobs.TypeDown}} {
 		r := e.do(carol, http.MethodPost, "/stacks/"+tc.stack+"/"+string(tc.typ), url.Values{"csrf_token": {carolToken}}, nil)
 		if r.status != http.StatusSeeOther || !strings.HasPrefix(r.location, jobLocation) {
 			t.Fatalf("%s %s: %d %q %s", tc.typ, tc.stack, r.status, r.location, r.body)
@@ -61,7 +80,8 @@ func TestControlJobs(t *testing.T) {
 		}
 		// Carol (operate right) may cancel it, alice (backup right) not.
 		r = e.do(carol, http.MethodGet, "/jobs/"+id, nil, nil)
-		title := map[jobs.Type]string{jobs.TypeStop: "Stop", jobs.TypeStart: "Start", jobs.TypeRestart: "Restart"}[tc.typ]
+		title := map[jobs.Type]string{jobs.TypeStop: "Stop", jobs.TypeStart: "Start", jobs.TypeRestart: "Restart",
+			jobs.TypeUp: "Up", jobs.TypeDown: "Down"}[tc.typ]
 		if !strings.Contains(r.body, "<h1>"+title+" of") || !strings.Contains(r.body, "/cancel") {
 			t.Fatalf("job page for carol:\n%s", r.body)
 		}
@@ -71,7 +91,7 @@ func TestControlJobs(t *testing.T) {
 			}
 		}
 	}
-	if n := auditActions(t, e.st)["job.create"]; n != 3 {
+	if n := auditActions(t, e.st)["job.create"]; n != 5 {
 		t.Fatalf("job.create audited %d times", n)
 	}
 }
@@ -86,9 +106,17 @@ func TestControlOwnStack(t *testing.T) {
 		t.Fatalf("Status tab of the own stack:\n%s", r.body)
 	}
 	token := e.csrf("/stacks/web")
-	r = e.post("/stacks/web/stop", url.Values{"csrf_token": {token}})
-	if r.status != http.StatusConflict || !strings.Contains(r.body, "own stack") {
-		t.Fatalf("stop of the own stack: %d", r.status)
+	for _, a := range []string{"stop", "down"} {
+		r = e.post("/stacks/web/"+a, url.Values{"csrf_token": {token}})
+		if r.status != http.StatusConflict || !strings.Contains(r.body, "own stack") {
+			t.Fatalf("%s of the own stack: %d", a, r.status)
+		}
+	}
+	if n := strings.Count(e.get("/stacks/web").body, `disabled title="This is StackVault&#39;s own stack`); n != 2 {
+		t.Errorf("%d disabled buttons on the own stack, want 2 (Stop, Down)", n)
+	}
+	if r := e.post("/stacks/web/up", url.Values{"csrf_token": {token}}); r.status != http.StatusSeeOther {
+		t.Fatalf("up of the own stack: %d %s", r.status, r.body)
 	}
 	if r := e.post("/stacks/web/restart", url.Values{"csrf_token": {token}}); r.status != http.StatusSeeOther {
 		t.Fatalf("restart of the own stack: %d %s", r.status, r.body)

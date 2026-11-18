@@ -24,7 +24,7 @@
 <section id="job-details">
   <h1>{{if eq (print .Job.Type) "restore"}}Restore{{else if eq (print .Job.Type) "update"}}Update{{else if eq (print .Job.Type) "compose-apply"}}Compose change
     {{- else if eq (print .Job.Type) "stop"}}Stop{{else if eq (print .Job.Type) "start"}}Start
-    {{- else if eq (print .Job.Type) "restart"}}Restart{{else if eq (print .Job.Type) "cleanup"}}Host cleanup{{else}}Backup{{end}}
+    {{- else if eq (print .Job.Type) "restart"}}Restart{{else if eq (print .Job.Type) "up"}}Up{{else if eq (print .Job.Type) "down"}}Down{{else if eq (print .Job.Type) "cleanup"}}Host cleanup{{else}}Backup{{end}}
     {{- with .Job.StackName}} of <a href="/stacks/{{.}}">{{.}}</a>{{end}} {{template "job-state" .Job.State}}</h1>
 
   {{- /* Why a queued job has not started yet. */}}

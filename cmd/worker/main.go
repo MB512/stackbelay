@@ -8,14 +8,15 @@
 //	worker backup  [--pre-stop] <stack>
 //	worker restore [--no-safety-snapshot] [--no-start] [--pin-images] [--in-place] [--import] [--limit-download <KiB/s>] <stack> <snapshot-id>
 //	worker update  [--no-backup] [--only-if-new] [--rollback-in-place] [--no-pre-stop] <stack>
-//	worker stop|start|restart <stack>
+//	worker stop|start|restart|up|down <stack>
 //	worker cleanup [--image-min-age <duration>]
 //
 // "run" is how the manager starts a job: the job is described by
 // <job-dir>/spec.json, and the worker writes status.json and log.txt there.
-// The other commands are for manual use and tests. stop, start and restart
-// run without backup and need no repository. cleanup is a host job (stopped
-// orphan containers of all stacks, old dangling images; no repository).
+// The other commands are for manual use and tests. stop, start, restart,
+// up and down run without backup and need no repository. cleanup is a host
+// job (stopped orphan containers of all stacks, old dangling images; no
+// repository).
 //
 // Flags must come before positional arguments. Configuration and repository
 // credentials are read from the environment (see internal/config). Exit
@@ -49,7 +50,7 @@ const usage = `usage:
   worker backup  [--pre-stop] <stack>
   worker restore [--no-safety-snapshot] [--no-start] [--pin-images] [--in-place] [--import] [--limit-download <KiB/s>] <stack> <snapshot-id>
   worker update  [--no-backup] [--only-if-new] [--rollback-in-place] [--no-pre-stop] <stack>
-  worker stop|start|restart <stack>
+  worker stop|start|restart|up|down <stack>
   worker cleanup [--image-min-age <duration>]
 `
 
@@ -256,7 +257,7 @@ func parseArgs(args []string) (jobs.Spec, string, error) {
 		}
 		return jobs.Spec{Type: jobs.TypeCleanup, ImageMinAgeHours: int(minAge.Hours())}, "", nil
 
-	case "stop", "start", "restart":
+	case "stop", "start", "restart", "up", "down":
 		if len(args) != 2 || strings.HasPrefix(args[1], "-") {
 			return jobs.Spec{}, "", fmt.Errorf("%w: %s expects <stack>", errUsage, args[0])
 		}
@@ -335,6 +336,10 @@ func execute(ctx context.Context, p *jobs.Pipeline, cfg config.Worker, spec jobs
 		return p.Start(ctx, stack)
 	case jobs.TypeRestart:
 		return p.Restart(ctx, stack)
+	case jobs.TypeUp:
+		return p.Up(ctx, stack)
+	case jobs.TypeDown:
+		return p.Down(ctx, stack)
 	default:
 		return fmt.Errorf("unknown job type %q", spec.Type)
 	}

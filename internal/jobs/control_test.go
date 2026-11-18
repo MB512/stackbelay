@@ -143,3 +143,35 @@ func (c *cancelingDocker) Stop(ctx context.Context, dir string) error {
 	c.cancel()
 	return err
 }
+
+func TestUpAndDown(t *testing.T) {
+	e := newEnv(t)
+	if err := e.p.Up(context.Background(), e.stack); err != nil {
+		t.Fatal(err)
+	}
+	assertCalls(t, e.calls.list(), []string{"docker.Services", "docker.UpAll", "docker.WaitHealthy"})
+
+	// Unhealthy or exited services (one-shot tasks) only warn.
+	e.calls.log = nil
+	e.docker.failOn["WaitHealthy"] = errBoom
+	if err := e.p.Up(context.Background(), e.stack); err != nil {
+		t.Fatalf("up with an exited service failed: %v", err)
+	}
+	e.docker.failOn["UpAll"] = errBoom
+	if err := e.p.Up(context.Background(), e.stack); !errors.Is(err, errBoom) {
+		t.Fatalf("failed up: %v", err)
+	}
+
+	e = newEnv(t)
+	if err := e.p.Down(context.Background(), e.stack); err != nil {
+		t.Fatal(err)
+	}
+	assertCalls(t, e.calls.list(), []string{"docker.Services", "docker.Down"})
+	// The project check (Services) fails: nothing is removed.
+	e.calls.log = nil
+	e.docker.failOn["Services"] = errBoom
+	if err := e.p.Down(context.Background(), e.stack); !errors.Is(err, errBoom) {
+		t.Fatalf("down: %v", err)
+	}
+	assertCalls(t, e.calls.list(), []string{"docker.Services"})
+}

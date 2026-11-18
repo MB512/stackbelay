@@ -38,6 +38,12 @@ setting `STACKVAULT_CLEANUP_IMAGE_MIN_AGE` is optional.
 - **Admin pages** with tabs: Users, **Jobs** (running and queued jobs of
   all stacks and the recent jobs, live; #24), Host, Import stack and
   **Audit log** (paged, with user and stack names).
+- **Up and Down** on the Status tab (operate right, without backup, with a
+  confirmation): `docker compose up --detach` and `docker compose down`
+  (volumes and files are kept). The controls now form the first row of
+  actions (Up, Start, Restart, Stop, Down), backup and update the second.
+  StackVault's own stack has no Down, like no Stop. Worker commands
+  `worker up|down <stack>`.
 - **Global log view** (#21): the "Logs" link in the header follows the
   container logs of up to 4 stacks in one view, in time order.
 

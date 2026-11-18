@@ -181,6 +181,8 @@ func (s *Server) Handler() (http.Handler, error) {
 			r.Post("/stacks/{name}/stop", s.startControl(jobs.TypeStop))
 			r.Post("/stacks/{name}/start", s.startControl(jobs.TypeStart))
 			r.Post("/stacks/{name}/restart", s.startControl(jobs.TypeRestart))
+			r.Post("/stacks/{name}/up", s.startControl(jobs.TypeUp))
+			r.Post("/stacks/{name}/down", s.startControl(jobs.TypeDown))
 			r.Get("/stacks/{name}/logs", s.stackLogsPage)
 			r.Get("/stacks/{name}/logs/events", s.stackLogEvents)
 			r.Get("/stacks/{name}/restore", s.restoreForm)

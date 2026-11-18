@@ -30,7 +30,8 @@ type statusTab struct {
 	CanBackup  bool
 	CanUpdate  bool
 	CanOperate bool // stop, start, restart
-	// OwnStackReason is set on the manager's own stack: why it has no Stop.
+	// OwnStackReason is set on the manager's own stack: why it has no Stop
+	// and no Down.
 	OwnStackReason  string
 	CanCheck        bool // this installation can check for updates
 	HasRepo         bool
@@ -162,7 +163,7 @@ func (s *Server) startControl(t jobs.Type) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		if t == jobs.TypeStop && st.Name == s.OwnStack {
+		if (t == jobs.TypeStop || t == jobs.TypeDown) && st.Name == s.OwnStack {
 			s.renderError(w, r, http.StatusConflict, ownStackStopReason)
 			return
 		}
@@ -170,6 +171,7 @@ func (s *Server) startControl(t jobs.Type) http.HandlerFunc {
 	}
 }
 
-// ownStackStopReason explains why the manager's own stack has no Stop.
-const ownStackStopReason = "This is StackVault's own stack: stopping it would also stop this web interface, " +
-	"and nobody could start it again from here. Use Restart instead."
+// ownStackStopReason explains why the manager's own stack has no Stop and
+// no Down.
+const ownStackStopReason = "This is StackVault's own stack: stopping it or taking it down would also stop this " +
+	"web interface, and nobody could start it again from here. Use Restart or Up instead."

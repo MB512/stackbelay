@@ -32,6 +32,13 @@ type Client interface {
 	Services(ctx context.Context, projectDir string) ([]ServiceState, error)
 	// Stop stops all containers of the project (compose stop, not down).
 	Stop(ctx context.Context, projectDir string) error
+	// UpAll creates and starts the whole project like "docker compose up
+	// --detach": missing containers are created, those whose configuration
+	// or image changed are recreated, the others are left alone.
+	UpAll(ctx context.Context, projectDir string) error
+	// Down stops and removes the project's containers and networks
+	// ("docker compose down"). Volumes are kept (never --volumes).
+	Down(ctx context.Context, projectDir string) error
 	// Start starts existing containers of the given services (compose start).
 	Start(ctx context.Context, projectDir string, services []string) error
 	// Up recreates and starts the given services (compose up -d

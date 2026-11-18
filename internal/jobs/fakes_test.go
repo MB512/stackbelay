@@ -122,6 +122,16 @@ func (f *fakeDocker) EnsureImage(ctx context.Context, ref string) (bool, error) 
 	return true, f.fail("EnsureImage")
 }
 
+func (f *fakeDocker) UpAll(ctx context.Context, dir string) error {
+	f.calls.add("docker.UpAll")
+	return f.fail("UpAll")
+}
+
+func (f *fakeDocker) Down(ctx context.Context, dir string) error {
+	f.calls.add("docker.Down")
+	return f.fail("Down")
+}
+
 func (f *fakeDocker) ImageExists(ctx context.Context, ref string) (bool, error) {
 	f.calls.add("docker.ImageExists %s", ref)
 	return !slices.Contains(f.missingImages, ref), f.fail("ImageExists")

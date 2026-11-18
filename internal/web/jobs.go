@@ -278,7 +278,7 @@ func jobAction(t jobs.Type) auth.Action {
 		return auth.ActionRestore
 	case jobs.TypeUpdate:
 		return auth.ActionUpdate
-	case jobs.TypeStop, jobs.TypeStart, jobs.TypeRestart:
+	case jobs.TypeStop, jobs.TypeStart, jobs.TypeRestart, jobs.TypeUp, jobs.TypeDown:
 		return auth.ActionOperate
 	}
 	return auth.ActionBackup
