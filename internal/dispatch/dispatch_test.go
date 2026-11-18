@@ -763,3 +763,45 @@ func TestCleanupJob(t *testing.T) {
 		t.Fatalf("imported: %+v", imported)
 	}
 }
+
+// The first restore of a stack imported from another host: the spec says
+// so, carries the download limit, and the stack is marked present once its
+// directory exists.
+func TestImportRestore(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	root := t.TempDir()
+	e.d.Template.StacksRoot = root
+	st, err := e.st.CreateImportedStack(ctx, "cloud", "old-host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.st.SetRepository(ctx, st.ID, "rest:https://backup.example/cloud", "pw", nil); err != nil {
+		t.Fatal(err)
+	}
+	j, err := e.d.Submit(ctx, store.Job{StackID: st.ID, Type: jobs.TypeRestore, Trigger: store.TriggerManual,
+		Options: store.JobOptions{SnapshotID: "0123abcd", Import: true, NoStart: true, Background: true, LimitDownloadKiB: 1024}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.d.Step(ctx)
+	spec, err := jobs.ReadSpec(filepath.Join(e.jobsDir, j.ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.Stack != "cloud" || !spec.Import || !spec.NoStart || spec.LimitDownloadKiB != 1024 || spec.CarryOverJobs != "" {
+		t.Fatalf("spec %+v", spec)
+	}
+	// The worker created the directory.
+	if err := os.MkdirAll(filepath.Join(root, "cloud"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "cloud", "compose.yaml"), []byte("services: {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	e.workerDone(j.ID, jobs.Status{State: jobs.StateSucceeded, Snapshot: "0123abcd99"})
+	e.d.Step(ctx)
+	if got, _ := e.st.StackByName(ctx, "cloud"); !got.Present {
+		t.Fatalf("imported stack not marked present: %+v", got)
+	}
+}

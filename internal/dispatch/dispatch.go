@@ -14,6 +14,7 @@ import (
 	"github.com/MB512/stackvault/internal/docker"
 	"github.com/MB512/stackvault/internal/jobs"
 	"github.com/MB512/stackvault/internal/restic"
+	"github.com/MB512/stackvault/internal/stacks"
 	"github.com/MB512/stackvault/internal/store"
 )
 
@@ -217,7 +218,7 @@ func (d *Dispatcher) reconcileDir(ctx context.Context, id string, importing bool
 		ID: id, StackID: st.ID, StackName: st.Name, Type: spec.Type, Trigger: spec.Trigger, QueuedAt: queued,
 		Options: store.JobOptions{PreStop: spec.PreStop, SnapshotID: spec.SnapshotID,
 			SkipSafetySnapshot: spec.SkipSafetySnapshot, NoStart: spec.NoStart, PinImages: spec.PinImages,
-			InPlace: spec.InPlace, NoBackup: spec.NoBackup, OnlyIfNew: spec.OnlyIfNew, RollbackInPlace: spec.RollbackInPlace,
+			InPlace: spec.InPlace, Import: spec.Import, LimitDownloadKiB: spec.LimitDownloadKiB, NoBackup: spec.NoBackup, OnlyIfNew: spec.OnlyIfNew, RollbackInPlace: spec.RollbackInPlace,
 			NoPreStop: spec.NoPreStop},
 	}
 	if j.Trigger == "" {
@@ -328,7 +329,8 @@ func (d *Dispatcher) start(ctx context.Context, j store.Job) {
 		ID: j.ID, Type: j.Type, Stack: j.StackName,
 		PreStop: j.Options.PreStop, SnapshotID: j.Options.SnapshotID,
 		SkipSafetySnapshot: j.Options.SkipSafetySnapshot, NoStart: j.Options.NoStart, PinImages: j.Options.PinImages,
-		InPlace: j.Options.InPlace, OnlyIfNew: j.Options.OnlyIfNew, NoPreStop: j.Options.NoPreStop, Trigger: j.Trigger, Requester: j.Requester, NoBackup: noBackup,
+		InPlace: j.Options.InPlace, Import: j.Options.Import, LimitDownloadKiB: j.Options.LimitDownloadKiB,
+		OnlyIfNew: j.Options.OnlyIfNew, NoPreStop: j.Options.NoPreStop, Trigger: j.Trigger, Requester: j.Requester, NoBackup: noBackup,
 		// Without backup there is no rollback, in place or not.
 		RollbackInPlace: j.Options.RollbackInPlace && !noBackup,
 	}
@@ -350,7 +352,7 @@ func (d *Dispatcher) start(ctx context.Context, j store.Job) {
 			return
 		}
 	}
-	if j.Type == jobs.TypeRestore || (changes && !noBackup) {
+	if (j.Type == jobs.TypeRestore && !j.Options.Import) || (changes && !noBackup) {
 		// Restoring the manager's own stack (also as an update's
 		// rollback): keep the job files.
 		spec.CarryOverJobs = d.Template.JobsDirInStack(j.StackName)
@@ -474,6 +476,9 @@ func (d *Dispatcher) finish(ctx context.Context, j store.Job, state jobs.State, 
 		Detail: fmt.Sprintf("job %s (%s): %s", j.ID, j.Type, state)}); err != nil {
 		d.Logger.Error("writing audit log", "error", err)
 	}
+	if j.Options.Import {
+		d.markImported(ctx, j)
+	}
 	// Backups and restores (safety snapshot) add snapshots, even failed ones.
 	if d.Snapshots != nil && (snapshot != "" || res.PreStopSnapshot != "" || res.SafetySnapshot != "") {
 		rctx, cancel := context.WithTimeout(ctx, time.Minute)
@@ -482,6 +487,23 @@ func (d *Dispatcher) finish(ctx context.Context, j store.Job, state jobs.State, 
 			d.Logger.Warn("refreshing snapshots after job", "job_id", j.ID, "error", err)
 		}
 	}
+}
+
+// markImported records that an imported stack's directory exists after its
+// first restore (it may also exist after a failed start). Discovery decides,
+// as at startup.
+func (d *Dispatcher) markImported(ctx context.Context, j store.Job) {
+	if d.Template.StacksRoot == "" {
+		return
+	}
+	if _, err := stacks.Lookup(d.Template.StacksRoot, j.StackName); err != nil {
+		return
+	}
+	if err := d.Store.SetStackPresent(ctx, j.StackID, true); err != nil {
+		d.Logger.Error("marking imported stack present", "stack", j.StackName, "error", err)
+		return
+	}
+	d.Logger.Info("imported stack is on disk now", "stack", j.StackName)
 }
 
 func (d *Dispatcher) removeContainer(ctx context.Context, name string) {
