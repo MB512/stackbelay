@@ -9,9 +9,9 @@ stacks root (e.g. `/home/docker/<stack>/compose.yml`). StackVault backs up the w
 directory, including bind-mounted data inside it, with the stack stopped,
 so the backup is consistent without database-specific dumps.
 
-Status: **0.3**. Use it next to, not instead of, a backup strategy you
-already trust until it has proven itself on your hosts. Upgrading from 0.2:
-see the [changelog](CHANGELOG.md#030---2026-11-17); from 0.1 also
+Status: **0.4**. Use it next to, not instead of, a backup strategy you
+already trust until it has proven itself on your hosts. Upgrading from 0.3
+(or 0.2): see the [changelog](CHANGELOG.md#040---2026-11-18); from 0.1 also
 [Upgrading from 0.1](#upgrading-from-01-move-the-secret-key-into-the-data-directory).
 
 ## Features
@@ -28,6 +28,9 @@ see the [changelog](CHANGELOG.md#030---2026-11-17); from 0.1 also
   instead: only files that differ from the snapshot are downloaded and
   rewritten. Optionally with the **image versions from backup time**
   (pinned by digest).
+- **Move a stack to another host** (or rebuild a host) through its
+  repository: import it, sync it with repeated in-place restores while it
+  still runs on the old host, take over after the final backup.
 - **Updates** with backup and automatic rollback: pull newer images, back
   up, recreate the services, roll back to the backup if they do not come
   up. An update check shows which services have newer images (without
@@ -37,22 +40,29 @@ see the [changelog](CHANGELOG.md#030---2026-11-17); from 0.1 also
 - **Stack list** with the state of every stack (started, stopped,
   degraded, …), its schedules, last backup and last update.
 - **Status page** per stack: containers with state, health and update
-  check, recent jobs; **stop, start and restart** a stack (without backup).
-- **Live container logs** per stack, with a filter per container.
+  check, recent jobs; **up, start, restart, stop and down** (without
+  backup).
+- **Sizes and durations**: what each snapshot added and how long it took,
+  the stack size at the last backup and on disk, job durations.
+- **Live container logs** per stack, with a filter per container, and a
+  **global log view** of several stacks.
+- **Host cleanup**: removes stopped orphan containers and old unused
+  images, with a preview; never volumes.
 - **Compose editor** and an opt-in **container shell** for admins.
 - **Multi-user** with per-stack rights (backup, restore, update, operate,
   logs);
   admins manage users, repositories, schedules and rights.
-- **Live job logs** in the browser, job history, audit log.
+- **Live job logs** in the browser, job history; admin pages with the job
+  queue of all stacks and the audit log.
 - Backup and restore run in a separate, short-lived **worker container**.
   StackVault can therefore back up and restore **its own stack**.
 - Only creating and reading restic operations: works with
   [rest-server](https://github.com/restic/rest-server) in **append-only**
   mode. Retention (`forget`/`prune`) is left to the repository owner.
 
-Not supported: restoring a stack from another host (migration), retention,
-Windows, Kubernetes. Planned features, bugs and design discussions are
-tracked in [GitHub issues](https://github.com/MB512/stackvault/issues).
+Not supported: retention, Windows, Kubernetes. Planned features, bugs and
+design discussions are tracked in
+[GitHub issues](https://github.com/MB512/stackvault/issues).
 
 ## Requirements
 
@@ -133,7 +143,7 @@ sudo install -m 600 /etc/stackvault/secret.key data/secret.key
 ```
 
 Then remove `STACKVAULT_SECRET_KEY_FILE` (or `STACKVAULT_SECRET_KEY`) and
-the key's volume line from `compose.yml`, set the image to `0.3`, and start
+the key's volume line from `compose.yml`, set the image to `0.4`, and start
 it again (`docker compose up -d`). StackVault checks the key against the
 database at startup and refuses to start if it does not match, so a wrong
 copy cannot damage anything. Run a backup of the StackVault stack
@@ -161,7 +171,8 @@ Environment variables only:
 | `STACKVAULT_SESSION_TTL` | session lifetime, default `12h` |
 | `STACKVAULT_ALLOW_INSECURE_HTTP` | accept logins over plain HTTP (testing only), default `false` |
 | `STACKVAULT_WORKER_IMAGE` | image for worker containers, default: the manager's own image |
-| `STACKVAULT_MAX_JOBS` | jobs running at the same time across all stacks, default `1` |
+| `STACKVAULT_MAX_JOBS` | jobs running at the same time across all stacks, default `1` (restores into a stack that is not running do not count) |
+| `STACKVAULT_CLEANUP_IMAGE_MIN_AGE` | host cleanup: keep unused untagged images pulled or replaced by an update less than this long ago, whole hours, default `168h` |
 | `STACKVAULT_ENABLE_SHELL` | `true` gives admins a shell in stack containers ("Shell" per container on the Status tab), default `false` |
 | `STACKVAULT_LOG_LEVEL` | `debug`, `info`, `warn`, `error` |
 | `TZ` | time zone of the schedules and of all times shown in the UI, e.g. `Europe/Berlin` (default UTC); an unknown zone stops the start |

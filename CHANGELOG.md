@@ -6,11 +6,16 @@ All notable changes to StackVault. The format is based on
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-18
+
 ### Upgrading from 0.3
 
-The database is migrated at startup (0011 rebuilds the `jobs` and
-`schedules` tables, 0012 adds a column). Nothing else to change; the new
-setting `STACKVAULT_CLEANUP_IMAGE_MIN_AGE` is optional.
+Replace the image tag `0.3` with `0.4` and run `docker compose up -d` in the
+StackVault stack. The database is migrated at startup (0011 rebuilds the
+`jobs` and `schedules` tables, 0012 and 0013 add columns). Nothing else to
+change; the new setting `STACKVAULT_CLEANUP_IMAGE_MIN_AGE` is optional.
+Sizes and durations appear for snapshots once the snapshot list was
+refreshed (and only for snapshots made with restic 0.17 or newer).
 
 ### Added
 
@@ -281,7 +286,8 @@ README).
 
 First release.
 
-[Unreleased]: https://github.com/MB512/stackvault/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/MB512/stackvault/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/MB512/stackvault/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/MB512/stackvault/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/MB512/stackvault/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/MB512/stackvault/releases/tag/v0.1.0
