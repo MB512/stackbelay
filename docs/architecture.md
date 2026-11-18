@@ -1283,3 +1283,8 @@ image from `deploy/Dockerfile`, as does `scripts/e2e-self.sh`.
 update, a failed one with automatic rollback, and a failed one without
 backup (no rollback); and the compose-apply job: a valid change and one
 with a missing image (rollback to the previous compose file).
+`scripts/e2e-migrate.sh` moves a stack between two simulated hosts (two
+stacks roots and host names, one repository): import without start,
+refused second import, in-place sync without safety snapshot, final
+restore with start and pinned images, and backups under the new host's
+name.
