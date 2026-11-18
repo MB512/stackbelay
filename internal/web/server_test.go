@@ -224,7 +224,7 @@ func TestLoginPasswordChangeLogout(t *testing.T) {
 
 	r = e.get("/")
 	expect(t, r, http.StatusOK, "")
-	if !strings.Contains(r.body, "<h1>Stacks</h1>") || !strings.Contains(r.body, "admin (admin)") {
+	if !strings.Contains(r.body, "<h1>Stacks</h1>") || !strings.Contains(r.body, `title="Signed in as admin">Profile</a>`) {
 		t.Fatalf("home page:\n%s", r.body)
 	}
 

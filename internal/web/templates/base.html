@@ -26,7 +26,7 @@
       {{- if .IsAdmin}}
       <a href="/admin/users">Users</a>
       {{- end}}
-      <a href="/account/password">{{.Username}}{{if .IsAdmin}} (admin){{end}}</a>
+      <a href="/account/password" title="Signed in as {{.Username}}">Profile</a>
       <form method="post" action="/logout">
         <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
         <button type="submit">Log out</button>
