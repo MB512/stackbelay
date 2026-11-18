@@ -45,7 +45,7 @@ func SHA256Hex(b []byte) string {
 // up, write the file, start, verify, roll back if it does not come up.
 //
 // Started are the services that ran before and are still defined, plus
-// services the new file adds; waited for are those that ran before. A
+// services the new file adds or that have no container yet; waited for are those that ran before. A
 // stack that was stopped only gets the new file. Containers of services
 // the new file removes are left stopped (orphans).
 func (p *Pipeline) ComposeApply(ctx context.Context, stack stacks.Stack, opts ComposeApplyOptions) (ChangeResult, error) {
@@ -98,13 +98,16 @@ func (p *Pipeline) ComposeApply(ctx context.Context, stack stacks.Stack, opts Co
 }
 
 // servicesAfterEdit returns the services to start after a compose file
-// change (running before and still defined, plus newly defined ones) and
-// those to verify (running before and still defined). New services are
-// started but not waited for: they may be one-shot tasks.
+// change (running before and still defined, plus new ones) and those to
+// verify (running before and still defined). New means: not in the file
+// before, or defined but without any container yet (added while the stack
+// was stopped, or by hand). A service with a stopped container stays
+// stopped; that was a choice. New services are started but not waited for:
+// they may be one-shot tasks.
 func servicesAfterEdit(before, after []docker.ServiceState, running []string) (start, verify []string) {
 	known := map[string]bool{}
 	for _, s := range before {
-		known[s.Name] = true
+		known[s.Name] = s.ContainerID != ""
 	}
 	for _, s := range after {
 		switch {

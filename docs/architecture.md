@@ -598,7 +598,9 @@ the worker checks it against `compose_sha256` from the spec and runs
 - the file is replaced atomically (temporary file in the stack directory,
   same mode and owner, fsync, rename);
 - started are the services that ran before and are still defined, plus
-  services the new file adds; waited for (running/healthy, 5 min) are the
+  services the new file adds or that are defined but have no container yet
+  (added while the stack was stopped); a stopped container stays stopped;
+  waited for (running/healthy, 5 min) are the
   previously running ones (new services may be one-shot tasks). Containers
   of removed services stay stopped (logged; remove them with `docker
   compose up --remove-orphans`);

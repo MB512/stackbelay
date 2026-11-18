@@ -174,16 +174,44 @@ func TestComposeApplyWithoutBackup(t *testing.T) {
 }
 
 func TestServicesAfterEdit(t *testing.T) {
-	names := func(ns ...string) []docker.ServiceState {
-		var out []docker.ServiceState
-		for _, n := range ns {
-			out = append(out, docker.ServiceState{Name: n})
+	// withContainer: the service has a container (running or not).
+	svc := func(name string, withContainer bool) docker.ServiceState {
+		s := docker.ServiceState{Name: name}
+		if withContainer {
+			s.ContainerID = "c-" + name
 		}
-		return out
+		return s
 	}
-	start, verify := servicesAfterEdit(names("app", "db", "job"), names("app", "job", "cache"), []string{"app", "db"})
-	if !reflect.DeepEqual(start, []string{"app", "cache"}) || !reflect.DeepEqual(verify, []string{"app"}) {
-		t.Fatalf("start %v, verify %v", start, verify)
+	tests := []struct {
+		name          string
+		before, after []docker.ServiceState
+		running       []string
+		start, verify []string
+	}{
+		{
+			name:    "kept, removed, new; a stopped container stays stopped",
+			before:  []docker.ServiceState{svc("app", true), svc("db", true), svc("job", true)},
+			after:   []docker.ServiceState{svc("app", true), svc("job", true), svc("cache", false)},
+			running: []string{"app", "db"},
+			start:   []string{"app", "cache"}, verify: []string{"app"},
+		},
+		{
+			// Added to the file while the stack was stopped: defined, but
+			// no container yet. Must be started with the next apply.
+			name:    "defined without a container counts as new",
+			before:  []docker.ServiceState{svc("db", true), svc("frontend", true), svc("frpc", false), svc("caddy", false)},
+			after:   []docker.ServiceState{svc("db", true), svc("frontend", true), svc("frpc", false), svc("caddy", false)},
+			running: []string{"db", "frontend"},
+			start:   []string{"db", "frontend", "frpc", "caddy"}, verify: []string{"db", "frontend"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			start, verify := servicesAfterEdit(tt.before, tt.after, tt.running)
+			if !reflect.DeepEqual(start, tt.start) || !reflect.DeepEqual(verify, tt.verify) {
+				t.Fatalf("start %v, verify %v; want %v, %v", start, verify, tt.start, tt.verify)
+			}
+		})
 	}
 }
 
