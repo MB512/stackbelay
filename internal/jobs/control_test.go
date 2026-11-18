@@ -23,11 +23,26 @@ func TestStop(t *testing.T) {
 
 func TestStart(t *testing.T) {
 	// Every service with a container is started (app and db are running,
-	// tool has exited; "never" has no container), then the health wait.
+	// tool has exited), then "never", which is defined but has no
+	// container (added while the stack was stopped), is created; each
+	// with the health wait.
 	e := newEnv(t)
-	e.docker.services[0].ContainerID = "c-app"
-	e.docker.services[1].ContainerID = "c-db"
-	e.docker.services[2].ContainerID = "c-tool"
+	if err := e.p.Start(context.Background(), e.stack); err != nil {
+		t.Fatal(err)
+	}
+	assertCalls(t, e.calls.list(), []string{"docker.Services", "docker.Start app,db,tool", "docker.WaitHealthy",
+		"docker.Up never", "docker.WaitHealthy"})
+
+	// Creating the new service fails: the job fails (the others run).
+	e2 := newEnv(t)
+	e2.docker.failOn["Up"] = errBoom
+	if err := e2.p.Start(context.Background(), e2.stack); !errors.Is(err, errBoom) || !strings.Contains(err.Error(), "creating new services") {
+		t.Fatalf("failed creation: %v", err)
+	}
+
+	// Nothing new: only compose start.
+	e.calls.log = nil
+	e.docker.services = e.docker.services[:3]
 	if err := e.p.Start(context.Background(), e.stack); err != nil {
 		t.Fatal(err)
 	}

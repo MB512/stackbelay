@@ -23,24 +23,36 @@ func (p *Pipeline) Stop(ctx context.Context, stack stacks.Stack) error {
 
 // Start starts the existing containers of all services that have one
 // (compose start), like "docker compose start", and waits until they run.
-// It creates nothing: a stack without containers fails.
+// Services that are defined but have no container yet (added to the compose
+// file while the stack was stopped) are then created and started with
+// "compose up" for just those services, as "docker compose up -d" would;
+// the existing containers are not recreated. A stack without any
+// containers fails: it was never created (issue #18).
 func (p *Pipeline) Start(ctx context.Context, stack stacks.Stack) error {
 	log := p.logger().With("stack", stack.Name, "job", "start")
 	services, err := p.Docker.Services(ctx, stack.Dir)
 	if err != nil {
 		return fmt.Errorf("reading stack state: %w", err)
 	}
-	var names []string
+	var existing, missing []string
 	for _, s := range services {
 		if s.ContainerID != "" {
-			names = append(names, s.Name)
+			existing = append(existing, s.Name)
+		} else {
+			missing = append(missing, s.Name)
 		}
 	}
-	if len(names) == 0 {
+	if len(existing) == 0 {
 		return errors.New("the stack has no containers to start (create them once with \"docker compose up\")")
 	}
-	if err := p.bringUp(ctx, log, stack.Dir, nil, names, false); err != nil {
+	if err := p.bringUp(ctx, log, stack.Dir, nil, existing, false); err != nil {
 		return fmt.Errorf("starting stack: %w", err)
+	}
+	if len(missing) > 0 {
+		log.Info("creating services that have no container yet (added while the stack was stopped)", "services", missing)
+		if err := p.bringUp(ctx, log, stack.Dir, nil, missing, true); err != nil {
+			return fmt.Errorf("creating new services: %w", err)
+		}
 	}
 	return nil
 }

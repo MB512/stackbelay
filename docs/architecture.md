@@ -598,9 +598,13 @@ dispatcher passes no repository credentials to their worker.
   `--remove-orphans`.
 - **Start** (`jobs.Pipeline.Start`): `docker compose start` of every
   service that has a container (like `docker compose start` by hand), then
-  the usual health wait (a warning only, as after a backup). It creates no
-  containers: a stack without containers fails ("create them once with
-  `docker compose up`").
+  the usual health wait (a warning only, as after a backup). Services that
+  are defined but have no container yet (added to the compose file while
+  the stack was stopped, e.g. with the compose editor) are then created
+  and started with `compose up` for just those services, as `docker
+  compose up -d` would; existing containers are not recreated. A stack
+  without any containers fails ("create them once with `docker compose
+  up`").
 - **Restart** (`jobs.Pipeline.Restart`): records the running services,
   stops the stack and starts those services again. The start is registered
   with `defer` before the stop, so it also runs when the stop fails or the

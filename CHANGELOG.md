@@ -50,6 +50,11 @@ setting `STACKVAULT_CLEANUP_IMAGE_MIN_AGE` is optional.
 
 ### Fixed
 
+- Services added to the compose file while the stack was stopped were
+  never started: "Start" only started existing containers, and the next
+  compose change counted them as known. Start now also creates and starts
+  services without a container (existing ones are not recreated), and a
+  compose change starts them too.
 - Schedules: "roll back in place" could be ticked for a backup schedule
   and was silently dropped; the option is now disabled for backups and
   refused by the server.
