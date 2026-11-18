@@ -201,6 +201,7 @@ func (s *Server) Handler() (http.Handler, error) {
 				r.Get("/admin/users", s.userList)
 				r.Get("/admin/jobs", s.adminJobs)
 				r.Get("/admin/jobs/live", s.adminJobsLiveFragment)
+				r.Get("/admin/audit", s.adminAudit)
 				r.Post("/admin/users", s.createUser)
 				r.Post("/admin/users/{id}", s.updateUser)
 				r.Post("/admin/users/{id}/password", s.resetPassword)

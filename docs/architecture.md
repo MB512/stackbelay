@@ -703,6 +703,7 @@ with a light and a dark set; the job log is a dark panel in both modes.
 | `POST /admin/users/{id}/password` | admin | generate a new password (must be changed, sessions end) |
 | `GET /admin/jobs` | admin | "Jobs" admin tab: running and queued jobs of all stacks, recent jobs |
 | `GET /admin/jobs/live` | admin | HTMX fragment of the Jobs admin tab, polled every 5 s |
+| `GET /admin/audit` | admin | "Audit log" admin tab: 100 entries per page, newest first; `?before=<id>` for older ones |
 
 Repository form: the location may be a `rest:` URL with `user:password`,
 which is split off into `RESTIC_REST_USERNAME`/`RESTIC_REST_PASSWORD`.
@@ -788,8 +789,9 @@ so HTMX loads the login page instead of swapping it into the fragment.
 ### Admin pages
 
 The header shows admins an "Admin" link to pages outside the stacks, with
-their own tabs (`admin-tabs` in `partials.html`): "Users" (`/admin/users`)
-and "Jobs" (`/admin/jobs`). The Jobs tab lists the running and queued jobs
+their own tabs (`admin-tabs` in `partials.html`): "Users" (`/admin/users`),
+"Jobs" (`/admin/jobs`) and "Audit log" (`/admin/audit`, read-only, 100
+entries per page with user and stack names). The Jobs tab lists the running and queued jobs
 of all stacks (running first, each oldest first) and the 50 newest jobs;
 like the Status tab it is one fragment that HTMX reloads every 5 seconds
 (`GET /admin/jobs/live`, with `X-Stackvault-Poll`). The account link in the

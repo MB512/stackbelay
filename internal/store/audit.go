@@ -9,11 +9,15 @@ import (
 
 // AuditEntry is one audit log record. Detail must never contain secrets.
 type AuditEntry struct {
+	ID      int64 // filled when reading
 	At      time.Time
 	UserID  int64 // 0 = no (known) user, e.g. a failed login for an unknown name
 	Action  string
 	StackID int64 // 0 = not stack-related
 	Detail  string
+	// Username and StackName are filled when reading (empty for 0).
+	Username  string
+	StackName string
 }
 
 // AddAudit appends an entry to the audit log.
@@ -32,8 +36,17 @@ func (s *Store) AddAudit(ctx context.Context, e AuditEntry) error {
 
 // ListAudit returns the newest entries first.
 func (s *Store) ListAudit(ctx context.Context, limit int) ([]AuditEntry, error) {
+	return s.ListAuditBefore(ctx, 0, limit)
+}
+
+// ListAuditBefore returns up to limit entries with an id below before
+// (0 = from the newest), newest first. The id of the last entry is the
+// before of the next page.
+func (s *Store) ListAuditBefore(ctx context.Context, before int64, limit int) ([]AuditEntry, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT at, user_id, action, stack_id, detail FROM audit_log ORDER BY id DESC LIMIT ?`, limit)
+		`SELECT a.id, a.at, a.user_id, a.action, a.stack_id, a.detail, u.username, st.name
+		 FROM audit_log a LEFT JOIN users u ON u.id = a.user_id LEFT JOIN stacks st ON st.id = a.stack_id
+		 WHERE (? = 0 OR a.id < ?) ORDER BY a.id DESC LIMIT ?`, before, before, limit)
 	if err != nil {
 		return nil, fmt.Errorf("listing audit log: %w", err)
 	}
@@ -43,14 +56,15 @@ func (s *Store) ListAudit(ctx context.Context, limit int) ([]AuditEntry, error) 
 		var e AuditEntry
 		var at string
 		var user, stack sql.NullInt64
-		var detail sql.NullString
-		if err := rows.Scan(&at, &user, &e.Action, &stack, &detail); err != nil {
+		var detail, username, stackName sql.NullString
+		if err := rows.Scan(&e.ID, &at, &user, &e.Action, &stack, &detail, &username, &stackName); err != nil {
 			return nil, fmt.Errorf("listing audit log: %w", err)
 		}
 		if e.At, err = parseTime(at); err != nil {
 			return nil, err
 		}
 		e.UserID, e.StackID, e.Detail = user.Int64, stack.Int64, detail.String
+		e.Username, e.StackName = username.String, stackName.String
 		out = append(out, e)
 	}
 	return out, rows.Err()

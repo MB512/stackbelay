@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"net/http"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -73,3 +74,62 @@ func TestAdminJobs(t *testing.T) {
 		t.Errorf("admin link shown to a user:\n%s", r.body)
 	}
 }
+
+func TestAdminAudit(t *testing.T) {
+	e := newEnv(t, true, true)
+	web, _ := e.setupStacks()
+	ctx := context.Background()
+	e.loginAdmin()
+	admin, err := e.st.UserByUsername(ctx, "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.st.AddAudit(ctx, store.AuditEntry{UserID: admin.ID, Action: "test.stack", StackID: web,
+		Detail: "<b>detail</b>"}); err != nil {
+		t.Fatal(err)
+	}
+	r := e.get("/admin/audit")
+	expect(t, r, http.StatusOK, "")
+	for _, want := range []string{`aria-current="page">Audit log</a>`, "<td>admin</td>", "<code>test.stack</code>",
+		`<a href="/stacks/web">web</a>`, "&lt;b&gt;detail&lt;/b&gt;", "<code>login.success</code>"} {
+		if !strings.Contains(r.body, want) {
+			t.Errorf("audit page lacks %q:\n%s", want, r.body)
+		}
+	}
+	if strings.Contains(r.body, "Older entries") || strings.Contains(r.body, "Newest entries") {
+		t.Errorf("paging links on a single page:\n%s", r.body)
+	}
+
+	// Pages of 100: fill up, then follow "Older entries" to the end.
+	for i := range auditPageSize + 10 {
+		if err := e.st.AddAudit(ctx, store.AuditEntry{Action: "test.fill", Detail: "fill " + itoa(int64(i))}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	total, _ := e.st.ListAudit(ctx, 10000)
+	seen, path := 0, "/admin/audit"
+	for pages := 0; path != ""; pages++ {
+		if pages > 5 {
+			t.Fatal("paging does not end")
+		}
+		r := e.get(path)
+		expect(t, r, http.StatusOK, "")
+		seen += strings.Count(r.body, "<tr>") - 1 // header row
+		if pages > 0 && !strings.Contains(r.body, `<a href="/admin/audit">Newest entries</a>`) {
+			t.Errorf("%s: no link to the newest entries", path)
+		}
+		path = ""
+		if m := olderLink.FindStringSubmatch(r.body); m != nil {
+			path = m[1]
+		}
+	}
+	if seen != len(total) {
+		t.Errorf("paged through %d entries, want %d", seen, len(total))
+	}
+	expect(t, e.get("/admin/audit?before=x"), http.StatusBadRequest, "")
+
+	alice, _ := e.createUser("alice")
+	expect(t, e.do(alice, http.MethodGet, "/admin/audit", nil, nil), http.StatusForbidden, "")
+}
+
+var olderLink = regexp.MustCompile(`<a href="(/admin/audit\?before=\d+)">Older entries</a>`)

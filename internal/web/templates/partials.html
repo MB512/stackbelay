@@ -20,11 +20,12 @@
 </nav>
 {{end}}
 
-{{- /* Tabs of the admin pages. Dot is the active tab: "users", "jobs". */}}
+{{- /* Tabs of the admin pages. Dot is the active tab: "users", "jobs", "audit". */}}
 {{define "admin-tabs"}}
 <nav class="tabs" aria-label="Administration sections">
   <a href="/admin/users"{{if eq . "users"}} aria-current="page"{{end}}>Users</a>
   <a href="/admin/jobs"{{if eq . "jobs"}} aria-current="page"{{end}}>Jobs</a>
+  <a href="/admin/audit"{{if eq . "audit"}} aria-current="page"{{end}}>Audit log</a>
 </nav>
 {{end}}
 
