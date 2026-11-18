@@ -46,9 +46,9 @@ func newEnv(t *testing.T) *env {
 	d := &fakeDocker{calls: c, failOn: map[string]error{}, services: []docker.ServiceState{
 		{Name: "app", State: "running", ImageRef: "nextcloud:29", ContainerID: "9f8e9f8e9f8e",
 			ImageID: testImageID, RepoDigests: []string{"other@sha256:" + strings.Repeat("0", 64), testDigest}},
-		{Name: "db", State: "running", ImageRef: "postgres:16"},
-		{Name: "tool", State: "exited"},
-		{Name: "never"},
+		{Name: "db", State: "running", ImageRef: "postgres:16", ContainerID: "db0db0db0db0"},
+		{Name: "tool", State: "exited", ContainerID: "7007700770077"},
+		{Name: "never"}, // defined, but no container (e.g. added while the stack was stopped)
 	}}
 	r := &fakeRestic{calls: c, failOn: map[string]error{}}
 	return &env{
@@ -203,8 +203,8 @@ func TestBackupWritesMetadata(t *testing.T) {
 	}
 	want := []ServiceRecord{
 		{Name: "app", State: "running", ImageRef: "nextcloud:29", RepoDigest: testDigest, ImageID: testImageID, ContainerID: "9f8e9f8e9f8e"},
-		{Name: "db", State: "running", ImageRef: "postgres:16"},
-		{Name: "tool", State: "exited"},
+		{Name: "db", State: "running", ImageRef: "postgres:16", ContainerID: "db0db0db0db0"},
+		{Name: "tool", State: "exited", ContainerID: "7007700770077"},
 		{Name: "never", State: "-"},
 	}
 	if !reflect.DeepEqual(m.Services, want) {

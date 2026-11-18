@@ -39,7 +39,9 @@ func TestComposeApply(t *testing.T) {
 		t.Fatal(err)
 	}
 	original := readCompose(t, e)
-	// The new file keeps app and db, drops "tool" and adds "worker".
+	// The new file keeps app and db, drops "tool" and adds "worker"; "never"
+	// was already defined but has no container (added while the stack was
+	// stopped), so it is started too.
 	e.docker.servicesAfter = []docker.ServiceState{{Name: "app"}, {Name: "db"}, {Name: "never"}, {Name: "worker"}}
 	opts := composeOpts(t, e, true)
 	res, err := e.p.ComposeApply(context.Background(), e.stack, opts)
@@ -51,7 +53,7 @@ func TestComposeApply(t *testing.T) {
 		"restic.Backup tag=pre-stop parent= host=host-a", "docker.Stop",
 		"restic.Backup tag=final parent=snap-pre-stop host=host-a",
 		"docker.Services", // services of the new file
-		"docker.Up app,db,worker",
+		"docker.Up app,db,never,worker",
 		"docker.WaitHealthy",
 		"docker.Services", // images after the change
 	})
@@ -145,10 +147,10 @@ func TestComposeApplyWithoutBackup(t *testing.T) {
 		wantCalls []string
 		wantFile  string
 	}{
-		{"success", nil, "", []string{"docker.Services", "docker.Stop", "docker.Services", "docker.Up app,db", "docker.WaitHealthy",
+		{"success", nil, "", []string{"docker.Services", "docker.Stop", "docker.Services", "docker.Up app,db,never", "docker.WaitHealthy",
 			"docker.Services"}, newCompose},
 		{"unhealthy: not rolled back", func(e *env) { e.docker.failOn["WaitHealthy"] = errBoom }, "not rolled back (no repository)",
-			[]string{"docker.Services", "docker.Stop", "docker.Services", "docker.Up app,db", "docker.WaitHealthy"}, newCompose},
+			[]string{"docker.Services", "docker.Stop", "docker.Services", "docker.Up app,db,never", "docker.WaitHealthy"}, newCompose},
 		{"stop fails: old containers restart, file unchanged", func(e *env) { e.docker.failOn["Stop"] = errBoom }, "stopping stack",
 			[]string{"docker.Services", "docker.Stop", "docker.Start app,db", "docker.WaitHealthy"}, "services:\n  app: {}\n"},
 	}
