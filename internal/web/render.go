@@ -51,6 +51,8 @@ func (s *Server) templateFuncs() template.FuncMap {
 		"size":    func(n int64) string { return formatBytes(uint64(max(n, 0))) },
 		"percent": func(f float64) string { return fmt.Sprintf("%.0f %%", f*100) },
 		"seconds": formatSeconds,
+		// duration formats a time.Duration, e.g. "1 min 30 s".
+		"duration": formatDuration,
 	}
 }
 
@@ -182,6 +184,24 @@ func formatBytes(n uint64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %ciB", float64(n)/float64(div), "KMGTPE"[exp])
+}
+
+// formatDuration shows a duration to the second below an hour: "45 s",
+// "1 min 30 s", "2 h 5 min"; "<1 s" for less than a second.
+func formatDuration(d time.Duration) string {
+	s := int64(d.Round(time.Second) / time.Second)
+	switch {
+	case d < time.Second:
+		return "<1 s"
+	case s < 60:
+		return fmt.Sprintf("%d s", s)
+	case s < 3600 && s%60 == 0:
+		return fmt.Sprintf("%d min", s/60)
+	case s < 3600:
+		return fmt.Sprintf("%d min %d s", s/60, s%60)
+	default:
+		return fmt.Sprintf("%d h %d min", s/3600, s%3600/60)
+	}
 }
 
 // formatSeconds shows a duration roughly: "45 s", "3 min", "2 h 5 min".

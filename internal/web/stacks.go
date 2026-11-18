@@ -125,6 +125,19 @@ type backupsTab struct {
 	NextScheduled time.Time
 }
 
+// LastBackupSize returns the newest snapshot (still in the repository)
+// that records its size: total_bytes_processed is the size of the stack
+// directory at that backup. Nil if there is none (no snapshot, or made by
+// restic < 0.17).
+func (b backupsTab) LastBackupSize() *store.CachedSnapshot {
+	for i := range b.Snapshots {
+		if sn := &b.Snapshots[i]; !sn.Missing && sn.Summary != nil {
+			return sn
+		}
+	}
+	return nil
+}
+
 // settingsTab is the data of the admin-only "Settings" tab.
 type settingsTab struct {
 	stackHeader

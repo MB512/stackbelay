@@ -45,9 +45,12 @@
     {{.OtherSnapshots}} other snapshot{{if ne .OtherSnapshots 1}}s{{end}} in this repository belong to other stacks or hosts and are not shown.</p>
   {{- end}}
   {{- if .RefreshInfo}}<p class="info" role="status">{{.RefreshInfo}}</p>{{end}}
+  {{template "stack-size" .}}
   {{- if .Snapshots}}
   <table>
-    <thead><tr><th>Time</th><th>ID</th><th>Tags</th><th>Host</th>{{if .CanRestore}}<th></th>{{end}}</tr></thead>
+    <thead><tr><th>Time</th><th>ID</th><th>Tags</th><th>Host</th>
+      <th title="What the snapshot added to the repository, after deduplication and compression">Added</th>
+      <th title="How long the backup took">Duration</th>{{if .CanRestore}}<th></th>{{end}}</tr></thead>
     <tbody>
       {{- range .Snapshots}}
       <tr{{if .Missing}} class="missing"{{end}}>
@@ -55,6 +58,12 @@
         <td><code>{{.ShortID}}</code></td>
         <td>{{range .Tags}}<span class="badge">{{.}}</span> {{end}}</td>
         <td>{{.Hostname}}{{if .Missing}} <span class="badge warn" title="No longer in the repository">removed</span>{{end}}</td>
+        {{- with .Summary}}
+        <td title="{{bytes .TotalBytesProcessed}} in {{.TotalFilesProcessed}} files backed up">{{bytes .DataAddedPacked}}</td>
+        <td>{{duration .Duration}}</td>
+        {{- else}}
+        <td><span class="muted" title="Made before restic 0.17: no size recorded">–</span></td><td><span class="muted">–</span></td>
+        {{- end}}
         {{- if $.CanRestore}}
         <td>{{if .Missing}}<span class="muted" title="No longer in the repository">Restore…</span>
           {{- else}}<a href="/stacks/{{$.Stack.Name}}/restore?snapshot={{.ID}}">Restore…</a>{{end}}</td>
@@ -63,9 +72,20 @@
       {{- end}}
     </tbody>
   </table>
+  <p class="hint">Added is what a snapshot added to the repository after deduplication and compression, not the size of
+    the stack: a final snapshot right after a pre-stop snapshot adds little. Hover it for the size backed up.</p>
   {{- else}}
   <p class="hint">{{if not .Repo}}No snapshots: the stack has no repository.
     {{- else}}No snapshots{{if .Repo.SnapshotsRefreshedAt.IsZero}} cached yet. Use Refresh to load the list{{end}}.{{end}}</p>
   {{- end}}
 </section>
 {{end}}
+
+{{- /* Size of the stack at its last backup (from the snapshot summary).
+       Dot is a backupsTab. */}}
+{{define "stack-size"}}
+{{- with .LastBackupSize}}
+<p>Stack size at the last backup: <strong>{{bytes .Summary.TotalBytesProcessed}}</strong>
+  ({{.Summary.TotalFilesProcessed}} files, {{when .Time}}; the backup took {{duration .Summary.Duration}}).</p>
+{{- end}}
+{{- end}}

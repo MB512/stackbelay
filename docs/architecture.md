@@ -688,8 +688,8 @@ the worker checks it against `compose_sha256` from the spec and runs
 ## Snapshot cache
 
 Listing snapshots on a remote repository can be slow, so the manager keeps a
-cache in the `snapshots` table (id, short id, time, host, paths, tags, size
-summary if available).
+cache in the `snapshots` table (id, short id, time, host, paths, tags, and
+the backup summary restic >= 0.17 records in every snapshot).
 
 - Refresh = `restic snapshots --json` against the stack's repository. It is a
   read-only operation, so the manager runs it directly (decrypting the repo
@@ -711,6 +711,14 @@ summary if available).
   too) and `hostname` = `STACKVAULT_HOSTNAME` (`store.StackSnapshots`). The
   page says how many other snapshots were hidden. The worker checks the
   path again before stopping anything.
+- Sizes and durations (issue #9), from the summary: the Backups tab shows
+  per snapshot what it **added** to the repository (`data_added_packed`,
+  after deduplication and compression; the page says it is not the stack
+  size: a final snapshot after a pre-stop snapshot adds little) and how
+  long the backup took (`backup_end - backup_start`); the size backed up
+  (`total_bytes_processed`, files) is the tooltip. Above the list:
+  "Stack size at the last backup" from the newest snapshot with a
+  summary. Snapshots without summary (restic < 0.17) show "–".
 
 ## Web UI
 
