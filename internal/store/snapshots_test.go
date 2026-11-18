@@ -118,3 +118,32 @@ func TestStackSnapshotsFilter(t *testing.T) {
 		t.Fatalf("all: %d", len(got))
 	}
 }
+
+func TestSnapshotSummaryCached(t *testing.T) {
+	s := openTest(t)
+	ctx := context.Background()
+	web := stackID(t, s, "web")
+	repo, err := s.SetRepository(ctx, web, "/repos/web", "pw", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t0 := time.Date(2026, 11, 18, 3, 0, 0, 0, time.UTC)
+	sum := &restic.SnapshotSummary{BackupStart: t0, BackupEnd: t0.Add(42 * time.Second), DataAddedPacked: 1234,
+		TotalBytesProcessed: 5 << 20, TotalFilesProcessed: 7}
+	if err := s.ReplaceSnapshots(ctx, repo, []restic.Snapshot{
+		{ID: "aaaaaaaa1", ShortID: "aaaaaaaa", Time: t0, Hostname: "h", Paths: []string{"/s/web"}, Summary: sum},
+		{ID: "bbbbbbbb1", ShortID: "bbbbbbbb", Time: t0.Add(-time.Hour), Hostname: "h", Paths: []string{"/s/web"}},
+	}, t0); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.StackSnapshots(ctx, repo, "web", "h")
+	if err != nil || len(got) != 2 {
+		t.Fatalf("snapshots %+v, %v", got, err)
+	}
+	if got[0].Summary == nil || *got[0].Summary != *sum || got[0].Summary.Duration() != 42*time.Second {
+		t.Fatalf("summary %+v", got[0].Summary)
+	}
+	if got[1].Summary != nil {
+		t.Fatalf("snapshot without summary got %+v", got[1].Summary)
+	}
+}

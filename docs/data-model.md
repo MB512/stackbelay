@@ -46,6 +46,8 @@ CREATE TABLE snapshots (
   paths        TEXT NOT NULL,               -- JSON array, paths[0] = stack dir on source
   tags         TEXT NOT NULL DEFAULT '[]',  -- JSON array (pre-stop, final, ...)
   missing      INTEGER NOT NULL DEFAULT 0,  -- 1 = no longer in repo at last refresh
+  summary      TEXT,                        -- migration 0013: restic's backup summary (JSON: backup_start/end,
+                                            -- data_added_packed, total_bytes/files_processed); NULL before restic 0.17
   PRIMARY KEY (repo_id, snapshot_id)
 );
 

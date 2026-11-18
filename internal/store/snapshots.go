@@ -49,13 +49,21 @@ func (s *Store) ReplaceSnapshots(ctx context.Context, repoID int64, snaps []rest
 			if err != nil {
 				return err
 			}
+			var summary sql.NullString
+			if sn.Summary != nil {
+				b, err := json.Marshal(sn.Summary)
+				if err != nil {
+					return err
+				}
+				summary = sql.NullString{String: string(b), Valid: true}
+			}
 			if _, err := tx.ExecContext(ctx,
-				`INSERT INTO snapshots (repo_id, snapshot_id, short_id, time, hostname, paths, tags, missing)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+				`INSERT INTO snapshots (repo_id, snapshot_id, short_id, time, hostname, paths, tags, summary, missing)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
 				 ON CONFLICT (repo_id, snapshot_id) DO UPDATE SET
 				   short_id = excluded.short_id, time = excluded.time, hostname = excluded.hostname,
-				   paths = excluded.paths, tags = excluded.tags, missing = 0`,
-				repoID, sn.ID, sn.ShortID, formatTime(sn.Time), sn.Hostname, string(paths), string(tags)); err != nil {
+				   paths = excluded.paths, tags = excluded.tags, summary = excluded.summary, missing = 0`,
+				repoID, sn.ID, sn.ShortID, formatTime(sn.Time), sn.Hostname, string(paths), string(tags), summary); err != nil {
 				return err
 			}
 		}
@@ -110,7 +118,7 @@ func (s *Store) StackSnapshotHosts(ctx context.Context, repoID int64, stack stri
 	return hosts, rows.Err()
 }
 
-const snapshotColumns = `snapshot_id, short_id, time, hostname, paths, tags, missing`
+const snapshotColumns = `snapshot_id, short_id, time, hostname, paths, tags, summary, missing`
 
 func (s *Store) querySnapshots(ctx context.Context, query string, args ...any) ([]CachedSnapshot, error) {
 	rows, err := s.db.QueryContext(ctx, query, args...)
@@ -122,7 +130,8 @@ func (s *Store) querySnapshots(ctx context.Context, query string, args ...any) (
 	for rows.Next() {
 		var cs CachedSnapshot
 		var ts, paths, tags string
-		if err := rows.Scan(&cs.ID, &cs.ShortID, &ts, &cs.Hostname, &paths, &tags, &cs.Missing); err != nil {
+		var summary sql.NullString
+		if err := rows.Scan(&cs.ID, &cs.ShortID, &ts, &cs.Hostname, &paths, &tags, &summary, &cs.Missing); err != nil {
 			return nil, fmt.Errorf("listing snapshots: %w", err)
 		}
 		if cs.Time, err = parseTime(ts); err != nil {
@@ -133,6 +142,12 @@ func (s *Store) querySnapshots(ctx context.Context, query string, args ...any) (
 		}
 		if err := json.Unmarshal([]byte(tags), &cs.Tags); err != nil {
 			return nil, fmt.Errorf("decoding snapshot tags: %w", err)
+		}
+		if summary.Valid {
+			cs.Summary = &restic.SnapshotSummary{}
+			if err := json.Unmarshal([]byte(summary.String), cs.Summary); err != nil {
+				return nil, fmt.Errorf("decoding snapshot summary: %w", err)
+			}
 		}
 		out = append(out, cs)
 	}

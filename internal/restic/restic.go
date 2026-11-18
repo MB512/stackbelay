@@ -43,6 +43,30 @@ type Snapshot struct {
 	Paths    []string  `json:"paths"`
 	Tags     []string  `json:"tags"`
 	Parent   string    `json:"parent"`
+	// Summary is recorded by restic >= 0.17 when the snapshot is created;
+	// nil for older snapshots.
+	Summary *SnapshotSummary `json:"summary,omitempty"`
+}
+
+// SnapshotSummary is the backup summary restic stores in a snapshot.
+type SnapshotSummary struct {
+	BackupStart time.Time `json:"backup_start"`
+	BackupEnd   time.Time `json:"backup_end"`
+	// DataAddedPacked is what the snapshot added to the repository, after
+	// deduplication and compression: not the size of the backed-up data.
+	DataAddedPacked     uint64 `json:"data_added_packed"`
+	TotalFilesProcessed uint64 `json:"total_files_processed"`
+	// TotalBytesProcessed is the size of the backed-up data (the stack
+	// directory at backup time).
+	TotalBytesProcessed uint64 `json:"total_bytes_processed"`
+}
+
+// Duration is how long the backup took; 0 if unknown.
+func (s *SnapshotSummary) Duration() time.Duration {
+	if s == nil || s.BackupStart.IsZero() || s.BackupEnd.Before(s.BackupStart) {
+		return 0
+	}
+	return s.BackupEnd.Sub(s.BackupStart)
 }
 
 // Node is one file or directory entry inside a snapshot ("restic ls --json").

@@ -47,6 +47,28 @@ func TestParseSnapshots(t *testing.T) {
 	}
 }
 
+// restic >= 0.17 stores a summary in every snapshot (shape from 0.18).
+func TestParseSnapshotSummary(t *testing.T) {
+	in := `[{"time":"2026-11-12T20:15:00Z","paths":["/s/web"],"hostname":"h","id":"0123456789abcdef","short_id":"01234567",
+	  "program_version":"restic 0.18.1","summary":{"backup_start":"2026-11-12T20:15:00.5Z","backup_end":"2026-11-12T20:16:30.5Z",
+	  "files_new":3,"files_changed":0,"files_unmodified":10,"dirs_new":1,"dirs_changed":0,"dirs_unmodified":2,
+	  "data_blobs":3,"tree_blobs":2,"data_added":4096,"data_added_packed":2048,"total_files_processed":13,
+	  "total_bytes_processed":330301440}},
+	 {"time":"2024-01-01T00:00:00Z","paths":["/s/web"],"hostname":"h","id":"1111111111111111","short_id":"11111111"}]`
+	snaps, err := parseSnapshots([]byte(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := snaps[0].Summary
+	if sum == nil || sum.DataAddedPacked != 2048 || sum.TotalBytesProcessed != 330301440 || sum.TotalFilesProcessed != 13 ||
+		sum.Duration() != 90*time.Second {
+		t.Fatalf("summary %+v (duration %s)", sum, sum.Duration())
+	}
+	if snaps[1].Summary != nil || snaps[1].Summary.Duration() != 0 {
+		t.Fatal("snapshot without summary")
+	}
+}
+
 func TestRedact(t *testing.T) {
 	repo := Repo{Env: []string{"RESTIC_PASSWORD=s3cret-pw", "RESTIC_REST_PASSWORD=ab", "EMPTY=",
 		"RESTIC_REST_USERNAME=demo", "AWS_SECRET_ACCESS_KEY=aws-secret-key", "AWS_ACCESS_KEY_ID=AKIDEXAMPLE"}}
