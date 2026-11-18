@@ -88,6 +88,28 @@ func (s *Store) StackSnapshots(ctx context.Context, repoID int64, stack, host st
 		 ORDER BY time DESC, snapshot_id`, repoID, "/"+stack, host)
 }
 
+// StackSnapshotHosts returns the hosts that have cached snapshots of the
+// stack in the repository, sorted.
+func (s *Store) StackSnapshotHosts(ctx context.Context, repoID int64, stack string) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT hostname FROM snapshots
+		 WHERE repo_id = ?1 AND json_array_length(paths) = 1
+		   AND substr(json_extract(paths, '$[0]'), -length(?2)) = ?2
+		 ORDER BY hostname`, repoID, "/"+stack)
+	if err != nil {
+		return nil, fmt.Errorf("listing snapshot hosts: %w", err)
+	}
+	defer rows.Close()
+	var hosts []string
+	for rows.Next() {
+		var h string
+		if err := rows.Scan(&h); err != nil {
+			return nil, fmt.Errorf("listing snapshot hosts: %w", err)
+		}
+		hosts = append(hosts, h)
+	}
+	return hosts, rows.Err()
+}
+
 const snapshotColumns = `snapshot_id, short_id, time, hostname, paths, tags, missing`
 
 func (s *Store) querySnapshots(ctx context.Context, query string, args ...any) ([]CachedSnapshot, error) {

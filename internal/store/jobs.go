@@ -26,6 +26,16 @@ type JobOptions struct {
 	NoStart            bool   `json:"no_start,omitempty"`             // restore
 	PinImages          bool   `json:"pin_images,omitempty"`           // restore: image versions from metadata.txt
 	InPlace            bool   `json:"in_place,omitempty"`             // restore: over the stack directory, no swap
+	// Import (restore): the stack directory does not exist yet (a stack
+	// imported from another host); restore into a new directory, nothing
+	// to stop or to protect.
+	Import bool `json:"import,omitempty"`
+	// LimitDownloadKiB (restore): restic --limit-download, KiB/s; 0 = none.
+	LimitDownloadKiB int `json:"limit_download_kib,omitempty"`
+	// Background: the job does not count against STACKVAULT_MAX_JOBS (a
+	// restore into a stack that was not running when it was queued: it
+	// stops nothing). The per-stack lock still applies.
+	Background bool `json:"background,omitempty"`
 	// NoBackup (update): the user confirmed updating a stack without
 	// repository, i.e. without backup and without rollback. It only takes
 	// effect if the stack still has no repository when the job starts.
@@ -356,8 +366,8 @@ func (s *Store) queryJobs(ctx context.Context, query string, args ...any) ([]Job
 }
 
 // ClaimNextJob marks the oldest queued job that may start as running and
-// returns it. ok is false if there is nothing to start or maxRunning jobs
-// are already running.
+// returns it. ok is false if there is nothing to start. Jobs with
+// Options.Background neither count against maxRunning nor wait for it.
 //
 // A stack job may start when its stack has no running job, no host job
 // runs and no host job was queued before it (so a host job is not starved
@@ -368,21 +378,21 @@ func (s *Store) ClaimNextJob(ctx context.Context, maxRunning int, now time.Time)
 	var id string
 	err = s.inTx(ctx, func(tx *sql.Tx) error {
 		var running int
-		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM jobs WHERE state = ?`, jobs.StateRunning).Scan(&running); err != nil {
+		if err := tx.QueryRowContext(ctx,
+			`SELECT COUNT(*) FROM jobs WHERE state = ? AND NOT COALESCE(json_extract(options, '$.background'), 0)`,
+			jobs.StateRunning).Scan(&running); err != nil {
 			return err
-		}
-		if running >= maxRunning {
-			return nil
 		}
 		err := tx.QueryRowContext(ctx,
 			`SELECT q.id FROM jobs q
-			 WHERE q.state = :queued AND (
+			 WHERE q.state = :queued AND (:free OR COALESCE(json_extract(q.options, '$.background'), 0)) AND (
 			   (q.stack_id IS NULL AND NOT EXISTS (SELECT 1 FROM jobs r WHERE r.state = :running))
 			   OR (q.stack_id IS NOT NULL
 			       AND NOT EXISTS (SELECT 1 FROM jobs r WHERE r.state = :running AND (r.stack_id = q.stack_id OR r.stack_id IS NULL))
 			       AND NOT EXISTS (SELECT 1 FROM jobs h WHERE h.state = :queued AND h.stack_id IS NULL AND h.id < q.id)))
 			 ORDER BY q.id LIMIT 1`,
-			sql.Named("queued", jobs.StateQueued), sql.Named("running", jobs.StateRunning)).Scan(&id)
+			sql.Named("queued", jobs.StateQueued), sql.Named("running", jobs.StateRunning),
+			sql.Named("free", running < maxRunning)).Scan(&id)
 		if errors.Is(err, sql.ErrNoRows) {
 			id = ""
 			return nil
@@ -446,7 +456,8 @@ type QueueState struct {
 	Blocking *Job
 	// Ahead counts the jobs of all stacks queued before this one.
 	Ahead int
-	// Running counts the jobs running now (all stacks).
+	// Running counts the jobs running now that count against the limit
+	// (all stacks, without background jobs).
 	Running int
 }
 
@@ -454,7 +465,8 @@ type QueueState struct {
 func (s *Store) QueueState(ctx context.Context, j Job) (QueueState, error) {
 	var qs QueueState
 	if err := s.db.QueryRowContext(ctx,
-		`SELECT (SELECT COUNT(*) FROM jobs WHERE state = ? AND id < ?), (SELECT COUNT(*) FROM jobs WHERE state = ?)`,
+		`SELECT (SELECT COUNT(*) FROM jobs WHERE state = ? AND id < ?),
+		        (SELECT COUNT(*) FROM jobs WHERE state = ? AND NOT COALESCE(json_extract(options, '$.background'), 0))`,
 		jobs.StateQueued, j.ID, jobs.StateRunning).Scan(&qs.Ahead, &qs.Running); err != nil {
 		return qs, fmt.Errorf("queue state of job %s: %w", j.ID, err)
 	}

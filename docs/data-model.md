@@ -25,7 +25,8 @@ CREATE TABLE stacks (
   id          INTEGER PRIMARY KEY,
   name        TEXT NOT NULL UNIQUE,         -- directory name under STACKS_ROOT
   enabled     INTEGER NOT NULL DEFAULT 1,
-  present     INTEGER NOT NULL DEFAULT 1    -- 0 = directory missing (vanished, or imported stack not restored yet)
+  present     INTEGER NOT NULL DEFAULT 1,   -- 0 = directory missing (vanished, or imported stack not restored yet)
+  source_host TEXT NOT NULL DEFAULT ''      -- migration 0012: whose snapshots it lists/restores; '' = this host
 );
 
 CREATE TABLE repositories (
@@ -167,6 +168,14 @@ CREATE TABLE audit_log (
   allows at most one `running` job per stack, enforced by SQLite itself.
   `ClaimNextJob` starts the oldest queued job whose stack is free, up to a
   global limit of running jobs. A stack has at most one queued job per type.
+- Imported stacks (issue #1): `CreateImportedStack` adds a stack whose name
+  comes from a repository's snapshot paths (validated, no directory yet):
+  `present = 0`, `enabled = 0`, `source_host` = the host it is imported
+  from. Its first restore creates the directory and sets `present = 1`.
+- Background jobs: `options.background` (a restore into a stack that was
+  not running when it was queued) do not count against the limit of running
+  jobs and start even when it is reached; the per-stack lock and host jobs'
+  exclusivity still apply.
 - Host jobs (issue #19, only `cleanup`) have `stack_id` NULL and run alone:
   one starts only when no job runs, and no stack job starts while one runs
   or while one is queued before it (no starving). The partial unique index
