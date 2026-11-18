@@ -63,6 +63,7 @@
       <tr><th>Queued</th><td>{{when .Job.QueuedAt}}</td></tr>
       <tr><th>Started</th><td>{{if .Job.StartedAt.IsZero}}<span class="muted">waiting</span>{{else}}{{when .Job.StartedAt}}{{end}}</td></tr>
       <tr><th>Finished</th><td>{{if .Job.FinishedAt.IsZero}}<span class="muted">–</span>{{else}}{{when .Job.FinishedAt}}{{end}}</td></tr>
+      {{- with jobDuration .Job}}<tr><th>Duration</th><td>{{.}}</td></tr>{{end}}
       {{- with .Job.Options}}
       {{- if .SnapshotID}}<tr><th>Restoring</th><td><code>{{printf "%.8s" .SnapshotID}}</code>
         {{- if .SkipSafetySnapshot}}, without safety snapshot{{end}}{{if .NoStart}}, stack not started afterwards{{end}}{{if .PinImages}}, image versions pinned{{end}}{{if .InPlace}}, in place{{end}}</td></tr>{{end}}

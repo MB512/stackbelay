@@ -14,7 +14,7 @@
     <h2>Queue</h2>
     {{- if .Active}}
     <table>
-      <thead><tr><th>Stack</th><th>Job</th><th>State</th><th>By</th><th>Queued</th><th>Started</th></tr></thead>
+      <thead><tr><th>Stack</th><th>Job</th><th>State</th><th>By</th><th>Queued</th><th>Started</th><th>Duration</th></tr></thead>
       <tbody>
         {{- range .Active}}
         <tr>
@@ -24,6 +24,7 @@
           <td>{{if .Requester}}{{.Requester}}{{else}}<span class="muted">{{.Trigger}}</span>{{end}}</td>
           <td>{{when .QueuedAt}}</td>
           <td>{{if .StartedAt.IsZero}}<span class="muted">waiting</span>{{else}}{{when .StartedAt}}{{end}}</td>
+          <td>{{with jobDuration .}}{{.}}{{else}}<span class="muted">–</span>{{end}}</td>
         </tr>
         {{- end}}
       </tbody>
@@ -36,7 +37,7 @@
     <h2>Recent jobs</h2>
     {{- if .Recent}}
     <table>
-      <thead><tr><th>Queued</th><th>Stack</th><th>Job</th><th>State</th><th>By</th><th>Finished</th></tr></thead>
+      <thead><tr><th>Queued</th><th>Stack</th><th>Job</th><th>State</th><th>By</th><th>Finished</th><th>Duration</th></tr></thead>
       <tbody>
         {{- range .Recent}}
         <tr>
@@ -46,6 +47,7 @@
           <td>{{template "job-state" .State}}</td>
           <td>{{if .Requester}}{{.Requester}}{{else}}<span class="muted">{{.Trigger}}</span>{{end}}</td>
           <td>{{if .FinishedAt.IsZero}}<span class="muted">—</span>{{else}}{{when .FinishedAt}}{{end}}</td>
+          <td>{{with jobDuration .}}{{.}}{{else}}<span class="muted">–</span>{{end}}</td>
         </tr>
         {{- end}}
       </tbody>

@@ -719,6 +719,9 @@ the backup summary restic >= 0.17 records in every snapshot).
   (`total_bytes_processed`, files) is the tooltip. Above the list:
   "Stack size at the last backup" from the newest snapshot with a
   summary. Snapshots without summary (restic < 0.17) show "–".
+- Job durations (`finished_at - started_at`, "running for …" while a job
+  runs) in the job lists (Status tab, admin Jobs and Host tabs) and on the
+  job page; no schema change.
 
 ## Web UI
 

@@ -53,6 +53,9 @@ func (s *Server) templateFuncs() template.FuncMap {
 		"seconds": formatSeconds,
 		// duration formats a time.Duration, e.g. "1 min 30 s".
 		"duration": formatDuration,
+		// jobDuration is how long a job ran ("running for …" while it runs,
+		// "" if it never started).
+		"jobDuration": func(j store.Job) string { return jobDuration(j, s.now()) },
 	}
 }
 
@@ -184,6 +187,19 @@ func formatBytes(n uint64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %ciB", float64(n)/float64(div), "KMGTPE"[exp])
+}
+
+// jobDuration describes how long j ran: finished - started, "running for
+// …" while it runs, "" if it never started (queued, or cancelled while
+// queued).
+func jobDuration(j store.Job, now time.Time) string {
+	switch {
+	case j.StartedAt.IsZero():
+		return ""
+	case j.FinishedAt.IsZero():
+		return "running for " + formatDuration(now.Sub(j.StartedAt))
+	}
+	return formatDuration(j.FinishedAt.Sub(j.StartedAt))
 }
 
 // formatDuration shows a duration to the second below an hour: "45 s",

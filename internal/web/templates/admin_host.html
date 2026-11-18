@@ -77,12 +77,13 @@
   <h2>Recent cleanups</h2>
   {{- if .Jobs}}
   <table>
-    <thead><tr><th>Queued</th><th>State</th><th>By</th><th>Removed</th></tr></thead>
+    <thead><tr><th>Queued</th><th>State</th><th>Duration</th><th>By</th><th>Removed</th></tr></thead>
     <tbody>
       {{- range .Jobs}}
       <tr>
         <td><a href="/jobs/{{.ID}}">{{when .QueuedAt}}</a></td>
         <td>{{template "job-state" .State}}</td>
+        <td>{{with jobDuration .}}{{.}}{{else}}<span class="muted">–</span>{{end}}</td>
         <td>{{if .Requester}}{{.Requester}}{{else}}<span class="muted">{{.Trigger}}</span>{{end}}</td>
         <td>{{if .State.Final}}{{template "cleanup-result" .Result}}{{else}}<span class="muted">–</span>{{end}}</td>
       </tr>

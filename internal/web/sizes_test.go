@@ -6,7 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/MB512/stackvault/internal/jobs"
 	"github.com/MB512/stackvault/internal/restic"
+	"github.com/MB512/stackvault/internal/store"
 )
 
 func TestFormatDuration(t *testing.T) {
@@ -55,5 +57,45 @@ func TestSnapshotSizes(t *testing.T) {
 	}
 	if t.Failed() {
 		t.Log(r.body)
+	}
+}
+
+func TestJobDuration(t *testing.T) {
+	t0 := time.Date(2026, 11, 18, 10, 0, 0, 0, time.UTC)
+	for _, tc := range []struct {
+		j    store.Job
+		want string
+	}{
+		{store.Job{QueuedAt: t0}, ""},
+		{store.Job{QueuedAt: t0, StartedAt: t0, FinishedAt: t0.Add(75 * time.Second)}, "1 min 15 s"},
+		{store.Job{QueuedAt: t0, StartedAt: t0.Add(-5 * time.Minute)}, "running for 5 min"},
+	} {
+		if got := jobDuration(tc.j, t0); got != tc.want {
+			t.Errorf("jobDuration(%+v) = %q, want %q", tc.j, got, tc.want)
+		}
+	}
+}
+
+// Job lists and the job page show how long a job ran.
+func TestJobDurationsShown(t *testing.T) {
+	e := newEnv(t, true, true)
+	webID, _ := e.setupStacks()
+	ctx := context.Background()
+	t0 := e.clock()
+	if err := e.st.CreateJob(ctx, store.Job{ID: "01AAAAAAAAAAAAAAAAAAAAAAA1", StackID: webID, Type: jobs.TypeStop,
+		Trigger: store.TriggerManual, QueuedAt: t0.Add(-time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, err := e.st.ClaimNextJob(ctx, 1, t0.Add(-time.Hour)); err != nil || !ok {
+		t.Fatal(err)
+	}
+	if err := e.st.FinishJob(ctx, "01AAAAAAAAAAAAAAAAAAAAAAA1", jobs.StateSucceeded, "", "", store.JobResult{}, t0.Add(-time.Hour+42*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	e.loginAdmin()
+	for _, path := range []string{"/stacks/web", "/admin/jobs", "/jobs/01AAAAAAAAAAAAAAAAAAAAAAA1"} {
+		if r := e.get(path); !strings.Contains(r.body, "42 s") {
+			t.Errorf("%s does not show the duration:\n%s", path, r.body)
+		}
 	}
 }
