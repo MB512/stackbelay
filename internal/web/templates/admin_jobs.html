@@ -1,0 +1,58 @@
+{{define "content"}}
+<h1>Administration</h1>
+{{template "admin-tabs" "jobs"}}
+{{template "admin-jobs-live" .Data}}
+{{end}}
+
+{{- /* Queue and recent jobs of all stacks, refreshed every 5 s (HTMX
+       replaces the whole element). The poll header keeps these requests
+       from extending the session. Dot is an adminJobsLive. */}}
+{{define "admin-jobs-live"}}
+<div id="admin-jobs-live" hx-get="/admin/jobs/live" hx-trigger="every 5s"
+     hx-swap="outerHTML" hx-headers='{"X-Stackvault-Poll": "1"}'>
+  <section>
+    <h2>Queue</h2>
+    {{- if .Active}}
+    <table>
+      <thead><tr><th>Stack</th><th>Job</th><th>State</th><th>By</th><th>Queued</th><th>Started</th></tr></thead>
+      <tbody>
+        {{- range .Active}}
+        <tr>
+          <td><a href="/stacks/{{.StackName}}">{{.StackName}}</a></td>
+          <td><a href="/jobs/{{.ID}}">{{.Type}}</a></td>
+          <td>{{template "job-state" .State}}</td>
+          <td>{{if .Requester}}{{.Requester}}{{else}}<span class="muted">{{.Trigger}}</span>{{end}}</td>
+          <td>{{when .QueuedAt}}</td>
+          <td>{{if .StartedAt.IsZero}}<span class="muted">waiting</span>{{else}}{{when .StartedAt}}{{end}}</td>
+        </tr>
+        {{- end}}
+      </tbody>
+    </table>
+    {{- else}}
+    <p class="hint">No job is running or queued.</p>
+    {{- end}}
+  </section>
+  <section>
+    <h2>Recent jobs</h2>
+    {{- if .Recent}}
+    <table>
+      <thead><tr><th>Queued</th><th>Stack</th><th>Job</th><th>State</th><th>By</th><th>Finished</th></tr></thead>
+      <tbody>
+        {{- range .Recent}}
+        <tr>
+          <td><a href="/jobs/{{.ID}}">{{when .QueuedAt}}</a></td>
+          <td><a href="/stacks/{{.StackName}}">{{.StackName}}</a></td>
+          <td>{{.Type}}</td>
+          <td>{{template "job-state" .State}}</td>
+          <td>{{if .Requester}}{{.Requester}}{{else}}<span class="muted">{{.Trigger}}</span>{{end}}</td>
+          <td>{{if .FinishedAt.IsZero}}<span class="muted">—</span>{{else}}{{when .FinishedAt}}{{end}}</td>
+        </tr>
+        {{- end}}
+      </tbody>
+    </table>
+    {{- else}}
+    <p class="hint">No jobs yet.</p>
+    {{- end}}
+  </section>
+</div>
+{{- end}}

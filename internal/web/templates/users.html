@@ -1,5 +1,6 @@
 {{define "content"}}
-<h1>Users</h1>
+<h1>Administration</h1>
+{{template "admin-tabs" "users"}}
 {{- with .Data}}
 {{- if .NewPassword}}
 <div class="card wide" role="status">

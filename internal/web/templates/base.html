@@ -24,7 +24,7 @@
     <nav>
       <a href="/">Stacks</a>
       {{- if .IsAdmin}}
-      <a href="/admin/users">Users</a>
+      <a href="/admin/users">Admin</a>
       {{- end}}
       <a href="/account/password" title="Signed in as {{.Username}}">Profile</a>
       <form method="post" action="/logout">

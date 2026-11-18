@@ -701,6 +701,8 @@ with a light and a dark set; the job log is a dark panel in both modes.
 | `GET/POST /admin/users` | admin | list users, create a user with a generated one-time password |
 | `POST /admin/users/{id}` | admin | set admin/disabled flags (not on one's own account) |
 | `POST /admin/users/{id}/password` | admin | generate a new password (must be changed, sessions end) |
+| `GET /admin/jobs` | admin | "Jobs" admin tab: running and queued jobs of all stacks, recent jobs |
+| `GET /admin/jobs/live` | admin | HTMX fragment of the Jobs admin tab, polled every 5 s |
 
 Repository form: the location may be a `rest:` URL with `user:password`,
 which is split off into `RESTIC_REST_USERNAME`/`RESTIC_REST_PASSWORD`.
@@ -782,6 +784,16 @@ These polls carry the header `X-Stackvault-Poll` and do **not** extend the
 session (`loadSession`): an open tab alone does not keep a login alive. An
 HTMX request without a valid session gets `401` with `HX-Redirect: /login`,
 so HTMX loads the login page instead of swapping it into the fragment.
+
+### Admin pages
+
+The header shows admins an "Admin" link to pages outside the stacks, with
+their own tabs (`admin-tabs` in `partials.html`): "Users" (`/admin/users`)
+and "Jobs" (`/admin/jobs`). The Jobs tab lists the running and queued jobs
+of all stacks (running first, each oldest first) and the 50 newest jobs;
+like the Status tab it is one fragment that HTMX reloads every 5 seconds
+(`GET /admin/jobs/live`, with `X-Stackvault-Poll`). The account link in the
+header reads "Profile" (the username is its tooltip).
 
 Stacks a user may not view answer 404 (not 403), so stack names are not
 revealed. `{name}` must pass `stacks.ValidName` and exist in the database

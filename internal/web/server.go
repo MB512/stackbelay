@@ -199,6 +199,8 @@ func (s *Server) Handler() (http.Handler, error) {
 				r.Post("/stacks/{name}/schedules/{id}/enabled", s.setScheduleEnabled)
 				r.Post("/stacks/{name}/schedules/{id}/delete", s.deleteSchedule)
 				r.Get("/admin/users", s.userList)
+				r.Get("/admin/jobs", s.adminJobs)
+				r.Get("/admin/jobs/live", s.adminJobsLiveFragment)
 				r.Post("/admin/users", s.createUser)
 				r.Post("/admin/users/{id}", s.updateUser)
 				r.Post("/admin/users/{id}/password", s.resetPassword)

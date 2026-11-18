@@ -20,6 +20,14 @@
 </nav>
 {{end}}
 
+{{- /* Tabs of the admin pages. Dot is the active tab: "users", "jobs". */}}
+{{define "admin-tabs"}}
+<nav class="tabs" aria-label="Administration sections">
+  <a href="/admin/users"{{if eq . "users"}} aria-current="page"{{end}}>Users</a>
+  <a href="/admin/jobs"{{if eq . "jobs"}} aria-current="page"{{end}}>Jobs</a>
+</nav>
+{{end}}
+
 {{- /* Newest job of a type with a link, its state and, as tooltip, the
        last success. Dot is a lastJob. */}}
 {{define "last-job"}}

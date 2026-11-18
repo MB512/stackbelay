@@ -287,6 +287,13 @@ func (s *Store) lastSucceeded(ctx context.Context, typ jobs.Type, imagesChanged 
 	return out, rows.Err()
 }
 
+// ActiveJobs returns the running jobs of all stacks, then the queued ones,
+// each oldest first.
+func (s *Store) ActiveJobs(ctx context.Context) ([]Job, error) {
+	return s.queryJobs(ctx, `SELECT `+jobColumns+jobFrom+`WHERE j.state IN (?, ?) ORDER BY j.state = ? DESC, j.id`,
+		jobs.StateRunning, jobs.StateQueued, jobs.StateRunning)
+}
+
 // JobsInState returns all jobs in a state, oldest first.
 func (s *Store) JobsInState(ctx context.Context, state jobs.State) ([]Job, error) {
 	return s.queryJobs(ctx, `SELECT `+jobColumns+jobFrom+`WHERE j.state = ? ORDER BY j.id`, state)
