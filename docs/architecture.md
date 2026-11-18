@@ -1064,6 +1064,9 @@ runs. A schedule has a job type (Settings tab, admins):
   stack has a repository when the job starts, it is backed up as usual (see
   "Update pipeline"). An update schedule without that confirmation (e.g.
   created while the stack had a repository that was removed later) fails.
+- **cleanup**, a host schedule (no stack, admin "Host" tab, no options):
+  queues a host cleanup (see "Host cleanup"); disabled stacks do not
+  matter.
 
 "Roll back in place" applies to updates only: the form disables it while
 "Backup" is selected (`static/forms.js`, `data-enable-when="job_type=update"`),

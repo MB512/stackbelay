@@ -177,6 +177,24 @@ func TestFire(t *testing.T) {
 		}
 	})
 
+	t.Run("queues a host cleanup, even with every stack disabled", func(t *testing.T) {
+		e := newEnv(t)
+		for _, st := range []store.Stack{e.web, e.db} {
+			if err := e.st.SetStackEnabled(ctx, st.ID, false); err != nil {
+				t.Fatal(err)
+			}
+		}
+		e.s.Fire(ctx, e.scheduleOf(t, store.Schedule{CronExpr: "@weekly", Type: jobs.TypeCleanup}))
+		got := e.queue.submitted()
+		if len(got) != 1 || got[0].StackID != 0 || got[0].Type != jobs.TypeCleanup || got[0].Trigger != store.TriggerSchedule {
+			t.Fatalf("submitted %+v", got)
+		}
+		audit, _ := e.st.ListAudit(ctx, 10)
+		if len(audit) != 1 || audit[0].StackID != 0 || !strings.Contains(audit[0].Detail, "scheduled cleanup") {
+			t.Errorf("audit = %+v", audit)
+		}
+	})
+
 	t.Run("queues a confirmed update without backup", func(t *testing.T) {
 		e := newEnv(t)
 		e.s.Fire(ctx, e.scheduleOf(t, store.Schedule{StackID: e.db.ID, CronExpr: "@daily", Type: jobs.TypeUpdate, NoBackup: true}))

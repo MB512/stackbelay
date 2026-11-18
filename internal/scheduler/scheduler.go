@@ -143,9 +143,9 @@ func (s *Scheduler) Reload(ctx context.Context) error {
 	return nil
 }
 
-// Fire queues the job of one schedule: a backup, or an update. It
-// re-reads the schedule and its stack, so a schedule or stack disabled in
-// the meantime is skipped. A job of the same type that is already queued
+// Fire queues the job of one schedule: a backup, an update, or (host
+// schedule) a cleanup. It re-reads the schedule and its stack, so a
+// schedule or stack disabled in the meantime is skipped. A job of the same type that is already queued
 // for the stack is not queued twice. Problems are logged; the queued job
 // itself reports its result.
 //
@@ -165,20 +165,24 @@ func (s *Scheduler) Fire(ctx context.Context, scheduleID int64) {
 	if !sc.Enabled {
 		return // disabled since the last reload
 	}
-	what := "scheduled " + string(sc.Type) // "scheduled backup", "scheduled update"
+	what := "scheduled " + string(sc.Type) // "scheduled backup", "scheduled update", "scheduled cleanup"
 	log = log.With("stack", sc.StackName, "type", sc.Type)
-	st, err := s.Store.StackByName(ctx, sc.StackName)
-	if err != nil {
-		log.Error(what+": loading stack", "error", err)
-		return
-	}
-	if !st.Enabled {
-		log.Info(what + " skipped: the stack is disabled")
-		return
+	var st store.Stack // zero for a host schedule
+	if !sc.Type.Host() {
+		if st, err = s.Store.StackByName(ctx, sc.StackName); err != nil {
+			log.Error(what+": loading stack", "error", err)
+			return
+		}
+		if !st.Enabled {
+			log.Info(what + " skipped: the stack is disabled")
+			return
+		}
 	}
 	job := store.Job{StackID: st.ID, Type: sc.Type, Trigger: store.TriggerSchedule}
 	var detail string
 	switch sc.Type {
+	case jobs.TypeCleanup:
+		detail = "host cleanup"
 	case jobs.TypeBackup:
 		job.Options = store.JobOptions{PreStop: sc.PreStop}
 		detail = fmt.Sprintf("pre-stop snapshot: %t", sc.PreStop)
@@ -199,7 +203,7 @@ func (s *Scheduler) Fire(ctx context.Context, scheduleID int64) {
 	}
 	j, err := s.Queue.Submit(ctx, job)
 	if errors.Is(err, store.ErrJobQueued) {
-		log.Warn(what + " skipped: a job of this type is already waiting to run for the stack")
+		log.Warn(what + " skipped: a job of this type is already waiting to run")
 		return
 	}
 	if err != nil {
