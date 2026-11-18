@@ -36,6 +36,11 @@ type Manager struct {
 	// (STACKVAULT_ENABLE_SHELL, default false). Off by default: a shell is
 	// free-form command execution.
 	EnableShell bool
+	// CleanupImageMinAge: the host cleanup keeps dangling images pulled,
+	// tagged or replaced by an update less than this long ago
+	// (STACKVAULT_CLEANUP_IMAGE_MIN_AGE, default 168h, whole hours up to
+	// ten years; 0 keeps none by age).
+	CleanupImageMinAge time.Duration
 	// TimeZone is the zone all times are shown in and schedules run in:
 	// TZ (e.g. "Europe/Berlin"), or the system's local zone if TZ is
 	// unset. Go reads TZ for time.Local too; loading it here gives the
@@ -68,6 +73,8 @@ func LoadManager(getenv func(string) string, readFile func(string) ([]byte, erro
 		WorkerImage: getenv("STACKVAULT_WORKER_IMAGE"),
 		SessionTTL:  12 * time.Hour,
 		MaxJobs:     1,
+
+		CleanupImageMinAge: 7 * 24 * time.Hour,
 	}
 	c.StacksRoot, errs = absPath(getenv, "STACKS_ROOT", "", errs)
 	c.DataDir, errs = absPath(getenv, "STACKVAULT_DATA_DIR", "/data", errs)
@@ -93,6 +100,14 @@ func LoadManager(getenv func(string) string, readFile func(string) ([]byte, erro
 			errs = append(errs, fmt.Errorf("STACKVAULT_MAX_JOBS: invalid value %q (1 to 32)", v))
 		} else {
 			c.MaxJobs = n
+		}
+	}
+	if v := getenv("STACKVAULT_CLEANUP_IMAGE_MIN_AGE"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d < 0 || d > 3650*24*time.Hour || d%time.Hour != 0 {
+			errs = append(errs, fmt.Errorf("STACKVAULT_CLEANUP_IMAGE_MIN_AGE: invalid duration %q (whole hours, e.g. 168h; 0 to 87600h)", v))
+		} else {
+			c.CleanupImageMinAge = d
 		}
 	}
 	if v := getenv("STACKVAULT_ENABLE_SHELL"); v != "" {

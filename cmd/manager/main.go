@@ -318,6 +318,6 @@ func newDispatcher(ctx context.Context, cfg config.Manager, st *store.Store, sna
 		"docker_socket", tpl.Socket, "max_jobs", cfg.MaxJobs)
 	return &dispatch.Dispatcher{
 		Store: st, Docker: cli, Template: tpl, JobsDir: cfg.JobsDir(), Snapshots: snaps,
-		Logger: log, MaxRunning: cfg.MaxJobs,
+		Logger: log, MaxRunning: cfg.MaxJobs, CleanupImageMinAge: cfg.CleanupImageMinAge,
 	}, nil
 }

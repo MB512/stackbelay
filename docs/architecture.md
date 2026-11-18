@@ -67,6 +67,7 @@ compose, so they are never affected by stopping a stack.
 | `STACKVAULT_ALLOW_INSECURE_HTTP` | accept logins over plain HTTP (testing without TLS proxy), default `false` |
 | `STACKVAULT_WORKER_IMAGE` | image for worker containers, default: the manager's own image |
 | `STACKVAULT_MAX_JOBS` | jobs running at the same time across all stacks, default `1` |
+| `STACKVAULT_CLEANUP_IMAGE_MIN_AGE` | host cleanup: keep dangling images pulled, tagged or replaced by an update less than this long ago, whole hours, default `168h`; see "Host cleanup" |
 | `STACKVAULT_ENABLE_SHELL` | admin-only container shells ("Shell" per container on the Status tab), default `false`; see "Container shell" |
 | `STACKVAULT_LOG_LEVEL` | `debug`, `info`, `warn`, `error` |
 | `TZ` | time zone of the cron schedules and of every time the UI shows (e.g. `Europe/Berlin`), default UTC in most images; the zone database is built into the binary; an unknown zone is a configuration error (Go would silently use UTC) |
@@ -175,8 +176,9 @@ A loop in the manager (every 2 s, and immediately when a job is queued):
 2. Claim queued jobs (oldest first, stack not locked, at most
    `STACKVAULT_MAX_JOBS` running in total), write `spec.json`, start the
    worker container. Start errors (no repository, `docker run` failed) fail
-   the job and release the lock. Stop, start and restart jobs get no
-   repository credentials at all.
+   the job and release the lock. Stop, start, restart and host cleanup
+   jobs get no repository credentials at all. For a cleanup the spec gets
+   the minimum image age and the images to keep (see "Host cleanup").
 
 All state is in the DB and the job directories, so a manager that was
 stopped by its own backup continues where it left off: running jobs are
@@ -1030,6 +1032,11 @@ job recomputes them itself.
    Others are removed with `docker image rm -- <id>` (no `--force`).
    A rollback or pinned restore that needs a removed version pulls it again
    by digest (`EnsureImage`).
+
+   The minimum age is `STACKVAULT_CLEANUP_IMAGE_MIN_AGE`; when the job
+   starts, the dispatcher puts it into the spec together with the
+   `replaced_images` of the jobs finished within it (at most 500; beyond
+   that, images are protected only by their pull/tag time).
 
 A removal that fails is logged and the cleanup continues; the job then
 ends `failed`. The result records `removed_containers`, `removed_images`

@@ -21,7 +21,8 @@ func TestLoadManagerDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 	if c.DataDir != "/data" || c.ListenAddr != ":8080" || c.SessionTTL != 12*time.Hour ||
-		c.AllowInsecureHTTP || c.WorkerImage != "" || len(c.SecretKey) != 32 || c.MaxJobs != 1 || c.EnableShell {
+		c.AllowInsecureHTTP || c.WorkerImage != "" || len(c.SecretKey) != 32 || c.MaxJobs != 1 || c.EnableShell ||
+		c.CleanupImageMinAge != 168*time.Hour {
 		t.Fatalf("unexpected config %+v", c)
 	}
 	if c.DBPath() != "/data/stackvault.db" || c.JobsDir() != "/data/jobs" {
@@ -50,15 +51,16 @@ func TestLoadManagerKeyFile(t *testing.T) {
 		return nil, fs.ErrNotExist
 	}
 	c, err := LoadManager(lookup(map[string]string{
-		"STACKS_ROOT":                    "/home/docker",
-		"STACKVAULT_HOSTNAME":            "host-a",
-		"STACKVAULT_SECRET_KEY_FILE":     "/run/secrets/key",
-		"STACKVAULT_DATA_DIR":            "/srv/sv/",
-		"STACKVAULT_ALLOW_INSECURE_HTTP": "true",
-		"STACKVAULT_SESSION_TTL":         "30m",
-		"STACKVAULT_MAX_JOBS":            "3",
-		"STACKVAULT_ENABLE_SHELL":        "true",
-		"TZ":                             ":Europe/Berlin",
+		"STACKS_ROOT":                      "/home/docker",
+		"STACKVAULT_HOSTNAME":              "host-a",
+		"STACKVAULT_SECRET_KEY_FILE":       "/run/secrets/key",
+		"STACKVAULT_DATA_DIR":              "/srv/sv/",
+		"STACKVAULT_ALLOW_INSECURE_HTTP":   "true",
+		"STACKVAULT_SESSION_TTL":           "30m",
+		"STACKVAULT_MAX_JOBS":              "3",
+		"STACKVAULT_ENABLE_SHELL":          "true",
+		"STACKVAULT_CLEANUP_IMAGE_MIN_AGE": "48h",
+		"TZ":                               ":Europe/Berlin",
 	}), read)
 	if err != nil {
 		t.Fatal(err)
@@ -66,7 +68,8 @@ func TestLoadManagerKeyFile(t *testing.T) {
 	if c.TimeZone == nil || c.TimeZone.String() != "Europe/Berlin" {
 		t.Fatalf("time zone %v", c.TimeZone)
 	}
-	if len(c.SecretKey) != 32 || c.DataDir != "/srv/sv" || !c.AllowInsecureHTTP || c.SessionTTL != 30*time.Minute || c.MaxJobs != 3 || !c.EnableShell {
+	if len(c.SecretKey) != 32 || c.DataDir != "/srv/sv" || !c.AllowInsecureHTTP || c.SessionTTL != 30*time.Minute || c.MaxJobs != 3 || !c.EnableShell ||
+		c.CleanupImageMinAge != 48*time.Hour {
 		t.Fatalf("unexpected config %+v", c)
 	}
 }
@@ -85,6 +88,8 @@ func TestLoadManagerErrors(t *testing.T) {
 		{"bad bool", map[string]string{"STACKVAULT_ALLOW_INSECURE_HTTP": "maybe"}, []string{"STACKVAULT_ALLOW_INSECURE_HTTP"}},
 		{"bad ttl", map[string]string{"STACKVAULT_SESSION_TTL": "5s"}, []string{"STACKVAULT_SESSION_TTL"}},
 		{"bad max jobs", map[string]string{"STACKVAULT_MAX_JOBS": "0"}, []string{"STACKVAULT_MAX_JOBS"}},
+		{"bad cleanup age", map[string]string{"STACKVAULT_CLEANUP_IMAGE_MIN_AGE": "90m"}, []string{"STACKVAULT_CLEANUP_IMAGE_MIN_AGE"}},
+		{"negative cleanup age", map[string]string{"STACKVAULT_CLEANUP_IMAGE_MIN_AGE": "-1h"}, []string{"STACKVAULT_CLEANUP_IMAGE_MIN_AGE"}},
 		{"bad shell flag", map[string]string{"STACKVAULT_ENABLE_SHELL": "maybe"}, []string{"STACKVAULT_ENABLE_SHELL"}},
 		{"unknown time zone", map[string]string{"TZ": "Europe/Atlantis"}, []string{"TZ:"}},
 	}

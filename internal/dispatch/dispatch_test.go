@@ -685,3 +685,81 @@ func TestControlJobsGetNoRepository(t *testing.T) {
 		}
 	}
 }
+
+// A host cleanup runs alone, gets no repository, and keeps the images
+// updates replaced within the minimum age.
+func TestCleanupJob(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	e.d.MaxRunning = 10
+	e.d.CleanupImageMinAge = 72 * time.Hour
+	recent, old := "sha256:"+strings.Repeat("a", 64), "sha256:"+strings.Repeat("b", 64)
+
+	// Two finished updates: one replaced an image long ago, one recently
+	// (the clock advances a second per call, so "long ago" is set directly).
+	for _, tc := range []struct {
+		id    string
+		image string
+		at    time.Time
+	}{{"01AAAAAAAAAAAAAAAAAAAAAAA1", old, e.clock.Add(-10 * 24 * time.Hour)}, {"01AAAAAAAAAAAAAAAAAAAAAAA2", recent, e.clock}} {
+		if err := e.st.CreateJob(ctx, store.Job{ID: tc.id, StackID: e.web, Type: jobs.TypeUpdate, Trigger: store.TriggerManual,
+			QueuedAt: tc.at}); err != nil {
+			t.Fatal(err)
+		}
+		if err := e.st.FinishJob(ctx, tc.id, jobs.StateSucceeded, "", "", store.JobResult{ReplacedImages: []string{tc.image}}, tc.at); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	backup := e.submit("web", jobs.TypeBackup, store.JobOptions{})
+	cleanup, err := e.d.Submit(ctx, store.Job{Type: jobs.TypeCleanup, Trigger: store.TriggerSchedule})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.d.Step(ctx)
+	if e.job(backup.ID).State != jobs.StateRunning || e.job(cleanup.ID).State != jobs.StateQueued {
+		t.Fatal("the cleanup must wait for the running backup")
+	}
+	e.workerDone(backup.ID, jobs.Status{State: jobs.StateSucceeded, Snapshot: "snap"})
+	e.d.Step(ctx)
+	e.d.Step(ctx)
+	if got := e.job(cleanup.ID); got.State != jobs.StateRunning || got.StackID != 0 {
+		t.Fatalf("cleanup: %+v", got)
+	}
+	spec, err := jobs.ReadSpec(filepath.Join(e.jobsDir, cleanup.ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.Stack != "" || spec.ImageMinAgeHours != 72 || len(spec.KeepImages) != 1 || spec.KeepImages[0] != recent ||
+		spec.CarryOverJobs != "" || spec.Trigger != store.TriggerSchedule {
+		t.Fatalf("spec: %+v", spec)
+	}
+	for _, cs := range e.docker.started {
+		if cs.Name != ContainerName(cleanup.ID) {
+			continue
+		}
+		for k := range cs.Env {
+			if strings.HasPrefix(k, "RESTIC_") && k != "RESTIC_CACHE_DIR" {
+				t.Errorf("cleanup got %s", k)
+			}
+		}
+	}
+
+	e.workerDone(cleanup.ID, jobs.Status{State: jobs.StateSucceeded, RemovedImages: 3, RemovedContainers: 1, FreedBytes: 1 << 20})
+	e.d.Step(ctx)
+	got := e.job(cleanup.ID)
+	if got.State != jobs.StateSucceeded || got.Result.RemovedImages != 3 || got.Result.RemovedContainers != 1 || got.Result.FreedBytes != 1<<20 {
+		t.Fatalf("finished cleanup: %+v", got)
+	}
+
+	// A restarted manager that finds the job files of an unknown cleanup
+	// imports it as a host job.
+	id := "01AAAAAAAAAAAAAAAAAAAAAAA9"
+	started := e.clock
+	e.writeJobDir(jobs.Spec{ID: id, Type: jobs.TypeCleanup, ImageMinAgeHours: 1, Trigger: "manual"},
+		&jobs.Status{State: jobs.StateSucceeded, StartedAt: &started, FinishedAt: &started, RemovedImages: 2})
+	e.newDispatcher().Reconcile(ctx)
+	if imported := e.job(id); imported.StackID != 0 || imported.Type != jobs.TypeCleanup || imported.Result.RemovedImages != 2 {
+		t.Fatalf("imported: %+v", imported)
+	}
+}

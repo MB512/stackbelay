@@ -42,6 +42,9 @@ type Dispatcher struct {
 	Logger    *slog.Logger
 	// MaxRunning limits jobs running at the same time (across stacks).
 	MaxRunning int
+	// CleanupImageMinAge is the minimum age rule of host cleanups (see
+	// jobs.CleanupOptions); images replaced by updates within it are kept.
+	CleanupImageMinAge time.Duration
 	// PollInterval is how often running jobs are checked; default 2s.
 	PollInterval time.Duration
 	// Now returns the current time; defaults to time.Now.
@@ -202,10 +205,12 @@ func (d *Dispatcher) reconcileDir(ctx context.Context, id string, importing bool
 		log.Warn("reconciling jobs: skipping job directory", "error", err)
 		return
 	}
-	st, err := d.Store.StackByName(ctx, spec.Stack)
-	if err != nil {
-		log.Warn("reconciling jobs: skipping job of unknown stack", "stack", spec.Stack, "error", err)
-		return
+	var st store.Stack // zero for a host job
+	if !spec.Type.Host() {
+		if st, err = d.Store.StackByName(ctx, spec.Stack); err != nil {
+			log.Warn("reconciling jobs: skipping job of unknown stack", "stack", spec.Stack, "error", err)
+			return
+		}
 	}
 	queued, _ := jobs.IDTime(id)
 	j := store.Job{
@@ -298,7 +303,7 @@ func (d *Dispatcher) start(ctx context.Context, j store.Job) {
 	changes := j.Type == jobs.TypeUpdate || j.Type == jobs.TypeComposeApply
 	var resticRepo restic.Repo
 	noBackup := false
-	if !j.Type.Control() {
+	if !j.Type.Control() && !j.Type.Host() {
 		repo, err := d.Store.RepositoryForStack(ctx, j.StackID)
 		switch {
 		case err == nil:
@@ -339,6 +344,12 @@ func (d *Dispatcher) start(ctx context.Context, j store.Job) {
 			return
 		}
 	}
+	if j.Type == jobs.TypeCleanup {
+		if err := d.cleanupSpec(ctx, &spec, log); err != nil {
+			fail("preparing cleanup", err)
+			return
+		}
+	}
 	if j.Type == jobs.TypeRestore || (changes && !noBackup) {
 		// Restoring the manager's own stack (also as an update's
 		// rollback): keep the job files.
@@ -358,6 +369,30 @@ func (d *Dispatcher) start(ctx context.Context, j store.Job) {
 		return
 	}
 	log.Info("worker started", "container", cs.Name)
+}
+
+// cleanupSpec sets the rules of a host cleanup: the minimum age and the
+// images updates and compose applies replaced within it, which the
+// cleanup keeps (Docker records no "dangling since" time).
+func (d *Dispatcher) cleanupSpec(ctx context.Context, spec *jobs.Spec, log *slog.Logger) error {
+	spec.ImageMinAgeHours = int(d.CleanupImageMinAge / time.Hour)
+	replaced, err := d.Store.ReplacedImagesSince(ctx, d.now().Add(-d.CleanupImageMinAge))
+	if err != nil {
+		return err
+	}
+	for _, id := range replaced {
+		if !docker.ValidImageID(id) {
+			continue
+		}
+		if len(spec.KeepImages) == jobs.MaxKeepImages {
+			// More than a spec can carry: the rest is protected only by
+			// its pull/tag time.
+			log.Warn("too many recently replaced images to keep by id", "kept", jobs.MaxKeepImages, "total", len(replaced))
+			break
+		}
+		spec.KeepImages = append(spec.KeepImages, id)
+	}
+	return nil
 }
 
 // check looks at a running job: a final status.json finishes it; a worker
