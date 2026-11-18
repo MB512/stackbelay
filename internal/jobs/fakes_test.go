@@ -48,6 +48,10 @@ type fakeDocker struct {
 	// after the job).
 	upFiles    []string
 	upOverride string
+	// orphans are services Services reports as not in the compose file;
+	// orphansAfter only from the second call on (a compose change removed
+	// them).
+	orphans, orphansAfter []string
 	// missingImages are references ImageExists reports as absent.
 	missingImages []string
 	// upFailures makes the next n Up calls fail with errBoom (besides failOn).
@@ -74,9 +78,20 @@ func (f *fakeDocker) Services(ctx context.Context, dir string) ([]docker.Service
 		return nil, err
 	}
 	if f.servicesAfter != nil && f.servicesCalls > 1 {
-		return f.servicesAfter, f.fail("Services")
+		return defined(f.servicesAfter, append(f.orphans, f.orphansAfter...)), f.fail("Services")
 	}
-	return f.services, f.fail("Services")
+	return defined(f.services, f.orphans), f.fail("Services")
+}
+
+// defined marks every service as in the compose file, except the orphans
+// (containers of services removed from the file), like docker.CLI.Services.
+func defined(list []docker.ServiceState, orphans []string) []docker.ServiceState {
+	out := make([]docker.ServiceState, len(list))
+	for i, s := range list {
+		s.Defined = !slices.Contains(orphans, s.Name)
+		out[i] = s
+	}
+	return out
 }
 
 func (f *fakeDocker) Pull(ctx context.Context, dir string, services []string) error {

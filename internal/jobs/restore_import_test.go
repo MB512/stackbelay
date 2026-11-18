@@ -42,6 +42,7 @@ func TestImport(t *testing.T) {
 		"restic.Restore " + snapID + ":/home/docker/web",
 		"restic.Node " + snapID + ":/home/docker/web",
 		"docker.ImageExists nginx@sha256:" + strings.Repeat("ab", 32),
+		"docker.Services",
 		"docker.Up app",
 		"docker.WaitHealthy",
 	})

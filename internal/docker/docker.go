@@ -10,7 +10,11 @@ import (
 
 // ServiceState describes one compose service at a point in time.
 type ServiceState struct {
-	Name        string   // compose service name
+	Name string // compose service name
+	// Defined: the service is in the compose file. False for an orphan: a
+	// container of the project whose service was removed from the file.
+	// Jobs only start, stop-and-start, pull or record defined services.
+	Defined     bool
 	State       string   // container state ("running", "exited", ...); "" if no container exists
 	Health      string   // "healthy", "unhealthy", "starting" or "" (no healthcheck)
 	ContainerID string   // full container id; "" if no container exists

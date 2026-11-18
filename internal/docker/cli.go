@@ -100,24 +100,7 @@ func (c *CLI) Services(ctx context.Context, dir string) ([]ServiceState, error) 
 		return nil, err
 	}
 
-	byService := map[string]ServiceState{}
-	for _, n := range names {
-		byService[n] = ServiceState{Name: n}
-	}
-	for _, ct := range containers {
-		cur, seen := byService[ct.Service]
-		// With scaled services keep the first running container.
-		if seen && cur.ContainerID != "" && (cur.Running() || ct.State != "running") {
-			continue
-		}
-		byService[ct.Service] = ServiceState{
-			Name:        ct.Service,
-			State:       ct.State,
-			Health:      ct.Health,
-			ContainerID: ct.ID,
-			ImageRef:    ct.Image,
-		}
-	}
+	byService := mergeServices(names, containers)
 
 	// Resolve image IDs and repo digests for every container.
 	imageCache := map[string]imageInfo{}
@@ -148,6 +131,33 @@ func (c *CLI) Services(ctx context.Context, dir string) ([]ServiceState, error) 
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
 	return result, nil
+}
+
+// mergeServices combines the services of the compose file (names, from
+// "compose config --services") with the project's containers ("compose ps
+// --all"). A container whose service is not in the file (an orphan: the
+// service was removed from the file) is listed with Defined false.
+func mergeServices(names []string, containers []psEntry) map[string]ServiceState {
+	byService := map[string]ServiceState{}
+	for _, n := range names {
+		byService[n] = ServiceState{Name: n, Defined: true}
+	}
+	for _, ct := range containers {
+		cur, seen := byService[ct.Service]
+		// With scaled services keep the first running container.
+		if seen && cur.ContainerID != "" && (cur.Running() || ct.State != "running") {
+			continue
+		}
+		byService[ct.Service] = ServiceState{
+			Name:        ct.Service,
+			Defined:     slices.Contains(names, ct.Service),
+			State:       ct.State,
+			Health:      ct.Health,
+			ContainerID: ct.ID,
+			ImageRef:    ct.Image,
+		}
+	}
+	return byService
 }
 
 func (c *CLI) containerImageID(ctx context.Context, dir, containerID string) (string, error) {

@@ -177,3 +177,20 @@ func TestStackOverview(t *testing.T) {
 		t.Fatalf("foreign containers: %v", err)
 	}
 }
+
+// A container whose service is no longer in the compose file is an
+// orphan: listed, but not Defined (issue #26).
+func TestMergeServices(t *testing.T) {
+	got := mergeServices([]string{"frontend", "never"}, []psEntry{
+		{ID: "c1", Service: "frontend", State: "running"},
+		{ID: "c2", Service: "shell", State: "running"},
+	})
+	want := map[string]ServiceState{
+		"frontend": {Name: "frontend", Defined: true, State: "running", ContainerID: "c1"},
+		"never":    {Name: "never", Defined: true},
+		"shell":    {Name: "shell", Defined: false, State: "running", ContainerID: "c2"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %+v\nwant %+v", got, want)
+	}
+}

@@ -30,7 +30,7 @@ func (p *Pipeline) Stop(ctx context.Context, stack stacks.Stack) error {
 // containers fails: it was never created (issue #18).
 func (p *Pipeline) Start(ctx context.Context, stack stacks.Stack) error {
 	log := p.logger().With("stack", stack.Name, "job", "start")
-	services, err := p.Docker.Services(ctx, stack.Dir)
+	services, err := p.services(ctx, log, stack.Dir)
 	if err != nil {
 		return fmt.Errorf("reading stack state: %w", err)
 	}
@@ -62,7 +62,7 @@ func (p *Pipeline) Start(ctx context.Context, stack stacks.Stack) error {
 // so it also happens when the stop fails or the job is cancelled.
 func (p *Pipeline) Restart(ctx context.Context, stack stacks.Stack) (err error) {
 	log := p.logger().With("stack", stack.Name, "job", "restart")
-	services, err := p.Docker.Services(ctx, stack.Dir)
+	services, err := p.services(ctx, log, stack.Dir)
 	if err != nil {
 		return fmt.Errorf("reading stack state: %w", err)
 	}
@@ -100,7 +100,7 @@ func (p *Pipeline) Restart(ctx context.Context, stack stacks.Stack) (err error) 
 // wait for all services (a warning only: one-shot services exit).
 func (p *Pipeline) Up(ctx context.Context, stack stacks.Stack) error {
 	log := p.logger().With("stack", stack.Name, "job", "up")
-	services, err := p.Docker.Services(ctx, stack.Dir) // also the project owner check
+	services, err := p.services(ctx, log, stack.Dir) // also the project owner check
 	if err != nil {
 		return fmt.Errorf("reading stack state: %w", err)
 	}
@@ -129,7 +129,7 @@ func (p *Pipeline) Up(ctx context.Context, stack stacks.Stack) error {
 // Up (or "docker compose up") creates the containers again.
 func (p *Pipeline) Down(ctx context.Context, stack stacks.Stack) error {
 	log := p.logger().With("stack", stack.Name, "job", "down")
-	if _, err := p.Docker.Services(ctx, stack.Dir); err != nil { // the project owner check, before removing anything
+	if _, err := p.services(ctx, log, stack.Dir); err != nil { // the project owner check, before removing anything
 		return fmt.Errorf("reading stack state: %w", err)
 	}
 	log.Info("removing containers and networks (compose down; volumes are kept)")

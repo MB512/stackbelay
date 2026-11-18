@@ -221,6 +221,19 @@ container (development) paths are used as they are and
 environment (`PATH`, `HOME`, `DOCKER_*`) plus the job's credentials, which
 `--env NAME` forwards by name.
 
+**Orphans** (issue #26): `docker.CLI.Services` lists the services of the
+compose file and the project's containers; a container whose service is
+no longer in the file (removed from it while its container existed) is
+listed with `Defined = false`. Compose refuses to start, recreate or pull
+such a service ("no such service"), so every pipeline reads the stack
+through `Pipeline.services`, which leaves orphans out and logs them: they
+are not stopped-and-started by a backup, restore, update, compose change,
+start, restart or up, and not recorded in `metadata.txt`. After a
+restore, the services `metadata.txt` lists as running are only started if
+the restored compose file defines them (older snapshots may list an
+orphan). Stopped orphans are removed by the host cleanup; `compose stop`
+does not stop a running orphan.
+
 ## Backup pipeline
 
 1. **Preflight**: stack exists in discovery, repo reachable (`restic cat config`),
@@ -679,8 +692,9 @@ the worker checks it against `compose_sha256` from the spec and runs
   (added while the stack was stopped); a stopped container stays stopped;
   waited for (running/healthy, 5 min) are the
   previously running ones (new services may be one-shot tasks). Containers
-  of removed services stay stopped (logged; remove them with `docker
-  compose up --remove-orphans`);
+  of removed services (also a running one: it was stopped with the stack)
+  stay stopped as orphans and are not started (logged; the host cleanup
+  removes them, or `docker compose up --remove-orphans`);
 - if they do not come up: rollback with a repository (restore of the final
   snapshot, which brings back the old compose file, with pinned images), no
   rollback without one.

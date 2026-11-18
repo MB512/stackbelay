@@ -48,7 +48,7 @@ func (p *Pipeline) Backup(ctx context.Context, stack stacks.Stack, opts BackupOp
 	}
 
 	// 2. Record state.
-	services, err := p.Docker.Services(ctx, stack.Dir)
+	services, err := p.services(ctx, log, stack.Dir)
 	if err != nil {
 		return res, fmt.Errorf("reading stack state: %w", err)
 	}

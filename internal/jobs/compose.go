@@ -81,7 +81,7 @@ func (p *Pipeline) ComposeApply(ctx context.Context, stack stacks.Stack, opts Co
 				log.Info("the stack was not running; it stays stopped with the new compose file")
 				return nil, nil, true, nil
 			}
-			after, err := p.Docker.Services(ctx, stack.Dir)
+			after, err := p.services(ctx, log, stack.Dir)
 			if err != nil {
 				return nil, nil, true, fmt.Errorf("reading the services of the new compose file: %w", err)
 			}

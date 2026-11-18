@@ -86,6 +86,9 @@ func (p *Pipeline) Import(ctx context.Context, target stacks.Stack, opts Restore
 		return res, nil
 	}
 	toStart, ok := p.servicesToStart(log, target)
+	if ok {
+		toStart = p.definedOnly(context.WithoutCancel(ctx), log, target.Dir, toStart)
+	}
 	if ok && len(toStart) == 0 {
 		log.Info("no services were running at snapshot time; leaving stack stopped")
 		return res, nil

@@ -39,6 +39,7 @@ func TestRestoreInPlaceSuccess(t *testing.T) {
 		"restic.Backup tag=pre-restore parent= host=host-a",
 		"restic.RestoreInPlace " + snapID + ":/home/docker/web exclude=",
 		"restic.Node " + snapID + ":/home/docker/web",
+		"docker.Services",
 		"docker.Up app",
 		"docker.WaitHealthy",
 	})

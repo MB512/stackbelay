@@ -288,7 +288,8 @@ func TestRestoreSuccess(t *testing.T) {
 		"restic.Backup tag=pre-restore parent= host=host-a",
 		"restic.Restore " + snapID + ":/home/docker/web",
 		"restic.Node " + snapID + ":/home/docker/web",
-		"docker.Up app", // only services running at backup time
+		"docker.Services", // the restored file's services (orphans are not started)
+		"docker.Up app",   // only services running at backup time
 		"docker.WaitHealthy",
 	})
 	wantOld := e.stack.Dir + ".old-20261113T100000Z"

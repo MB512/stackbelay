@@ -2,6 +2,7 @@
 package jobs
 
 import (
+	"cmp"
 	"context"
 	"log/slog"
 	"time"
@@ -70,6 +71,32 @@ func orDefault(d, def time.Duration) time.Duration {
 		return def
 	}
 	return d
+}
+
+// services reads the stack's services (docker.Client.Services, which also
+// checks that the compose project belongs to dir) and leaves out orphans:
+// containers of services that are no longer in the compose file. Compose
+// refuses to start, recreate or pull those ("no such service"), so no job
+// touches them; they are logged once (issue #26). The host cleanup removes
+// them when they are stopped.
+func (p *Pipeline) services(ctx context.Context, log *slog.Logger, dir string) ([]docker.ServiceState, error) {
+	all, err := p.Docker.Services(ctx, dir)
+	if err != nil {
+		return nil, err
+	}
+	defined := make([]docker.ServiceState, 0, len(all))
+	var orphans []string
+	for _, s := range all {
+		if s.Defined {
+			defined = append(defined, s)
+		} else {
+			orphans = append(orphans, s.Name+" ("+cmp.Or(s.State, "no container")+")")
+		}
+	}
+	if len(orphans) > 0 {
+		log.Warn("containers of services that are no longer in the compose file are left alone (orphans)", "orphans", orphans)
+	}
+	return defined, nil
 }
 
 // bringUp starts services after a job. It must run even if the job's context

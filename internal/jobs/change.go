@@ -100,7 +100,7 @@ func (p *Pipeline) runChange(ctx context.Context, stack stacks.Stack, c change) 
 	} else {
 		log.Warn("the stack has no repository: changing it WITHOUT backup; a failure cannot be rolled back")
 	}
-	services, err := p.Docker.Services(ctx, stack.Dir)
+	services, err := p.services(ctx, log, stack.Dir)
 	if err != nil {
 		return res, fmt.Errorf("reading stack state: %w", err)
 	}
@@ -276,7 +276,7 @@ func (p *Pipeline) upAndVerify(ctx context.Context, log *slog.Logger, dir string
 // they ran before (each once). A failure to read the state only warns: the
 // change itself succeeded.
 func (p *Pipeline) imagesChanged(ctx context.Context, log *slog.Logger, dir string, before []docker.ServiceState) (services, replaced []string) {
-	after, err := p.Docker.Services(context.WithoutCancel(ctx), dir)
+	after, err := p.services(context.WithoutCancel(ctx), log, dir)
 	if err != nil {
 		log.Warn("reading the stack state after the change; image changes are not recorded", "error", err)
 		return nil, nil

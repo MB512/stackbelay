@@ -36,6 +36,7 @@ func TestRestorePinnedImages(t *testing.T) {
 		"restic.Node " + snapID + ":/home/docker/web",
 		"docker.EnsureImage " + testDigest,
 		"docker.EnsureImage " + dbDigest,
+		"docker.Services", // the restored file's services (orphans are not started)
 		"docker.Up app,db,tool",
 		"docker.WaitHealthy",
 	})

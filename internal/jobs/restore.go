@@ -10,9 +10,11 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 
+	"github.com/MB512/stackvault/internal/docker"
 	"github.com/MB512/stackvault/internal/restic"
 	"github.com/MB512/stackvault/internal/stacks"
 )
@@ -89,7 +91,7 @@ func (p *Pipeline) Restore(ctx context.Context, stack stacks.Stack, opts Restore
 		}
 	}
 
-	services, err := p.Docker.Services(ctx, stack.Dir)
+	services, err := p.services(ctx, log, stack.Dir)
 	if err != nil {
 		return res, fmt.Errorf("reading stack state: %w", err)
 	}
@@ -238,6 +240,10 @@ func (p *Pipeline) Restore(ctx context.Context, stack stacks.Stack, opts Restore
 		return res, nil
 	}
 	toStart, ok := p.servicesToStart(log, stack)
+	if ok {
+		// The start must happen even after a cancellation, like bringUp.
+		toStart = p.definedOnly(context.WithoutCancel(ctx), log, stack.Dir, toStart)
+	}
 	if ok && len(toStart) == 0 {
 		log.Info("no services were running at snapshot time; leaving stack stopped")
 		return res, nil
@@ -381,6 +387,30 @@ func (p *Pipeline) applyDirMetadata(ctx context.Context, log *slog.Logger, snaps
 		log.Warn("could not restore mtime of stack directory", "error", err)
 	}
 	return nil
+}
+
+// definedOnly keeps the services of names that the restored compose file
+// defines: a metadata.txt written before issue #26 may list an orphan
+// (a container whose service was no longer in the file) as running, and
+// compose refuses to start it. If the stack cannot be read, names is kept.
+func (p *Pipeline) definedOnly(ctx context.Context, log *slog.Logger, dir string, names []string) []string {
+	if len(names) == 0 {
+		return names
+	}
+	defined, err := p.services(ctx, log, dir)
+	if err != nil {
+		log.Warn("reading the restored stack's services; starting the recorded ones", "error", err)
+		return names
+	}
+	var out []string
+	for _, n := range names {
+		if slices.ContainsFunc(defined, func(s docker.ServiceState) bool { return s.Name == n }) {
+			out = append(out, n)
+		} else {
+			log.Warn("not starting a service that ran at snapshot time but is not in its compose file", "service", n)
+		}
+	}
+	return out
 }
 
 // servicesToStart reads metadata.txt from the restored stack and returns the

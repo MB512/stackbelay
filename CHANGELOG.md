@@ -61,6 +61,11 @@ setting `STACKVAULT_CLEANUP_IMAGE_MIN_AGE` is optional.
 
 ### Fixed
 
+- A compose change that removed a running service failed and was rolled
+  back ("no such service"; #26). Containers of services that are no longer
+  in the compose file (orphans) are now left alone by every job: they are
+  not started again after a backup, restore, update, start or restart, and
+  not recorded in the snapshot's `metadata.txt`.
 - Services added to the compose file while the stack was stopped were
   never started: "Start" only started existing containers, and the next
   compose change counted them as known. Start now also creates and starts

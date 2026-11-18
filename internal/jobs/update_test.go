@@ -214,6 +214,7 @@ func TestUpdateRollback(t *testing.T) {
 		// no safety snapshot: the final snapshot is the state before the update
 		"restic.Restore " + snapID + ":/home/docker/web",
 		"restic.Node " + snapID + ":/home/docker/web",
+		"docker.Services",
 		"docker.Up app", // services running at snapshot time, per its metadata.txt
 		"docker.WaitHealthy",
 	}
