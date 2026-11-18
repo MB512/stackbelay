@@ -99,6 +99,7 @@ type Server struct {
 	logStreams streamLimiter  // open log streams
 	shells     streamLimiter  // open shell sessions
 	imports    pendingImports // "Import stack" between its two steps
+	diskSizes  diskSizes      // "Calculate" of stack sizes on disk
 	// running update checks (not streams, but limited the same way)
 	updateChecks streamLimiter
 	// the last update check per stack
@@ -177,6 +178,7 @@ func (s *Server) Handler() (http.Handler, error) {
 			r.Get("/stacks/{name}/state", s.stackStateCell)
 			r.Get("/stacks/{name}/backups", s.stackBackups)
 			r.Post("/stacks/{name}/snapshots/refresh", s.refreshStackSnapshots)
+			r.Post("/stacks/{name}/size", s.calculateStackSize)
 			r.Post("/stacks/{name}/backup", s.startBackup)
 			r.Post("/stacks/{name}/stop", s.startControl(jobs.TypeStop))
 			r.Post("/stacks/{name}/start", s.startControl(jobs.TypeStart))

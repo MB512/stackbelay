@@ -73,7 +73,10 @@ attackers reaching the UI, a leaked database file.
    host); the manager only validates it, the file is written by the
    compose-apply job in a worker, after a backup. The new content is
    checked against its SHA-256 in the worker, and an apply is refused if
-   the file changed since it was opened in the editor.
+   the file changed since it was opened in the editor. Outside Docker, the
+   manager only reads stack directories (discovery, the compose editor,
+   and the "Calculate" of a stack's size on disk: a walk that stats files
+   and follows no symlinks).
 4. **Secrets at rest.** Repo passwords and backend credentials are encrypted
    with AES-256-GCM using the secret key (`STACKVAULT_SECRET_KEY`,
    `STACKVAULT_SECRET_KEY_FILE`, or by default `<data>/secret.key`, mode

@@ -121,6 +121,12 @@ type backupsTab struct {
 	// ForeignHost: the stack lists another host's snapshots (its source
 	// host, see "Restore from another host"); restoring them is admin-only.
 	ForeignHost bool
+	// SizeOnDisk is the last "Calculate" of the stack directory's size (nil:
+	// none since the manager started); DirPresent whether it can be
+	// calculated; SizeInfo/SizeError the answer to a Calculate.
+	SizeOnDisk          *diskSize
+	DirPresent          bool
+	SizeInfo, SizeError string
 	// NextScheduled is the next scheduled backup; zero if none.
 	NextScheduled time.Time
 }
@@ -227,6 +233,8 @@ func (s *Server) loadBackupsTab(r *http.Request, st store.Stack, perm store.Perm
 		return page, err
 	}
 	page.NextScheduled = nextScheduled(scheds, jobs.TypeBackup)
+	page.SizeOnDisk = s.diskSizes.get(st.ID)
+	_, page.DirPresent = s.stackDir(st)
 	repo, err := s.Store.RepositoryInfoForStack(r.Context(), st.ID)
 	if errors.Is(err, store.ErrNotFound) {
 		return page, nil

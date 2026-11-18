@@ -81,11 +81,31 @@
 </section>
 {{end}}
 
-{{- /* Size of the stack at its last backup (from the snapshot summary).
+{{- /* Size of the stack at its last backup (from the snapshot summary) and
+       on disk now (calculated on request; HTMX replaces this element).
        Dot is a backupsTab. */}}
 {{define "stack-size"}}
+<div id="stack-size">
 {{- with .LastBackupSize}}
 <p>Stack size at the last backup: <strong>{{bytes .Summary.TotalBytesProcessed}}</strong>
   ({{.Summary.TotalFilesProcessed}} files, {{when .Time}}; the backup took {{duration .Summary.Duration}}).</p>
 {{- end}}
+<form method="post" action="/stacks/{{.Stack.Name}}/size" class="inline"
+      hx-post="/stacks/{{.Stack.Name}}/size" hx-target="#stack-size" hx-swap="outerHTML" hx-disabled-elt="find button">
+  <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+  <span>Size on disk now:
+  {{- with .SizeOnDisk}}
+    {{- if .Err}} <span class="error">calculation failed ({{.Err}})</span>
+    {{- else}} <strong>{{bytes .Bytes}}</strong> ({{.Files}} files, calculated {{when .At}} in {{duration .Took}})
+      {{- if .Unreadable}} <span class="warning" title="{{.FirstError}}">{{.Unreadable}} entries could not be read</span>{{end}}
+    {{- end}}
+  {{- else}} <span class="muted">not calculated</span>{{end}}</span>
+  <button type="submit" class="secondary"{{if not .DirPresent}} disabled title="The stack directory is missing"{{end}}>Calculate</button>
+  <span class="hint busy-text">reading the stack directory…</span>
+</form>
+{{- with .SizeInfo}}<p class="info" role="status">{{.}}</p>{{end}}
+{{- with .SizeError}}<p class="error" role="alert">{{.}}</p>{{end}}
+<p class="hint">The size on disk counts the files in the stack directory (not following links) and helps to estimate
+  how long a first backup takes; later backups only read what changed.</p>
+</div>
 {{- end}}

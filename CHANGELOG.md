@@ -44,6 +44,11 @@ setting `STACKVAULT_CLEANUP_IMAGE_MIN_AGE` is optional.
   actions (Up, Start, Restart, Stop, Down), backup and update the second.
   StackVault's own stack has no Down, like no Stop. Worker commands
   `worker up|down <stack>`.
+- **Sizes and durations** (#9): the snapshot list shows what each snapshot
+  added to the repository and how long the backup took (snapshots made with
+  restic 0.17 or newer), and the stack size at the last backup. "Calculate"
+  shows the stack's size on disk, also before the first backup. Job lists
+  and job pages show how long a job ran.
 - **Global log view** (#21): the "Logs" link in the header follows the
   container logs of up to 4 stacks in one view, in time order.
 

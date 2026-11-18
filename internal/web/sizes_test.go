@@ -2,6 +2,11 @@ package web
 
 import (
 	"context"
+	"errors"
+	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -97,5 +102,96 @@ func TestJobDurationsShown(t *testing.T) {
 		if r := e.get(path); !strings.Contains(r.body, "42 s") {
 			t.Errorf("%s does not show the duration:\n%s", path, r.body)
 		}
+	}
+}
+
+func TestMeasureDir(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name string, n int) {
+		t.Helper()
+		p := filepath.Join(dir, name)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, make([]byte, n), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("compose.yaml", 100)
+	write("data/a.bin", 1000)
+	write("data/sub/b.bin", 24)
+	// A link to something big outside is not followed.
+	big := filepath.Join(t.TempDir(), "big")
+	if err := os.WriteFile(big, make([]byte, 1<<20), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(big, filepath.Join(dir, "data", "link")); err != nil {
+		t.Fatal(err)
+	}
+	locked := filepath.Join(dir, "locked")
+	if err := os.Mkdir(locked, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o755) })
+
+	r, err := measureDir(context.Background(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Bytes != 1124 || r.Files != 3 {
+		t.Fatalf("measured %d bytes in %d files, want 1124 in 3", r.Bytes, r.Files)
+	}
+	if os.Geteuid() != 0 && (r.Unreadable != 1 || r.FirstError == "") {
+		t.Fatalf("unreadable %d (%q), want the locked directory", r.Unreadable, r.FirstError)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := measureDir(ctx, dir); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled walk: %v", err)
+	}
+}
+
+func TestCalculateStackSize(t *testing.T) {
+	e := newEnv(t, true, true)
+	e.setupStacks()
+	e.setupLogs() // creates web and db directories with a compose file
+	if err := os.WriteFile(filepath.Join(e.server.StacksRoot, "web", "data.bin"), make([]byte, 3<<20), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	e.loginAdmin()
+	r := e.get("/stacks/web/backups")
+	if !strings.Contains(r.body, "not calculated") || !strings.Contains(r.body, `action="/stacks/web/size"`) {
+		t.Fatalf("Backups tab without a size:\n%s", r.body)
+	}
+	token := e.csrf("/stacks/web/backups")
+	htmx := map[string]string{"HX-Request": "true"}
+	r = e.do(e.client, http.MethodPost, "/stacks/web/size", url.Values{"csrf_token": {token}}, htmx)
+	expect(t, r, http.StatusOK, "")
+	if !strings.HasPrefix(strings.TrimSpace(r.body), `<div id="stack-size">`) || !strings.Contains(r.body, "<strong>3.0 MiB</strong> (2 files") {
+		t.Fatalf("size fragment:\n%s", r.body)
+	}
+	// Right after: not again.
+	r = e.do(e.client, http.MethodPost, "/stacks/web/size", url.Values{"csrf_token": {token}}, htmx)
+	if !strings.Contains(r.body, "calculated just now") {
+		t.Errorf("second calculation not refused:\n%s", r.body)
+	}
+	// The result stays on the page; the action is audited.
+	if r := e.get("/stacks/web/backups"); !strings.Contains(r.body, "<strong>3.0 MiB</strong>") {
+		t.Error("result not kept")
+	}
+	if auditActions(t, e.st)["stack.size"] != 1 {
+		t.Error("calculation not audited once")
+	}
+	// Without directory: the button is disabled, the action says why.
+	if err := os.RemoveAll(filepath.Join(e.server.StacksRoot, "db")); err != nil {
+		t.Fatal(err)
+	}
+	if r := e.get("/stacks/db/backups"); !strings.Contains(r.body, `disabled title="The stack directory is missing">Calculate`) {
+		t.Errorf("Calculate not disabled for a missing directory:\n%s", r.body)
+	}
+	r = e.do(e.client, http.MethodPost, "/stacks/db/size", url.Values{"csrf_token": {token}}, htmx)
+	if !strings.Contains(r.body, "The stack directory is missing.") {
+		t.Errorf("missing directory:\n%s", r.body)
 	}
 }

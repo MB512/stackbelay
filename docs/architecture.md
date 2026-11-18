@@ -719,6 +719,14 @@ the backup summary restic >= 0.17 records in every snapshot).
   (`total_bytes_processed`, files) is the tooltip. Above the list:
   "Stack size at the last backup" from the newest snapshot with a
   summary. Snapshots without summary (restic < 0.17) show "–".
+- **Size on disk** ("Calculate" next to it, view right; also before the
+  first backup, to estimate it): the manager walks the stack directory
+  read-only (`measureDir`: regular files, apparent size, symlinks not
+  followed, unreadable entries counted and named) and keeps the result in
+  memory with its time and duration. At most one calculation per stack and
+  two in total at a time, not again within 30 s, at most 5 minutes; a
+  client that gives up does not stop it (the result shows on the next
+  visit). Audited as `stack.size`.
 - Job durations (`finished_at - started_at`, "running for …" while a job
   runs) in the job lists (Status tab, admin Jobs and Host tabs) and on the
   job page; no schema change.
@@ -781,6 +789,7 @@ with a light and a dark set; the job log is a dark panel in both modes.
 | `GET /jobs/{id}` | view right on the job's stack | job details and log; followed live by `static/joblog.js` while not final |
 | `GET /jobs/{id}/events` | view right on the job's stack | live stream of the job (SSE), see "Live logs" |
 | `POST /jobs/{id}/cancel` | backup/restore/update/operate right (by job type; compose-apply: admin) | cancel a queued or running job |
+| `POST /stacks/{name}/size` | view right | calculate the stack directory's size on disk (read-only walk in the manager; HTMX: returns the size section) |
 | `POST /stacks/{name}/snapshots/refresh` | view right | refresh the snapshot cache (read-only restic; at most once per 10 s per stack; HTMX: returns the snapshot section) |
 | `GET /stacks/{name}/shell?container=<id>` | admin, opt-in | shell page (no tab, linked per container from Status): terminal of a running container; without `container` a redirect to Status |
 | `GET /stacks/{name}/shell/ws` | admin, opt-in | WebSocket of a shell session, see "Container shell" |
