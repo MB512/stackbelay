@@ -154,8 +154,8 @@ func TestRepositoryFormValidation(t *testing.T) {
 			"Only rest: repository URLs", "sk-secret"},
 		{"unsupported variable", url.Values{"location": {"/r"}, "password": {"x"}, "env": {"LD_PRELOAD=/evil.so"}},
 			"not supported", "/evil.so"},
-		{"password variable", url.Values{"location": {"/r"}, "password": {"x"}, "env": {"RESTIC_PASSWORD=other"}},
-			"not supported", "other"},
+		{"password variable", url.Values{"location": {"/r"}, "password": {"x"}, "env": {"RESTIC_PASSWORD=env-pw-secret"}},
+			"not supported", "env-pw-secret"},
 		{"malformed line", url.Values{"location": {"/r"}, "password": {"x"}, "env": {"AWS_ACCESS_KEY_ID"}}, "KEY=value", ""},
 		{"flag as location", url.Values{"location": {"--insecure-tls"}, "password": {"x"}}, "must not start with", ""},
 	}

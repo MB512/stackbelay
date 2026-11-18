@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -15,6 +17,7 @@ import (
 	"github.com/MB512/stackvault/internal/dispatch"
 	"github.com/MB512/stackvault/internal/jobs"
 	"github.com/MB512/stackvault/internal/restic"
+	"github.com/MB512/stackvault/internal/stacks"
 	"github.com/MB512/stackvault/internal/store"
 )
 
@@ -59,7 +62,7 @@ func (s *Server) submitJob(w http.ResponseWriter, r *http.Request, st store.Stac
 		s.renderError(w, r, http.StatusServiceUnavailable, reason)
 		return
 	}
-	if !st.Present {
+	if !st.Present && !job.Options.Import {
 		s.renderError(w, r, http.StatusConflict, "The stack directory is missing.")
 		return
 	}
@@ -92,6 +95,14 @@ func (s *Server) submitJob(w http.ResponseWriter, r *http.Request, st store.Stac
 type restorePage struct {
 	Stack    store.Stack
 	Snapshot store.CachedSnapshot
+	// Import: the stack directory does not exist (a stack imported from
+	// another host, or one whose directory vanished): the restore creates
+	// it, with nothing to stop, protect or switch over.
+	Import bool
+	// ForeignHost: the snapshot is from another host (the stack's source
+	// host); host-specific settings may not fit this host.
+	ForeignHost bool
+	ThisHost    string
 }
 
 // restorableSnapshot returns the cached snapshot id of the stack, if it
@@ -109,7 +120,7 @@ func (s *Server) restorableSnapshot(ctx context.Context, st store.Stack, id stri
 	if err != nil {
 		return store.CachedSnapshot{}, false, err
 	}
-	snaps, err := s.Store.StackSnapshots(ctx, repo.ID, st.Name, s.Hostname)
+	snaps, err := s.Store.StackSnapshots(ctx, repo.ID, st.Name, s.snapshotHost(st))
 	if err != nil {
 		return store.CachedSnapshot{}, false, err
 	}
@@ -123,7 +134,7 @@ func (s *Server) restorableSnapshot(ctx context.Context, st store.Stack, id stri
 
 // restoreForm asks for confirmation and options before a restore.
 func (s *Server) restoreForm(w http.ResponseWriter, r *http.Request) {
-	st, _, ok := s.loadStack(w, r, auth.ActionRestore)
+	st, _, ok := s.loadRestoreStack(w, r)
 	if !ok {
 		return
 	}
@@ -137,12 +148,38 @@ func (s *Server) restoreForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.render(w, r, http.StatusOK, "restore.html", pageData{Title: "Restore " + st.Name,
-		Error: s.jobsUnavailable(), Data: restorePage{Stack: st, Snapshot: sn}})
+		Error: s.jobsUnavailable(), Data: restorePage{Stack: st, Snapshot: sn, Import: !st.Present,
+			ForeignHost: s.foreignSource(st), ThisHost: s.Hostname}})
+}
+
+// loadRestoreStack is loadStack for the restore right; another host's
+// snapshots (the stack's source host) may only be restored by admins.
+func (s *Server) loadRestoreStack(w http.ResponseWriter, r *http.Request) (store.Stack, store.Permission, bool) {
+	st, perm, ok := s.loadStack(w, r, auth.ActionRestore)
+	if ok && !s.mayRestore(authFrom(r.Context()).User, perm, st) {
+		s.renderError(w, r, http.StatusForbidden, "Only admins may restore snapshots of another host.")
+		return st, perm, false
+	}
+	return st, perm, ok
+}
+
+// parseDownloadLimit reads the "limit download" field (MiB/s, empty or 0 =
+// no limit) and returns KiB/s for restic.
+func parseDownloadLimit(v string) (int, error) {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return 0, nil
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n < 0 || n*1024 > restic.MaxLimitKiB {
+		return 0, fmt.Errorf("invalid download limit %q (MiB/s, a whole number)", truncate(v, 20))
+	}
+	return n * 1024, nil
 }
 
 // startRestore queues a restore. Only admins may skip the safety snapshot.
 func (s *Server) startRestore(w http.ResponseWriter, r *http.Request) {
-	st, _, ok := s.loadStack(w, r, auth.ActionRestore)
+	st, _, ok := s.loadRestoreStack(w, r)
 	if !ok {
 		return
 	}
@@ -155,17 +192,37 @@ func (s *Server) startRestore(w http.ResponseWriter, r *http.Request) {
 		s.renderError(w, r, http.StatusBadRequest, "Snapshot not found. Refresh the snapshot list and try again.")
 		return
 	}
+	limit, err := parseDownloadLimit(r.PostFormValue("limit_download"))
+	if err != nil {
+		s.renderError(w, r, http.StatusBadRequest, capitalize(err.Error())+".")
+		return
+	}
 	opts := store.JobOptions{
-		SnapshotID: sn.ID,
-		NoStart:    r.PostFormValue("start") != "on",
-		PinImages:  r.PostFormValue("images") == "pinned",
-		InPlace:    r.PostFormValue("method") == "in-place",
+		SnapshotID:       sn.ID,
+		NoStart:          r.PostFormValue("start") != "on",
+		PinImages:        r.PostFormValue("images") == "pinned",
+		LimitDownloadKiB: limit,
+	}
+	if st.Present {
+		opts.InPlace = r.PostFormValue("method") == "in-place"
 		// The safety snapshot is the way back if the restore was a mistake.
-		SkipSafetySnapshot: authFrom(r.Context()).User.IsAdmin && r.PostFormValue("safety_snapshot") != "on",
+		opts.SkipSafetySnapshot = authFrom(r.Context()).User.IsAdmin && r.PostFormValue("safety_snapshot") != "on"
+		// A restore into a stopped stack stops nothing: it need not wait
+		// for (or block) other stacks' jobs.
+		opts.Background = !s.stackRunning(r.Context(), st)
+	} else {
+		// No directory: the restore creates it (import from another host,
+		// or a stack whose directory vanished).
+		if _, err := stacks.ImportTarget(s.StacksRoot, st.Name); err != nil {
+			s.renderError(w, r, http.StatusConflict, "The stack directory cannot be created: "+truncate(err.Error(), 200))
+			return
+		}
+		opts.Import, opts.Background = true, true
 	}
 	s.submitJob(w, r, st, store.Job{Type: jobs.TypeRestore, Options: opts},
-		fmt.Sprintf("restore of snapshot %s, safety snapshot: %t, start: %t, pinned images: %t, in place: %t",
-			sn.ShortID, !opts.SkipSafetySnapshot, !opts.NoStart, opts.PinImages, opts.InPlace), true)
+		fmt.Sprintf("restore of snapshot %s (host %s), import: %t, safety snapshot: %t, start: %t, pinned images: %t, in place: %t, download limit: %d KiB/s, background: %t",
+			sn.ShortID, sn.Hostname, opts.Import, !opts.SkipSafetySnapshot && !opts.Import, !opts.NoStart, opts.PinImages,
+			opts.InPlace, opts.LimitDownloadKiB, opts.Background), true)
 }
 
 // loadJob resolves the job in the URL and checks that the user may view

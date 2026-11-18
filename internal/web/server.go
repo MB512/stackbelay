@@ -203,6 +203,7 @@ func (s *Server) Handler() (http.Handler, error) {
 				r.Post("/stacks/{name}/repository/init", s.initRepository)
 				r.Post("/stacks/{name}/permissions", s.setPermission)
 				r.Post("/stacks/{name}/enabled", s.setStackEnabled)
+				r.Post("/stacks/{name}/source-host", s.setSourceHost)
 				r.Post("/stacks/{name}/schedules", s.createSchedule)
 				r.Post("/stacks/{name}/schedules/{id}/enabled", s.setScheduleEnabled)
 				r.Post("/stacks/{name}/schedules/{id}/delete", s.deleteSchedule)

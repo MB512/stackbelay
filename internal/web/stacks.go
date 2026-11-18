@@ -118,6 +118,9 @@ type backupsTab struct {
 	RefreshInfo, RefreshError string
 	Host                      string // snapshots are shown for this host ("" = all)
 	OtherSnapshots            int    // snapshots in the repository of other stacks or hosts
+	// ForeignHost: the stack lists another host's snapshots (its source
+	// host, see "Restore from another host"); restoring them is admin-only.
+	ForeignHost bool
 	// NextScheduled is the next scheduled backup; zero if none.
 	NextScheduled time.Time
 }
@@ -131,6 +134,10 @@ type settingsTab struct {
 	// NewSchedule holds the input of the "add schedule" form after an error.
 	NewSchedule newSchedule
 	TimeZone    string // the manager's time zone, in which schedules run
+	// SourceHosts are the hosts the stack can list snapshots of (this
+	// host first); SourceHost is the chosen one.
+	SourceHosts          []string
+	SourceHost, ThisHost string
 }
 
 // permRow is one user in the permission table of a stack (admin view). It
@@ -199,7 +206,7 @@ func (s *Server) loadBackupsTab(r *http.Request, st store.Stack, perm store.Perm
 	a := authFrom(r.Context())
 	page := backupsTab{
 		stackHeader: s.newStackHeader(a.User, perm, st, tabBackups),
-		CanRestore:  auth.Allowed(a.User, perm, auth.ActionRestore),
+		CanRestore:  s.mayRestore(a.User, perm, st),
 		CSRF:        a.Session.CSRFToken,
 	}
 	scheds, err := s.scheduleRows(r.Context(), st)
@@ -215,11 +222,12 @@ func (s *Server) loadBackupsTab(r *http.Request, st store.Stack, perm store.Perm
 		return page, err
 	}
 	page.Repo = &repo
-	if page.Snapshots, err = s.Store.StackSnapshots(r.Context(), repo.ID, st.Name, s.Hostname); err != nil {
+	if page.Snapshots, err = s.Store.StackSnapshots(r.Context(), repo.ID, st.Name, s.snapshotHost(st)); err != nil {
 		return page, err
 	}
 	all, err := s.Store.ListSnapshots(r.Context(), repo.ID)
-	page.Host, page.OtherSnapshots = s.Hostname, len(all)-len(page.Snapshots)
+	page.Host, page.OtherSnapshots = s.snapshotHost(st), len(all)-len(page.Snapshots)
+	page.ForeignHost = s.foreignSource(st)
 	return page, err
 }
 
@@ -338,6 +346,11 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, st store
 		TimeZone:    s.zoneName() + s.now().In(s.loc()).Format(" (MST, -07:00)"),
 	}
 	page.NewSchedule = v.NewSchedule
+	if page.SourceHosts, err = s.sourceHostOptions(r.Context(), st); err != nil {
+		s.internalError(w, r, "listing snapshot hosts", err)
+		return
+	}
+	page.SourceHost, page.ThisHost = s.snapshotHost(st), s.Hostname
 	s.render(w, r, v.Status, "stack_settings.html",
 		pageData{Title: st.Name + " settings", Info: v.Info, Error: v.Error, Data: page})
 }

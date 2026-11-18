@@ -374,6 +374,24 @@ rest of the path may differ (`/home/docker/web` on A restores into
   and without safety snapshot, not started; the last one after the final
   backup on host A with start and pinned images. So a large stack moves
   with repeated, ever faster syncs and a short final downtime.
+- **Source host** (`stacks.source_host`, Settings tab): whose snapshots
+  the Backups tab lists and the restore accepts (`StackSnapshots` with
+  that host instead of `STACKVAULT_HOSTNAME`). Offered are this host and
+  the hosts with cached snapshots of the stack. Restoring another host's
+  snapshots is admin-only (restore links hidden, form and action answer
+  403). Backups are always made under this host's name.
+- **Restore page**: for a stack without directory it offers no safety
+  snapshot and no method (the restore creates the directory), "start"
+  off and pinned image versions on; for another host's snapshot it
+  preselects "in place", "do not start" and pinned versions, and lists the
+  caveats (numeric UID/GID restored as is; ports, external networks and
+  absolute paths outside the stack directory may not fit; only bind mounts
+  inside the stack directory are in the snapshot).
+- **Background**: a restore into a stack without directory, or one with
+  no running container when it is queued (`stackRunning`; unknown counts
+  as running), gets `options.background` and does not count against
+  `STACKVAULT_MAX_JOBS` (see data-model.md), so a long first restore does
+  not hold up scheduled backups.
 - **Download limit**: restore option `limit_download_kib` (worker flag
   `--limit-download`), passed to every restic command of the job as
   `--limit-download` (KiB/s, at most `restic.MaxLimitKiB`).
@@ -731,6 +749,7 @@ with a light and a dark set; the job log is a dark panel in both modes.
 | `POST /stacks/{name}/repository` | admin | create/update the repository, then refresh the snapshot cache as an access check |
 | `POST /stacks/{name}/repository/init` | admin | `restic init` at the stored location (offered only when no repository exists there) |
 | `POST /stacks/{name}/permissions` | admin | set one user's backup/restore right (HTMX: returns the table row) |
+| `POST /stacks/{name}/source-host` | admin | set the host whose snapshots the stack lists and restores, see "Restore from another host" |
 | `POST /stacks/{name}/enabled` | admin | enable/disable the stack for scheduled backups |
 | `POST /stacks/{name}/schedules` | admin | add a schedule (cron expression, pre-stop option); at most 20 per stack |
 | `POST /stacks/{name}/schedules/{id}/enabled` | admin | enable/disable one schedule |

@@ -55,6 +55,25 @@
 </section>
 
 <section>
+  <h2>Source host</h2>
+  <form method="post" action="/stacks/{{.Stack.Name}}/source-host" class="card wide">
+    <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+    <label>Snapshots of host
+      <select name="source_host"{{if lt (len .SourceHosts) 2}} disabled{{end}}>
+        {{- range .SourceHosts}}
+        <option value="{{.}}"{{if eq . $.Data.SourceHost}} selected{{end}}>{{.}}{{if eq . $.Data.ThisHost}} (this host){{end}}</option>
+        {{- end}}
+      </select>
+    </label>
+    <p class="hint">The Backups tab lists and restores the snapshots of this host. Choose another host to move this stack
+      here from there: restore its snapshots (again and again, in place, while it still runs there), then the last one
+      after its final backup, and switch back to this host. Only admins may restore another host's snapshots. Backups are
+      always made under this host's name. Other hosts are offered once the snapshot list contains their snapshots.</p>
+    <div><button type="submit" class="secondary"{{if lt (len .SourceHosts) 2}} disabled{{end}}>Save</button></div>
+  </form>
+</section>
+
+<section>
   <h2>Schedules</h2>
   <form method="post" action="/stacks/{{.Stack.Name}}/enabled" class="inline">
     <input type="hidden" name="csrf_token" value="{{$.CSRF}}">

@@ -36,6 +36,10 @@
     {{- with .Repo}}<span class="hint">Last refreshed: {{when .SnapshotsRefreshedAt}}</span>{{end}}
   </div>
   {{- if .RefreshError}}<p class="error" role="alert">{{.RefreshError}}</p>{{end}}
+  {{- if .ForeignHost}}
+  <p class="warning">This stack lists the snapshots of host <code>{{.Host}}</code> (Settings: source host), to move it here.
+    Restoring them is admin-only.</p>
+  {{- end}}
   {{- if .OtherSnapshots}}
   <p class="hint">Snapshots of this stack{{with .Host}} from host <code>{{.}}</code>{{end}}.
     {{.OtherSnapshots}} other snapshot{{if ne .OtherSnapshots 1}}s{{end}} in this repository belong to other stacks or hosts and are not shown.</p>

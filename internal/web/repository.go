@@ -188,7 +188,7 @@ func (s *Server) refreshSnapshots(ctx context.Context, st store.Stack) (int, err
 	if err != nil {
 		return 0, &refreshError{msg: "loading repository: " + err.Error()}
 	}
-	own, err := s.Store.StackSnapshots(ctx, repo.ID, st.Name, s.Hostname)
+	own, err := s.Store.StackSnapshots(ctx, repo.ID, st.Name, s.snapshotHost(st))
 	if err != nil {
 		return 0, &refreshError{msg: "listing snapshots: " + err.Error()}
 	}
