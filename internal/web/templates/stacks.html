@@ -1,8 +1,11 @@
 {{define "content"}}
 <h1>Stacks</h1>
 {{- with .Data}}
-<p><button type="button" hx-get="/" hx-select="#stack-rows" hx-target="#stack-rows" hx-swap="outerHTML"
-  title="Reload the states and times">Refresh</button></p>
+<p class="actions-row"><button type="button" hx-get="/{{if .ShowAll}}?all=1{{end}}" hx-select="#stack-rows" hx-target="#stack-rows" hx-swap="outerHTML"
+  title="Reload the states and times">Refresh</button>
+  {{- if .ShowAll}} <a href="/">Hide stacks without directory</a>
+  {{- else if .Hidden}} <a href="/?all=1">Show stacks without directory ({{.Hidden}})</a>{{end}}</p>
+{{- if .Rows}}
 <div class="table-scroll">
 <table class="stack-list">
   <thead>
@@ -12,11 +15,12 @@
       <th class="group-start">Scheduling</th><th>Last check</th><th>Last update</th></tr>
   </thead>
   <tbody id="stack-rows">
-    {{- range .}}
+    {{- range .Rows}}
     <tr>
       <td><a href="/stacks/{{.Name}}">{{.Name}}</a></td>
       <td>
         {{- if .Present}}<span hx-get="/stacks/{{.Name}}/state" hx-trigger="load"><span class="muted">…</span></span>
+        {{- else if not .SeenPresent}}<span class="badge" title="Imported from another host: its first restore creates the directory.">not restored yet</span>
         {{- else}}<span class="badge warn" title="The stack directory is missing.">missing</span>{{end}}</td>
       <td class="group-start">{{template "schedule-cell" .BackupSchedule}}</td>
       <td>{{if .HasRepository}}<span class="dot ok" role="img" aria-label="configured" title="Repository configured">✓</span>
@@ -43,8 +47,9 @@
 </div>
 <p class="hint">Times are how long ago something happened; hover them for the exact time. Scheduling shows the next
   run of a stack's enabled backup or update schedules.</p>
-{{- else}}
-{{- if $.User.IsAdmin}}
+{{- else if .Hidden}}
+<p class="hint">{{.Hidden}} stack{{if ne .Hidden 1}}s{{end}} without directory {{if ne .Hidden 1}}are{{else}}is{{end}} hidden.</p>
+{{- else if $.User.IsAdmin}}
 <p class="hint">No stacks found. Stacks are the directories with a compose file under <code>STACKS_ROOT</code>;
 they are discovered when the manager starts.</p>
 {{- else}}

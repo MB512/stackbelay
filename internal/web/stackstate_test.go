@@ -164,11 +164,12 @@ func TestStackStateCell(t *testing.T) {
 		t.Fatalf("legacy: %s", r.body)
 	}
 
-	// A missing directory needs no request: the list shows it directly.
+	// A missing directory needs no request: the list shows it directly
+	// (with "show all": a vanished stack is hidden by default, issue #27).
 	if err := e.st.SyncStacks(ctx, []string{"web"}); err != nil {
 		t.Fatal(err)
 	}
-	r = e.get("/")
+	r = e.get("/?all=1")
 	if !strings.Contains(r.body, `>missing</span>`) || strings.Contains(r.body, `hx-get="/stacks/db/state"`) {
 		t.Fatalf("missing stack in list:\n%s", r.body)
 	}

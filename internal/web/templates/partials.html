@@ -29,7 +29,8 @@
        Dot is a stackHeader (or a struct embedding one). */}}
 {{define "stack-header"}}
 <h1>{{.Stack.Name}}
-  {{- if not .Stack.Present}} <span class="badge warn" title="The stack directory is missing">missing</span>{{end}}
+  {{- if and (not .Stack.Present) (not .Stack.SeenPresent)}} <span class="badge" title="Imported from another host: its first restore creates the directory">not restored yet</span>
+  {{- else if not .Stack.Present}} <span class="badge warn" title="The stack directory is missing">missing</span>{{end}}
   {{- if .RestoreIncomplete}} <span class="badge warn" title="The last restore did not complete">restore incomplete</span>{{end}}</h1>
 {{- if .RestoreIncomplete}}
 <p class="warning" role="alert">The last restore of this stack did not complete, so its directory may be partly restored.

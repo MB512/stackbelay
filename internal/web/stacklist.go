@@ -13,6 +13,20 @@ import (
 // repository, last backup) and an Update group (scheduling, last check,
 // last update), with relative times and status dots.
 
+// stackListPage is the data of the stack list. Stacks whose directory
+// vanished are hidden unless ShowAll (issue #27, "?all=1": bookmarkable,
+// works without JavaScript); Hidden counts them.
+type stackListPage struct {
+	Rows    []stackRow
+	ShowAll bool
+	Hidden  int
+}
+
+// vanished reports whether st's directory existed once and is gone now.
+// A stack imported from another host that was never restored here is not
+// vanished: it is shown as "not restored yet".
+func vanished(st store.Stack) bool { return !st.Present && st.SeenPresent }
+
 // stackRow is one line of the stack list.
 type stackRow struct {
 	store.StackSummary

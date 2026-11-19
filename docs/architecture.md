@@ -916,6 +916,15 @@ tooltip; job states are dots with a symbol, not color alone (✓ succeeded,
 cells and recomputes the times. On narrow screens the table scrolls
 horizontally.
 
+Stacks whose directory **vanished** (`present = 0`, `seen_present = 1`) are
+hidden (issue #27); "Show stacks without directory (N)" lists them again
+(`/?all=1`, bookmarkable, works without JavaScript), and a list that is
+empty because of it says how many are hidden. A stack imported from
+another host that was never restored here (`seen_present = 0`) is always
+listed, with the badge `not restored yet` instead of `missing` (also in
+the stack header). Other lists (global log view, Host tab, permissions)
+are unchanged.
+
 The State cell loads lazily (HTMX, `GET /stacks/{name}/state`, again on
 "Refresh"), so the page does not wait for docker:
 

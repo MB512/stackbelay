@@ -18,6 +18,10 @@ type Stack struct {
 	ID      int64
 	Name    string
 	Present bool // false = directory missing (vanished, or imported but not restored yet)
+	// SeenPresent: the directory existed at some point (issue #27). False
+	// only for a stack imported from another host that was never restored
+	// here; a stack with SeenPresent and not Present has vanished.
+	SeenPresent bool
 	// SourceHost is the host whose snapshots the stack lists and restores
 	// (restic --host); "" = this host. Backups always use this host's name.
 	SourceHost string
@@ -34,8 +38,8 @@ func (s *Store) SyncStacks(ctx context.Context, discovered []string) error {
 		}
 		for _, name := range discovered {
 			if _, err := tx.ExecContext(ctx,
-				`INSERT INTO stacks (name, present) VALUES (?, 1)
-				 ON CONFLICT (name) DO UPDATE SET present = 1`, name); err != nil {
+				`INSERT INTO stacks (name, present, seen_present) VALUES (?, 1, 1)
+				 ON CONFLICT (name) DO UPDATE SET present = 1, seen_present = 1`, name); err != nil {
 				return fmt.Errorf("syncing stack %q: %w", name, err)
 			}
 		}
@@ -45,7 +49,7 @@ func (s *Store) SyncStacks(ctx context.Context, discovered []string) error {
 
 // ListStacks returns all stacks ordered by name.
 func (s *Store) ListStacks(ctx context.Context) ([]Stack, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, name, present, source_host FROM stacks ORDER BY name`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, name, present, seen_present, source_host FROM stacks ORDER BY name`)
 	if err != nil {
 		return nil, fmt.Errorf("listing stacks: %w", err)
 	}
@@ -55,7 +59,7 @@ func (s *Store) ListStacks(ctx context.Context) ([]Stack, error) {
 	var out []Stack
 	for rows.Next() {
 		var st Stack
-		if err := rows.Scan(&st.ID, &st.Name, &st.Present, &st.SourceHost); err != nil {
+		if err := rows.Scan(&st.ID, &st.Name, &st.Present, &st.SeenPresent, &st.SourceHost); err != nil {
 			return nil, fmt.Errorf("listing stacks: %w", err)
 		}
 		out = append(out, st)
@@ -96,7 +100,7 @@ func (s *Store) StackSummaries(ctx context.Context) ([]StackSummary, error) {
 	}
 
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT s.id, s.name, s.present, s.source_host, r.id IS NOT NULL
+		`SELECT s.id, s.name, s.present, s.seen_present, s.source_host, r.id IS NOT NULL
 		 FROM stacks s
 		 LEFT JOIN repositories r ON r.stack_id = s.id
 		 ORDER BY s.name`)
@@ -107,7 +111,7 @@ func (s *Store) StackSummaries(ctx context.Context) ([]StackSummary, error) {
 	var out []StackSummary
 	for rows.Next() {
 		var ss StackSummary
-		if err := rows.Scan(&ss.ID, &ss.Name, &ss.Present, &ss.SourceHost, &ss.HasRepository); err != nil {
+		if err := rows.Scan(&ss.ID, &ss.Name, &ss.Present, &ss.SeenPresent, &ss.SourceHost, &ss.HasRepository); err != nil {
 			return nil, fmt.Errorf("listing stacks: %w", err)
 		}
 		ss.LastBackup = lastBackup[ss.ID]
@@ -122,8 +126,8 @@ func (s *Store) StackSummaries(ctx context.Context) ([]StackSummary, error) {
 func (s *Store) StackByName(ctx context.Context, name string) (Stack, error) {
 	var st Stack
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, name, present, source_host FROM stacks WHERE name = ?`, name,
-	).Scan(&st.ID, &st.Name, &st.Present, &st.SourceHost)
+		`SELECT id, name, present, seen_present, source_host FROM stacks WHERE name = ?`, name,
+	).Scan(&st.ID, &st.Name, &st.Present, &st.SeenPresent, &st.SourceHost)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Stack{}, fmt.Errorf("stack %q: %w", name, ErrNotFound)
 	}
@@ -141,7 +145,7 @@ func (s *Store) StackByName(ctx context.Context, name string) (Stack, error) {
 // ErrConflict if a stack of that name exists.
 func (s *Store) CreateImportedStack(ctx context.Context, name, sourceHost string) (Stack, error) {
 	res, err := s.db.ExecContext(ctx,
-		`INSERT INTO stacks (name, present, source_host) VALUES (?, 0, ?) ON CONFLICT (name) DO NOTHING`,
+		`INSERT INTO stacks (name, present, seen_present, source_host) VALUES (?, 0, 0, ?) ON CONFLICT (name) DO NOTHING`,
 		name, sourceHost)
 	if err != nil {
 		return Stack{}, fmt.Errorf("creating stack %q: %w", name, err)
@@ -155,7 +159,8 @@ func (s *Store) CreateImportedStack(ctx context.Context, name, sourceHost string
 // SetStackPresent records that a stack's directory exists (after the first
 // restore of an imported stack) or not.
 func (s *Store) SetStackPresent(ctx context.Context, id int64, present bool) error {
-	res, err := s.db.ExecContext(ctx, `UPDATE stacks SET present = ? WHERE id = ?`, present, id)
+	res, err := s.db.ExecContext(ctx, `UPDATE stacks SET present = ?, seen_present = seen_present OR ? WHERE id = ?`,
+		present, present, id)
 	if err != nil {
 		return fmt.Errorf("updating stack %d: %w", id, err)
 	}

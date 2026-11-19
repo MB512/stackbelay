@@ -103,3 +103,74 @@ func TestScheduleEnabledMigration(t *testing.T) {
 		}
 	}
 }
+
+// SeenPresent (issue #27): false only for an imported stack that was never
+// on disk; once present, it stays true when the directory vanishes.
+func TestStackSeenPresent(t *testing.T) {
+	s := openTest(t)
+	ctx := context.Background()
+	if err := s.SyncStacks(ctx, []string{"web"}); err != nil {
+		t.Fatal(err)
+	}
+	cloud, err := s.CreateImportedStack(ctx, "cloud", "old-host")
+	if err != nil || cloud.SeenPresent || cloud.Present {
+		t.Fatalf("imported: %+v, %v", cloud, err)
+	}
+	if err := s.SetStackPresent(ctx, cloud.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SyncStacks(ctx, nil); err != nil { // both vanish
+		t.Fatal(err)
+	}
+	for _, name := range []string{"web", "cloud"} {
+		if st, _ := s.StackByName(ctx, name); st.Present || !st.SeenPresent {
+			t.Errorf("%s after vanishing: %+v", name, st)
+		}
+	}
+}
+
+// Migration 0017 marks existing records as seen, except imported stacks
+// that are not present and were never restored successfully.
+func TestSeenPresentMigration(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	raw, err := sql.Open("sqlite", dbPath+"?_pragma=foreign_keys(1)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ms, err := loadMigrations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	exec := func(q string, args ...any) {
+		t.Helper()
+		if _, err := raw.ExecContext(ctx, q, args...); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	exec(`CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL) STRICT`)
+	for _, m := range ms {
+		if m.version > 16 {
+			break
+		}
+		exec(m.sql)
+		exec(`INSERT INTO schema_migrations VALUES (?, ?, '2026-11-01T00:00:00Z')`, m.version, m.name)
+	}
+	exec(`INSERT INTO stacks (id, name, present, source_host) VALUES
+	      (1, 'here', 1, ''), (2, 'vanished', 0, ''), (3, 'imported', 0, 'old-host'), (4, 'moved-and-gone', 0, 'old-host')`)
+	exec(`INSERT INTO jobs (id, stack_id, type, trigger, state, options, queued_at, finished_at, result)
+	      VALUES ('01AAAAAAAAAAAAAAAAAAAAAAA1', 4, 'restore', 'manual', 'succeeded', '{}', '2026-11-01T10:00:00Z', '2026-11-01T11:00:00Z', '{}')`)
+	if err := raw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(ctx, dbPath, testBox(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	for name, want := range map[string]bool{"here": true, "vanished": true, "imported": false, "moved-and-gone": true} {
+		if st, err := s.StackByName(ctx, name); err != nil || st.SeenPresent != want {
+			t.Errorf("%s: %+v, %v; want seen_present=%v", name, st, err, want)
+		}
+	}
+}

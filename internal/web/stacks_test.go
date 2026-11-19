@@ -414,3 +414,60 @@ func TestBackupsTabWithoutRepositoryShowsDisabledActions(t *testing.T) {
 		t.Errorf("Backups tab of a user without backup right:\n%s", r.body)
 	}
 }
+
+// Stacks whose directory vanished are hidden by default; an imported stack
+// that was never restored stays visible as "not restored yet" (issue #27).
+func TestStackListHidesVanishedStacks(t *testing.T) {
+	e := newEnv(t, true, true)
+	e.setupStacks() // web and db
+	ctx := context.Background()
+	if _, err := e.st.CreateImportedStack(ctx, "cloud", "old-host"); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.st.SyncStacks(ctx, []string{"web"}); err != nil { // db vanished
+		t.Fatal(err)
+	}
+	e.loginAdmin()
+	r := e.get("/")
+	if strings.Contains(r.body, `href="/stacks/db"`) || !strings.Contains(r.body, `href="/stacks/web"`) {
+		t.Errorf("vanished stack listed or present one missing:\n%s", r.body)
+	}
+	if !strings.Contains(r.body, `href="/stacks/cloud"`) || !strings.Contains(r.body, ">not restored yet</span>") {
+		t.Errorf("imported stack not shown as not restored yet:\n%s", r.body)
+	}
+	if !strings.Contains(r.body, `<a href="/?all=1">Show stacks without directory (1)</a>`) {
+		t.Errorf("no link to show the hidden stack:\n%s", r.body)
+	}
+	r = e.get("/?all=1")
+	if !strings.Contains(r.body, `href="/stacks/db"`) || !strings.Contains(r.body, ">missing</span>") ||
+		!strings.Contains(r.body, `hx-get="/?all=1"`) || !strings.Contains(r.body, `<a href="/">Hide stacks without directory</a>`) {
+		t.Errorf("show all:\n%s", r.body)
+	}
+	// The stack page of the imported stack says so, too.
+	if r := e.get("/stacks/cloud/backups"); !strings.Contains(r.body, ">not restored yet</span>") {
+		t.Errorf("stack header of the imported stack:\n%s", r.body)
+	}
+
+	// Everything hidden: the list says so instead of "no stacks".
+	if err := e.st.SyncStacks(ctx, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.st.SetStackPresent(ctx, mustStack(t, e, "cloud").ID, true); err != nil { // restored once...
+		t.Fatal(err)
+	}
+	if err := e.st.SyncStacks(ctx, nil); err != nil { // ...and gone again
+		t.Fatal(err)
+	}
+	if r := e.get("/"); !strings.Contains(r.body, "3 stacks without directory are hidden.") || strings.Contains(r.body, "No stacks found") {
+		t.Errorf("all hidden:\n%s", r.body)
+	}
+}
+
+func mustStack(t *testing.T, e *testEnv, name string) store.Stack {
+	t.Helper()
+	st, err := e.st.StackByName(context.Background(), name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return st
+}

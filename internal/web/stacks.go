@@ -32,10 +32,15 @@ func (s *Server) stackList(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	page := stackListPage{ShowAll: r.URL.Query().Get("all") == "1"}
 	visible := sums[:0]
 	for _, sum := range sums {
 		p := perms[sum.ID] // zero Permission (no grant) if missing, also for admins
-		if auth.Allowed(a.User, p, auth.ActionView) {
+		switch {
+		case !auth.Allowed(a.User, p, auth.ActionView):
+		case vanished(sum.Stack) && !page.ShowAll:
+			page.Hidden++
+		default:
 			visible = append(visible, sum)
 		}
 	}
@@ -44,7 +49,8 @@ func (s *Server) stackList(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, r, "listing schedules", err)
 		return
 	}
-	s.render(w, r, http.StatusOK, "stacks.html", pageData{Title: "Stacks", Data: s.stackRows(visible, schedules)})
+	page.Rows = s.stackRows(visible, schedules)
+	s.render(w, r, http.StatusOK, "stacks.html", pageData{Title: "Stacks", Data: page})
 }
 
 // stackTab is one tab in the header of the stack pages.

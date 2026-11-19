@@ -11,7 +11,7 @@ All notable changes to StackVault. The format is based on
 Nothing to change in the compose file. The database is migrated at
 startup (0014 and 0015 drop schedule options that no longer exist, 0016
 the stack-level enabled flag: the schedules of a disabled stack are
-disabled instead). If you
+disabled instead; 0017 records which stacks were on disk once). If you
 set `STACKVAULT_MAX_JOBS=1`, consider removing it: the new default 3 lets
 the pre-stop snapshots and restores of several stacks run at the same
 time, while `STACKVAULT_MAX_DOWNTIMES` (default 1) still stops only one
@@ -70,6 +70,10 @@ directories left by older versions can be deleted by hand.
   dots (✓ / ✗ / running). A failed last backup also shows when the last
   successful one was; "update available" appears when the last check found
   newer images.
+- **Stacks without directory are hidden** in the stack list (#27); "Show
+  stacks without directory (N)" lists them again. A stack imported from
+  another host that is not restored yet stays visible, marked "not
+  restored yet". Migration 0017 adds `stacks.seen_present`.
 - **Job timeout** raised from 6 h to 48 h and configurable on the manager
   with `STACKVAULT_JOB_TIMEOUT` (e.g. `72h`; #32). Before, the variable was
   only read by the worker and the manager did not pass it on, so large
