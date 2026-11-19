@@ -4,6 +4,7 @@ package web
 
 import (
 	"context"
+	"fmt"
 	"html/template"
 	"log/slog"
 	"net/http"
@@ -136,7 +137,11 @@ func (s *Server) now() time.Time {
 
 // Handler returns the root HTTP handler with all routes and middleware.
 func (s *Server) Handler() (http.Handler, error) {
-	t, err := parseTemplates(s.templateFuncs())
+	assets, err := assetVersions()
+	if err != nil {
+		return nil, fmt.Errorf("reading static assets: %w", err)
+	}
+	t, err := parseTemplates(s.templateFuncs(assets))
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +156,7 @@ func (s *Server) Handler() (http.Handler, error) {
 	r.Use(securityHeaders)
 
 	r.Get("/healthz", s.healthz)
-	r.Handle("/static/*", staticHandler())
+	r.Handle("/static/*", staticHandler(assets))
 
 	r.Group(func(r chi.Router) {
 		// Reject cross-site browser requests that change state (first CSRF

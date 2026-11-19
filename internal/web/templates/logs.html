@@ -22,7 +22,7 @@
 {{- end}}
 {{- if .Selected}}
 {{template "log-panel" .Panel}}
-<script src="/static/stacklog.js" defer></script>
+<script src="{{asset "stacklog.js"}}" defer></script>
 {{- end}}
 {{- else}}
 <p class="hint">You may not read the logs of any stack.</p>

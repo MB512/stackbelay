@@ -194,11 +194,11 @@ func TestBusyForms(t *testing.T) {
 	e.setupLogs() // stack directories with a compose file (compose editor)
 	e.loginAdmin()
 	for path, wants := range map[string][]string{
-		"/stacks/web":          {`<script src="/static/forms.js" defer>`, `<span class="hint busy-text">asking the registries…</span>`},
+		"/stacks/web":          {`<script src="/static/forms.js?v=`, `<span class="hint busy-text">asking the registries…</span>`},
 		"/stacks/web/backups":  {`<span class="hint busy-text">reading the repository…</span>`},
 		"/stacks/web/settings": {`data-busy="Saving and checking access…"`, `data-busy="Initializing…"`},
 		"/stacks/web/compose":  {`data-busy="Validating…"`},
-		"/":                    {`<script src="/static/forms.js" defer>`},
+		"/":                    {`<script src="/static/forms.js?v=`},
 	} {
 		r := e.get(path)
 		for _, want := range wants {

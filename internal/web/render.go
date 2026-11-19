@@ -2,7 +2,9 @@ package web
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"fmt"
 	"html/template"
 	"io/fs"
@@ -27,9 +29,19 @@ var pages = []string{"login.html", "password.html", "error.html", "stacks.html",
 
 // templateFuncs returns the functions available in all templates. Times
 // are shown in the manager's time zone (s.loc).
-func (s *Server) templateFuncs() template.FuncMap {
+func (s *Server) templateFuncs(assets map[string]string) template.FuncMap {
 	loc := s.loc()
 	return template.FuncMap{
+		// asset is the URL of a static file with its content version
+		// ("/static/style.css?v=1a2b3c4d5e6f", issue #20), so a browser
+		// loads the new file right after an upgrade.
+		"asset": func(name string) (string, error) {
+			v, ok := assets[name]
+			if !ok {
+				return "", fmt.Errorf("unknown static asset %q", name)
+			}
+			return "/static/" + name + "?v=" + v, nil
+		},
 		// version is the build version, shown in the page footer.
 		"version": func() string { return buildinfo.Version },
 		// imageVersion formats an image version for the update check: the
@@ -146,15 +158,49 @@ func (s *Server) renderError(w http.ResponseWriter, r *http.Request, status int,
 	s.render(w, r, status, "error.html", pageData{Title: http.StatusText(status), Error: msg})
 }
 
-// staticHandler serves the embedded static assets under /static/.
-func staticHandler() http.Handler {
+// assetVersions returns a short hash of the content of every embedded
+// static file, by name ("style.css"). It is computed once at startup.
+func assetVersions() (map[string]string, error) {
+	sub, err := fs.Sub(staticFS, "static")
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	err = fs.WalkDir(sub, ".", func(name string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		b, err := fs.ReadFile(sub, name)
+		if err != nil {
+			return err
+		}
+		sum := sha256.Sum256(b)
+		out[name] = hex.EncodeToString(sum[:6])
+		return nil
+	})
+	return out, err
+}
+
+// staticHandler serves the embedded static assets under /static/. A URL
+// with the file's current version (see "asset") may be cached for a year;
+// any other is revalidated on every use (ETag = version), so a browser
+// never keeps an old script or style sheet after an upgrade (issue #20).
+func staticHandler(versions map[string]string) http.Handler {
 	sub, err := fs.Sub(staticFS, "static")
 	if err != nil {
 		panic(err) // the embedded directory always exists
 	}
 	files := http.StripPrefix("/static/", http.FileServerFS(sub))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "public, max-age=3600")
+		if v, ok := versions[strings.TrimPrefix(r.URL.Path, "/static/")]; ok {
+			// FileServer answers If-None-Match with 304 using this ETag.
+			w.Header().Set("ETag", `"`+v+`"`)
+			if r.URL.Query().Get("v") == v {
+				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			} else {
+				w.Header().Set("Cache-Control", "no-cache")
+			}
+		}
 		files.ServeHTTP(w, r)
 	})
 }

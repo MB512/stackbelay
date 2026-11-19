@@ -1000,7 +1000,13 @@ Stacks a user may not view answer 404 (not 403), so stack names are not
 revealed. `{name}` must pass `stacks.ValidName` and exist in the database
 (i.e. was discovered).
 
-Static assets are vendored into `internal/web/static` and embedded:
+Static assets are embedded from `internal/web/static`. Templates reference
+them with `{{asset "name"}}`, which adds the file's content version
+(`/static/style.css?v=<12 hex of its SHA-256>`, computed once at startup,
+`assetVersions`; issue #20). A request with the current version may be
+cached for a year (`immutable`); any other gets `Cache-Control: no-cache`
+and an `ETag` (the version), so a browser never keeps an old script or
+style sheet after an upgrade. Vendored assets:
 `htmx-2.0.11.min.js` (0BSD, `htmx-LICENSE.txt`; from the npm package
 `htmx.org@2.0.11`, tarball integrity checked against the registry). To
 update, replace the file, keep the version in the file name (cache busting)

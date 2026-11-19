@@ -14,7 +14,7 @@
   <p class="hint" id="job-log-empty">{{if .Job.State.Final}}No log.{{else}}The log appears when the worker starts.{{end}}</p>
   {{- end}}
 </div>
-<script src="/static/joblog.js" defer></script>
+<script src="{{asset "joblog.js"}}" defer></script>
 {{- end}}
 {{end}}
 

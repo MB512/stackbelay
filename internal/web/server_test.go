@@ -375,3 +375,48 @@ func TestDarkModeFollowsBrowser(t *testing.T) {
 		}
 	}
 }
+
+// Static files are referenced with their content version and may then be
+// cached long; without the current version they are revalidated (issue
+// #20: no stale scripts or styles after an upgrade).
+func TestStaticAssetVersions(t *testing.T) {
+	e := newEnv(t, true, true)
+	versions, err := assetVersions()
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := versions["style.css"]
+	if len(v) != 12 {
+		t.Fatalf("version of style.css: %q", v)
+	}
+	r := e.get("/login")
+	if !strings.Contains(r.body, `href="/static/style.css?v=`+v+`"`) {
+		t.Fatalf("login page does not reference the versioned style sheet:\n%s", r.body)
+	}
+	// get returns the status and headers; the body is closed inside.
+	get := func(path string, header ...string) (int, http.Header) {
+		t.Helper()
+		req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, e.srv.URL+path, nil)
+		for i := 0; i+1 < len(header); i += 2 {
+			req.Header.Set(header[i], header[i+1])
+		}
+		resp, err := e.srv.Client().Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		return resp.StatusCode, resp.Header
+	}
+	if code, h := get("/static/style.css?v=" + v); code != http.StatusOK ||
+		h.Get("Cache-Control") != "public, max-age=31536000, immutable" || h.Get("ETag") != `"`+v+`"` {
+		t.Errorf("current version: %d %v", code, h)
+	}
+	for _, path := range []string{"/static/style.css", "/static/style.css?v=old"} {
+		if _, h := get(path); h.Get("Cache-Control") != "no-cache" {
+			t.Errorf("%s: Cache-Control %q", path, h.Get("Cache-Control"))
+		}
+	}
+	if code, _ := get("/static/style.css", "If-None-Match", `"`+v+`"`); code != http.StatusNotModified {
+		t.Errorf("revalidation: %d", code)
+	}
+}

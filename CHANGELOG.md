@@ -99,6 +99,9 @@ directories left by older versions can be deleted by hand.
   is now interrupted like Ctrl+C and killed only after 30 s.
 - The job log showed the **snapshot's time instead of the log time** for
   the line "snapshot verified" of a restore (#31).
+- After an upgrade, **browsers kept the old scripts and styles** for up to
+  an hour (#20). Static files are now referenced with their content
+  version and loaded anew as soon as they change.
 
 ## [0.4.0] - 2026-11-18
 
