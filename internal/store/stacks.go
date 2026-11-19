@@ -67,7 +67,6 @@ func (s *Store) ListStacks(ctx context.Context) ([]Stack, error) {
 type StackSummary struct {
 	Stack
 	HasRepository        bool
-	ActiveSchedules      int       // enabled backup and update schedules
 	LastBackup           JobBrief  // newest backup job in any state; zero if there is none
 	LastSuccessfulBackup time.Time // finish of the newest succeeded backup; zero if there is none
 	LastUpdate           JobBrief  // newest update job in any state; zero if there is none
@@ -97,8 +96,7 @@ func (s *Store) StackSummaries(ctx context.Context) ([]StackSummary, error) {
 	}
 
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT s.id, s.name, s.present, s.source_host, r.id IS NOT NULL,
-		   (SELECT COUNT(*) FROM schedules sc WHERE sc.stack_id = s.id AND sc.enabled)
+		`SELECT s.id, s.name, s.present, s.source_host, r.id IS NOT NULL
 		 FROM stacks s
 		 LEFT JOIN repositories r ON r.stack_id = s.id
 		 ORDER BY s.name`)
@@ -109,7 +107,7 @@ func (s *Store) StackSummaries(ctx context.Context) ([]StackSummary, error) {
 	var out []StackSummary
 	for rows.Next() {
 		var ss StackSummary
-		if err := rows.Scan(&ss.ID, &ss.Name, &ss.Present, &ss.SourceHost, &ss.HasRepository, &ss.ActiveSchedules); err != nil {
+		if err := rows.Scan(&ss.ID, &ss.Name, &ss.Present, &ss.SourceHost, &ss.HasRepository); err != nil {
 			return nil, fmt.Errorf("listing stacks: %w", err)
 		}
 		ss.LastBackup = lastBackup[ss.ID]

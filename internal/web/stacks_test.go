@@ -209,51 +209,70 @@ func TestStackDetailShowsRepositoryAndSnapshots(t *testing.T) {
 			t.Fatalf("stack page contains secret %q", secret)
 		}
 	}
+	// Stack list (issue #37): column groups, relative times, status dots.
 	r = e.get("/")
-	if !strings.Contains(r.body, "<th>Scheduling</th>") || !strings.Contains(r.body, "configured") ||
-		!strings.Contains(r.body, `<span class="muted">never</span>`) {
-		t.Errorf("stack list:\n%s", r.body)
-	}
-	// Scheduling: none without schedule, active with one.
-	if !strings.Contains(r.body, `title="No enabled backup or update schedule">none</span>`) {
-		t.Errorf("scheduling none:\n%s", r.body)
+	for _, want := range []string{`<th colspan="3" class="group">Backup</th>`, `<th colspan="3" class="group">Update</th>`,
+		`aria-label="configured" title="Repository configured">✓</span>`, `<span class="muted">never</span>`,
+		`<span class="muted" title="No schedule">–</span>`} {
+		if !strings.Contains(r.body, want) {
+			t.Errorf("stack list lacks %s", want)
+		}
 	}
 	if _, err := e.st.CreateSchedule(ctx, store.Schedule{StackID: web, CronExpr: "0 3 * * *", Type: jobs.TypeUpdate}); err != nil {
 		t.Fatal(err)
 	}
-	if r = e.get("/"); !strings.Contains(r.body, `<span class="badge ok" title="1 enabled backup or update schedule(s)">active</span>`) {
-		t.Errorf("scheduling active:\n%s", r.body)
+	off, err := e.st.CreateSchedule(ctx, store.Schedule{StackID: web, CronExpr: "@daily", Type: jobs.TypeBackup})
+	if err != nil {
+		t.Fatal(err)
 	}
-	// Last backup: the newest backup job with its state, the last success
-	// as tooltip.
+	if err := e.st.SetScheduleEnabled(ctx, web, off, false); err != nil {
+		t.Fatal(err)
+	}
+	// The test clock is 2026-11-14 10:00 UTC.
+	base := time.Date(2026, 11, 10, 3, 0, 0, 0, time.UTC)
 	for _, j := range []store.Job{
-		{ID: "01AAAAAAAAAAAAAAAAAAAAAAA1", State: jobs.StateSucceeded, FinishedAt: t0},
-		{ID: "01AAAAAAAAAAAAAAAAAAAAAAA2", State: jobs.StateFailed, FinishedAt: t0.Add(24 * time.Hour)},
+		{ID: "01AAAAAAAAAAAAAAAAAAAAAAA1", State: jobs.StateSucceeded, FinishedAt: base},
+		{ID: "01AAAAAAAAAAAAAAAAAAAAAAA2", State: jobs.StateFailed, FinishedAt: base.Add(24 * time.Hour)},
 	} {
-		j.StackID, j.Type, j.Trigger, j.QueuedAt, j.StartedAt = web, jobs.TypeBackup, store.TriggerSchedule, t0, t0
+		j.StackID, j.Type, j.Trigger, j.QueuedAt, j.StartedAt = web, jobs.TypeBackup, store.TriggerSchedule, base, base
 		if err := e.st.ImportJob(ctx, j, ""); err != nil {
 			t.Fatal(err)
 		}
 	}
-	// Last update check: the newest update job, the last update that
-	// changed an image as tooltip.
 	for _, j := range []store.Job{
-		{ID: "01AAAAAAAAAAAAAAAAAAAAAAA3", FinishedAt: t0.Add(48 * time.Hour), Result: store.JobResult{ImagesChanged: []string{"app"}}},
-		{ID: "01AAAAAAAAAAAAAAAAAAAAAAA4", FinishedAt: t0.Add(72 * time.Hour), Result: store.JobResult{Unchanged: true}},
+		{ID: "01AAAAAAAAAAAAAAAAAAAAAAA3", FinishedAt: base.Add(48 * time.Hour), Result: store.JobResult{ImagesChanged: []string{"app"}}},
+		{ID: "01AAAAAAAAAAAAAAAAAAAAAAA4", FinishedAt: base.Add(72 * time.Hour), Result: store.JobResult{Unchanged: true}},
 	} {
-		j.StackID, j.Type, j.Trigger, j.State, j.QueuedAt, j.StartedAt = web, jobs.TypeUpdate, store.TriggerSchedule, jobs.StateSucceeded, t0, t0
+		j.StackID, j.Type, j.Trigger, j.State, j.QueuedAt, j.StartedAt = web, jobs.TypeUpdate, store.TriggerSchedule, jobs.StateSucceeded, base, base
 		if err := e.st.ImportJob(ctx, j, ""); err != nil {
 			t.Fatal(err)
 		}
 	}
 	r = e.get("/")
 	for _, want := range []string{
-		`<a href="/jobs/01AAAAAAAAAAAAAAAAAAAAAAA2" title="Last successful backup: 2026-11-13 03:00 UTC">2026-11-14 03:00 UTC</a> <span class="badge err">failed</span>`,
-		`<a href="/jobs/01AAAAAAAAAAAAAAAAAAAAAAA4" title="Last update that changed an image: 2026-11-15 03:00 UTC">2026-11-16 03:00 UTC</a> <span class="badge ok">succeeded</span>`,
+		// Last backup failed 3 days ago; the last success 4 days ago.
+		`<a href="/jobs/01AAAAAAAAAAAAAAAAAAAAAAA2" title="2026-11-11 03:00 UTC: failed">3 d</a> <span class="dot err" role="img" aria-label="failed"`,
+		`title="Last successful backup: 2026-11-10 03:00 UTC">(ok 4 d ago)</span>`,
+		// Backup scheduling: one schedule, disabled.
+		`title="1 schedule, all disabled">off</span>`,
+		// Update scheduling: next run tomorrow 03:00.
+		`title="Next run 2026-11-15 03:00 UTC (0 3 * * *)">in 17 h</span>`,
+		// Last check: the newest update job; last update: the one that changed an image.
+		`<a href="/jobs/01AAAAAAAAAAAAAAAAAAAAAAA4" title="2026-11-13 03:00 UTC: succeeded">1 d</a>`,
+		`title="Last update that changed an image: 2026-11-12 03:00 UTC">2 d</span>`,
 	} {
 		if !strings.Contains(r.body, want) {
-			t.Errorf("stack list lacks %s:\n%s", want, r.body)
+			t.Errorf("stack list lacks %s", want)
 		}
+	}
+	// A newer registry check (in memory) wins and shows "update available".
+	e.server.updateResults.set(web, &updateResult{At: time.Date(2026, 11, 14, 9, 0, 0, 0, time.UTC), NewImages: 1})
+	if r = e.get("/"); !strings.Contains(r.body, `<span title="Registry check: 2026-11-14 09:00 UTC">1 h</span>`) ||
+		!strings.Contains(r.body, ">update available</a>") {
+		t.Errorf("registry check not shown:\n%s", r.body)
+	}
+	if t.Failed() {
+		t.Log(r.body)
 	}
 
 	// Disable and enable all schedules on the Settings tab (issue #37).

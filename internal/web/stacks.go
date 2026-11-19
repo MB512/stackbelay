@@ -17,21 +17,6 @@ import (
 	"github.com/MB512/stackvault/internal/store"
 )
 
-// stackRow is one line of the stack list.
-type stackRow struct {
-	store.StackSummary
-	Backup lastJob
-	Update lastJob
-}
-
-// lastJob is a stack's newest job of one type and its last success, for
-// the "last-job" template.
-type lastJob struct {
-	store.JobBrief
-	Success      time.Time // zero if never
-	SuccessLabel string    // tooltip text before the success time
-}
-
 // stackList shows the stacks the user may see.
 func (s *Server) stackList(w http.ResponseWriter, r *http.Request) {
 	a := authFrom(r.Context())
@@ -47,19 +32,19 @@ func (s *Server) stackList(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	var rows []stackRow
+	visible := sums[:0]
 	for _, sum := range sums {
 		p := perms[sum.ID] // zero Permission (no grant) if missing, also for admins
-		if !auth.Allowed(a.User, p, auth.ActionView) {
-			continue
+		if auth.Allowed(a.User, p, auth.ActionView) {
+			visible = append(visible, sum)
 		}
-		rows = append(rows, stackRow{
-			StackSummary: sum,
-			Backup:       lastJob{JobBrief: sum.LastBackup, Success: sum.LastSuccessfulBackup, SuccessLabel: "Last successful backup"},
-			Update:       lastJob{JobBrief: sum.LastUpdate, Success: sum.LastImageUpdate, SuccessLabel: "Last update that changed an image"},
-		})
 	}
-	s.render(w, r, http.StatusOK, "stacks.html", pageData{Title: "Stacks", Data: rows})
+	schedules, err := s.Store.ListSchedules(r.Context(), 0)
+	if err != nil {
+		s.internalError(w, r, "listing schedules", err)
+		return
+	}
+	s.render(w, r, http.StatusOK, "stacks.html", pageData{Title: "Stacks", Data: s.stackRows(visible, schedules)})
 }
 
 // stackTab is one tab in the header of the stack pages.

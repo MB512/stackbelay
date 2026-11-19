@@ -130,7 +130,7 @@ func TestStackStateCell(t *testing.T) {
 
 	// The list loads the cell lazily and has the refresh button.
 	r := e.get("/")
-	for _, want := range []string{`hx-get="/stacks/web/state" hx-trigger="load, click from:#refresh-states"`, `id="refresh-states"`} {
+	for _, want := range []string{`hx-get="/stacks/web/state" hx-trigger="load"`, `hx-select="#stack-rows" hx-target="#stack-rows"`} {
 		if !strings.Contains(r.body, want) {
 			t.Errorf("stack list lacks %s:\n%s", want, r.body)
 		}

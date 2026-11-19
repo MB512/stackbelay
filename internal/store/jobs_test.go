@@ -229,25 +229,3 @@ func TestStackSummariesLastJobs(t *testing.T) {
 		t.Errorf("db updates: %+v %v", d.LastUpdate, d.LastImageUpdate)
 	}
 }
-
-func TestStackSummariesActiveSchedules(t *testing.T) {
-	s := openTest(t)
-	ctx := context.Background()
-	web := stackID(t, s, "web")
-	for _, typ := range []jobs.Type{jobs.TypeBackup, jobs.TypeUpdate} {
-		if _, err := s.CreateSchedule(ctx, Schedule{StackID: web, CronExpr: "0 3 * * *", Type: typ}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	off, err := s.CreateSchedule(ctx, Schedule{StackID: web, CronExpr: "0 4 * * *", Type: jobs.TypeBackup})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := s.SetScheduleEnabled(ctx, web, off, false); err != nil {
-		t.Fatal(err)
-	}
-	sums, err := s.StackSummaries(ctx)
-	if err != nil || len(sums) != 1 || sums[0].ActiveSchedules != 2 {
-		t.Fatalf("StackSummaries (2 enabled schedules): %+v, %v", sums, err)
-	}
-}

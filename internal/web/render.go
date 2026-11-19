@@ -43,6 +43,10 @@ func (s *Server) templateFuncs() template.FuncMap {
 			}
 			return t.In(loc).Format("2006-01-02 15:04 MST")
 		},
+		// ago and in show the time since or until t roughly ("4 h", issue
+		// #37); the full time belongs in a tooltip (when).
+		"ago": func(t time.Time) string { return formatAge(s.now().Sub(t)) },
+		"in":  func(t time.Time) string { return "in " + formatAge(t.Sub(s.now())) },
 		// timeZone names the zone times are shown in, e.g. "Europe/Berlin".
 		"timeZone": s.zoneName,
 		// bytes, percent and seconds format job progress.

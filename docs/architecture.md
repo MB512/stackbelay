@@ -892,20 +892,32 @@ keeping repositories and their indexes small.
 
 ### Stack list
 
-The start page (`GET /`, decided in issue #23) lists the stacks the user
-may view with these columns:
+The start page (`GET /`, decided in issues #23 and #37) lists the stacks
+the user may view. Times are relative ("45 s", "12 min", "4 h", "25 d",
+"1 y", `formatAge`; "in 5 h" for the future) with the full timestamp in the
+tooltip; job states are dots with a symbol, not color alone (✓ succeeded,
+✗ failed, pulsing ● running, … queued, ○ cancelled; tooltip and
+`aria-label` carry the text). Columns, in two groups:
 
-- **State** (see below).
-- **Scheduling**: `active` (at least one enabled backup or update
-  schedule) or `none`.
-- **Repository**: configured or none.
-- **Last backup** and **Last update check**: the newest backup or update
-  job in any state with a link. The tooltip shows the last successful
-  backup, or the last update that changed an image (`result.images_changed`,
-  see "Update pipeline").
+- **Stack** and **State** (see below).
+- **Backup**: *Scheduling* (next run of the stack's enabled backup
+  schedules, cron expression in the tooltip; `–` without schedule, `off`
+  when all are disabled), *Repository* (✓ or `–`), *Last* (the newest
+  backup job with its dot and a link; if it did not succeed, also the
+  time since the last successful backup, or "never succeeded").
+- **Update**: *Scheduling* (like backups), *Last check* (the newest update
+  job in any outcome, or the last manual registry check of the update
+  page if that is newer; it lives in memory and is lost on a restart;
+  "update available" links to the update page when that check found newer
+  images or pinned versions), *Last update* (the newest update that
+  changed an image, `result.images_changed`, see "Update pipeline").
+
+"Refresh" reloads the rows (HTMX, `hx-select`), which reloads the State
+cells and recomputes the times. On narrow screens the table scrolls
+horizontally.
 
 The State cell loads lazily (HTMX, `GET /stacks/{name}/state`, again on
-"Refresh state"), so the page does not wait for docker:
+"Refresh"), so the page does not wait for docker:
 
 | State | Meaning |
 |---|---|

@@ -64,6 +64,12 @@ directories left by older versions can be deleted by hand.
   their own; the Settings tab has "Enable all" and "Disable all" for a
   stack's schedules. Migration 0016 disables the schedules of stacks that
   were disabled and drops `stacks.enabled`.
+- **New stack list** (#37): backup and update column groups (scheduling
+  with the next run, repository, last backup; last check, last update),
+  times as "4 h" / "25 d" with the exact time in the tooltip, and status
+  dots (✓ / ✗ / running). A failed last backup also shows when the last
+  successful one was; "update available" appears when the last check found
+  newer images.
 - **Job timeout** raised from 6 h to 48 h and configurable on the manager
   with `STACKVAULT_JOB_TIMEOUT` (e.g. `72h`; #32). Before, the variable was
   only read by the worker and the manager did not pass it on, so large

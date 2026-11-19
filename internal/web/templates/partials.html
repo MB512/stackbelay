@@ -1,9 +1,28 @@
 {{- /* Snippets shared by several pages. */ -}}
 
-{{- /* Whether scheduled jobs run. Dot is a store.StackSummary. */}}
-{{define "stack-scheduling"}}
-{{- if .ActiveSchedules}}<span class="badge ok" title="{{.ActiveSchedules}} enabled backup or update schedule(s)">active</span>
-{{- else}}<span class="muted" title="No enabled backup or update schedule">none</span>{{end}}
+{{- /* Next scheduled run of one job type in the stack list. Dot is a
+       scheduleInfo. */}}
+{{define "schedule-cell"}}
+{{- if not .Count}}<span class="muted" title="No schedule">–</span>
+{{- else if not .Enabled}}<span class="muted" title="{{.Count}} schedule{{if ne .Count 1}}s{{end}}, all disabled">off</span>
+{{- else}}<span title="Next run {{when .Next}} ({{.Cron}}){{if gt .Count .Enabled}}; {{.Enabled}} of {{.Count}} schedules enabled{{end}}">{{in .Next}}</span>{{end}}
+{{- end}}
+
+{{- /* Status dot of a job state: a symbol, not color alone. Dot is a
+       jobs.State. */}}
+{{define "dot"}}
+{{- if eq (print .) "succeeded"}}<span class="dot ok" role="img" aria-label="succeeded" title="succeeded">✓</span>
+{{- else if eq (print .) "failed"}}<span class="dot err" role="img" aria-label="failed" title="failed">✗</span>
+{{- else if eq (print .) "running"}}<span class="dot run" role="img" aria-label="running" title="running">●</span>
+{{- else if eq (print .) "queued"}}<span class="dot" role="img" aria-label="queued" title="queued">…</span>
+{{- else}}<span class="dot" role="img" aria-label="{{.}}" title="{{.}}">○</span>{{end}}
+{{- end}}
+
+{{- /* A job as "4 h ago" with its state dot, linking to the job. Dot is a
+       store.JobBrief. */}}
+{{define "job-age"}}
+{{- if .ID}}<a href="/jobs/{{.ID}}" title="{{when .Time}}: {{.State}}">{{ago .Time}}</a> {{template "dot" .State}}
+{{- else}}<span class="muted">never</span>{{end}}
 {{- end}}
 
 {{- /* Top of every stack page: name, status and the tabs the user may open.
@@ -34,13 +53,6 @@
   <a href="/admin/audit"{{if eq . "audit"}} aria-current="page"{{end}}>Audit log</a>
 </nav>
 {{end}}
-
-{{- /* Newest job of a type with a link, its state and, as tooltip, the
-       last success. Dot is a lastJob. */}}
-{{define "last-job"}}
-{{- if .ID}}<a href="/jobs/{{.ID}}" title="{{.SuccessLabel}}: {{when .Success}}">{{when .Time}}</a> {{template "job-state" .State}}
-{{- else}}<span class="muted">never</span>{{end}}
-{{- end}}
 
 {{- /* What a host cleanup removed. Dot is a store.JobResult. */}}
 {{define "cleanup-result"}}

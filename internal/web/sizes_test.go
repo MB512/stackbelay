@@ -248,3 +248,18 @@ func TestPreStopSnapshotsFolded(t *testing.T) {
 		t.Errorf("admin restore page: %d", r.status)
 	}
 }
+
+func TestFormatAge(t *testing.T) {
+	for d, want := range map[time.Duration]string{
+		-time.Minute:                    "0 s",
+		45 * time.Second:                "45 s",
+		12*time.Minute + 59*time.Second: "12 min",
+		4*time.Hour + 59*time.Minute:    "4 h",
+		25 * 24 * time.Hour:             "25 d",
+		400 * 24 * time.Hour:            "1 y",
+	} {
+		if got := formatAge(d); got != want {
+			t.Errorf("formatAge(%s) = %q, want %q", d, got, want)
+		}
+	}
+}

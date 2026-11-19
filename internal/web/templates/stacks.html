@@ -1,26 +1,48 @@
 {{define "content"}}
 <h1>Stacks</h1>
 {{- with .Data}}
-<p><button type="button" id="refresh-states">Refresh state</button></p>
-<table>
+<p><button type="button" hx-get="/" hx-select="#stack-rows" hx-target="#stack-rows" hx-swap="outerHTML"
+  title="Reload the states and times">Refresh</button></p>
+<div class="table-scroll">
+<table class="stack-list">
   <thead>
-    <tr><th>Stack</th><th>State</th><th>Scheduling</th><th>Repository</th><th>Last backup</th><th>Last update check</th></tr>
+    <tr><th rowspan="2">Stack</th><th rowspan="2">State</th>
+      <th colspan="3" class="group">Backup</th><th colspan="3" class="group">Update</th></tr>
+    <tr><th class="group-start">Scheduling</th><th>Repository</th><th>Last</th>
+      <th class="group-start">Scheduling</th><th>Last check</th><th>Last update</th></tr>
   </thead>
-  <tbody>
+  <tbody id="stack-rows">
     {{- range .}}
     <tr>
       <td><a href="/stacks/{{.Name}}">{{.Name}}</a></td>
       <td>
-        {{- if .Present}}<span hx-get="/stacks/{{.Name}}/state" hx-trigger="load, click from:#refresh-states"><span class="muted">…</span></span>
+        {{- if .Present}}<span hx-get="/stacks/{{.Name}}/state" hx-trigger="load"><span class="muted">…</span></span>
         {{- else}}<span class="badge warn" title="The stack directory is missing.">missing</span>{{end}}</td>
-      <td>{{template "stack-scheduling" .StackSummary}}</td>
-      <td>{{if .HasRepository}}configured{{else}}<span class="muted">none</span>{{end}}</td>
-      <td>{{template "last-job" .Backup}}</td>
-      <td>{{template "last-job" .Update}}</td>
+      <td class="group-start">{{template "schedule-cell" .BackupSchedule}}</td>
+      <td>{{if .HasRepository}}<span class="dot ok" role="img" aria-label="configured" title="Repository configured">✓</span>
+        {{- else}}<span class="muted" title="No repository: backups are not possible">–</span>{{end}}</td>
+      <td>{{template "job-age" .LastBackup}}
+        {{- if and .LastBackup.ID (ne (print .LastBackup.State) "succeeded")}}
+        <span class="hint" title="Last successful backup: {{when .LastSuccessfulBackup}}">
+          {{- if .LastSuccessfulBackup.IsZero}}(never succeeded){{else}}(ok {{ago .LastSuccessfulBackup}} ago){{end}}</span>
+        {{- end}}</td>
+      <td class="group-start">{{template "schedule-cell" .UpdateSchedule}}</td>
+      <td>
+        {{- with .Check.Registry}}
+        <span title="Registry check: {{when .At}}{{with .Error}}; failed: {{.}}{{end}}">{{ago .At}}</span>
+        {{- if .Error}} <span class="dot err" role="img" aria-label="failed" title="Registry check failed: {{.Error}}">✗</span>
+        {{- else}} <span class="dot ok" role="img" aria-label="checked" title="Registry check">✓</span>{{end}}
+        {{- else}}{{template "job-age" .Check.Job}}{{end}}
+        {{- if .Check.UpdateAvailable}} <a href="/stacks/{{.Name}}/update" class="badge run" title="The last check found newer images or versions pinned by a restore">update available</a>{{end}}</td>
+      <td>{{if .LastImageUpdate.IsZero}}<span class="muted">never</span>
+        {{- else}}<span title="Last update that changed an image: {{when .LastImageUpdate}}">{{ago .LastImageUpdate}}</span>{{end}}</td>
     </tr>
     {{- end}}
   </tbody>
 </table>
+</div>
+<p class="hint">Times are how long ago something happened; hover them for the exact time. Scheduling shows the next
+  run of a stack's enabled backup or update schedules.</p>
 {{- else}}
 {{- if $.User.IsAdmin}}
 <p class="hint">No stacks found. Stacks are the directories with a compose file under <code>STACKS_ROOT</code>;
