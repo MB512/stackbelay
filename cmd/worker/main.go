@@ -159,20 +159,18 @@ func run(args []string, getenv func(string) string, stderr io.Writer) int {
 	finished := time.Now().UTC()
 	status.FinishedAt = &finished
 	code := 0
-	switch {
-	case err == nil:
-		status.State = jobs.StateSucceeded
+	state, err := outcome(ctx.Err(), err, cfg.JobTimeout)
+	status.State = state
+	switch state {
+	case jobs.StateSucceeded:
 		log.Info("job succeeded", "type", spec.Type, "stack", spec.Stack, "snapshot", status.Snapshot,
 			"pre_stop_snapshot", status.PreStopSnapshot, "safety_snapshot", status.SafetySnapshot,
 			"previous_dir", status.PreviousDir)
-	case errors.Is(err, context.Canceled) && ctx.Err() != nil:
-		status.State, status.Error, code = jobs.StateCancelled, redact(err.Error(), secrets), 1
+	case jobs.StateCancelled:
+		status.Error, code = redact(err.Error(), secrets), 1
 		log.Error("job cancelled", "error", err)
 	default:
-		if errors.Is(err, context.DeadlineExceeded) && ctx.Err() != nil {
-			err = fmt.Errorf("job timeout (%s) exceeded: %w", cfg.JobTimeout, err)
-		}
-		status.State, status.Error, code = jobs.StateFailed, redact(err.Error(), secrets), 1
+		status.Error, code = redact(err.Error(), secrets), 1
 		log.Error("job failed", "error", err)
 	}
 	if jobDir != "" && !writeFinalStatus(jobDir, status, log, stderr) {
@@ -190,6 +188,25 @@ func run(args []string, getenv func(string) string, stderr io.Writer) int {
 		}
 	}
 	return code
+}
+
+// outcome decides the final state of a job from the error of the pipeline
+// and the state of the job's context (ctxErr = ctx.Err() after the job).
+// The context decides, not the error: when the context ends, the running
+// command (restic, docker) is killed and only reports "signal: killed",
+// which does not wrap context.Canceled or context.DeadlineExceeded.
+// A timeout is a failure; the returned error then says so first.
+func outcome(ctxErr, err error, timeout time.Duration) (jobs.State, error) {
+	switch {
+	case err == nil:
+		return jobs.StateSucceeded, nil
+	case errors.Is(ctxErr, context.Canceled):
+		return jobs.StateCancelled, fmt.Errorf("job cancelled: %w", err)
+	case errors.Is(ctxErr, context.DeadlineExceeded):
+		return jobs.StateFailed, fmt.Errorf("job timeout (%s) exceeded: %w", timeout, err)
+	default:
+		return jobs.StateFailed, err
+	}
 }
 
 // parseArgs turns the command line into a job spec. For "run" it also

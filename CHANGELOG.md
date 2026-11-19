@@ -6,6 +6,13 @@ All notable changes to StackVault. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **Cancelled and timed-out jobs** were shown as failed with restic's last
+  output as the error (e.g. `restic restore: signal: killed`; #30). A
+  cancelled job is now `cancelled`, and a job stopped by the job timeout
+  says `job timeout (…) exceeded`.
+
 ## [0.4.0] - 2026-11-18
 
 ### Upgrading from 0.3

@@ -2,13 +2,16 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/MB512/stackvault/internal/jobs"
 	"github.com/MB512/stackvault/internal/restic"
@@ -266,5 +269,38 @@ func TestImportRefusesExistingStack(t *testing.T) {
 	if code := run([]string{"restore", "--import", "web", "0123abcd"}, func(k string) string { return env[k] }, &out); code != 1 ||
 		!strings.Contains(out.String(), "already exists") {
 		t.Fatalf("code %d, output %s", code, out.String())
+	}
+}
+
+func TestOutcome(t *testing.T) {
+	// What a killed restic returns: no context error wrapped (issue #30).
+	killed := errors.New("restoring snapshot: restic restore: signal: killed")
+	tests := []struct {
+		name    string
+		ctxErr  error
+		err     error
+		want    jobs.State
+		wantErr string // prefix of the error; "" for none
+	}{
+		{"success", nil, nil, jobs.StateSucceeded, ""},
+		{"success after context ended", context.Canceled, nil, jobs.StateSucceeded, ""},
+		{"failure", nil, killed, jobs.StateFailed, "restoring snapshot:"},
+		{"cancelled, killed command", context.Canceled, killed, jobs.StateCancelled, "job cancelled: restoring snapshot:"},
+		{"cancelled, wrapped", context.Canceled, fmt.Errorf("x: %w", context.Canceled), jobs.StateCancelled, "job cancelled: x:"},
+		{"timeout, killed command", context.DeadlineExceeded, killed, jobs.StateFailed, "job timeout (6h0m0s) exceeded: restoring snapshot:"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := outcome(tt.ctxErr, tt.err, 6*time.Hour)
+			if got != tt.want {
+				t.Errorf("state = %q, want %q", got, tt.want)
+			}
+			switch {
+			case tt.wantErr == "" && err != nil:
+				t.Errorf("err = %v, want nil", err)
+			case tt.wantErr != "" && (err == nil || !strings.HasPrefix(err.Error(), tt.wantErr)):
+				t.Errorf("err = %v, want prefix %q", err, tt.wantErr)
+			}
+		})
 	}
 }
