@@ -1099,6 +1099,18 @@ script inserts every line in time order: the event id and the line's
 resumes after the newest line seen. The stream always
 carries all containers. "Wrap lines" (on by default, remembered per
 browser in `localStorage`) can be turned off for horizontal scrolling.
+**Colors** (issue #29, on by default, remembered the same way): the ANSI
+colors applications write into their output are shown. `ansiHTML`
+converts the SGR sequences of each line on the server into `<span>`
+elements with fixed classes (16 foreground and background colors, bold,
+dim, italic, underline; 256-color and true-color codes map to the nearest
+of the 16), with every piece of text HTML-escaped and no inline style
+(CSP). Every other escape or control sequence (cursor movement, titles,
+hyperlinks) is removed; after a carriage return only the last segment
+of a line is kept (progress bars); open spans are closed at the end of
+each line. The palette is the dark log panel's (both themes); turning
+colors off shows plain text. Compose's own prefix colors stay off
+(`--no-color`); the job log is not affected.
 "Full screen" makes the log cover the browser window (not the browser's
 own full-screen mode) with only an "Exit full screen" button; Esc exits
 too.

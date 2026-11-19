@@ -128,6 +128,19 @@ table.details th { width: 10rem; }
 .log .line.colored { border-left: 3px solid var(--cc); padding-left: .5rem; }
 .swatch { display: inline-block; width: .8rem; height: .8rem; border-radius: 2px; background: var(--cc); }
 .log .line[hidden] { display: none; }
+/* Container log colors (issue #29): the ANSI colors of applications
+   (web/ansi.go). The log panel is dark in both modes, so one palette is
+   enough; normal colors are lifted a little to stay readable on it. */
+.log .af0 { color: #6b7380; } .log .af1 { color: #f28b82; } .log .af2 { color: #8fd694; } .log .af3 { color: #e8c25e; }
+.log .af4 { color: #7ea4ff; } .log .af5 { color: #e88fd0; } .log .af6 { color: #7fd8d8; } .log .af7 { color: #d7dde5; }
+.log .af8 { color: #9aa4b2; } .log .af9 { color: #ff9f97; } .log .af10 { color: #a8f0ad; } .log .af11 { color: #ffe17a; }
+.log .af12 { color: #a3bfff; } .log .af13 { color: #ffaee6; } .log .af14 { color: #a0f0f0; } .log .af15 { color: #ffffff; }
+.log .ab0 { background: #000; } .log .ab1 { background: #6b1f1a; } .log .ab2 { background: #1f4d27; } .log .ab3 { background: #5c4a12; }
+.log .ab4 { background: #1d2f66; } .log .ab5 { background: #5a1f4d; } .log .ab6 { background: #164a4a; } .log .ab7 { background: #4a525c; }
+.log .ab8 { background: #3a404a; } .log .ab9 { background: #8a2a23; } .log .ab10 { background: #2a6b35; } .log .ab11 { background: #7a6318; }
+.log .ab12 { background: #2a428c; } .log .ab13 { background: #7a2a68; } .log .ab14 { background: #1f6666; } .log .ab15 { background: #6b737d; }
+.log .abold { font-weight: 700; } .log .adim { opacity: .7; } .log .aital { font-style: italic; } .log .aund { text-decoration: underline; }
+.log.nocolor .an { color: inherit; background: none; font-weight: inherit; opacity: 1; font-style: inherit; text-decoration: none; }
 fieldset.containers { display: flex; flex-wrap: wrap; gap: .3rem 1.2rem; align-items: center; }
 fieldset.containers .actions { margin-left: auto; display: flex; gap: .5rem; }
 .log-controls { display: flex; gap: 1.2rem; align-items: center; margin: .6rem 0; }

@@ -133,6 +133,24 @@
 	} catch (e) { /* default: wrap */ }
 	wrap.addEventListener("change", function () { setWrap(wrap.checked); });
 
+	// ANSI colors of the applications (issue #29), like line wrapping:
+	// remembered in this browser only.
+	var colorsKey = "stackvault.logs.colors";
+	var colorsBox = document.getElementById("log-colors");
+	function setColors(on) {
+		colorsBox.checked = on;
+		log.classList.toggle("nocolor", !on);
+		try {
+			window.localStorage.setItem(colorsKey, on ? "1" : "0");
+		} catch (e) { /* not remembered */ }
+	}
+	try {
+		if (window.localStorage.getItem(colorsKey) === "0") {
+			setColors(false);
+		}
+	} catch (e) { /* default: colors */ }
+	colorsBox.addEventListener("change", function () { setColors(colorsBox.checked); });
+
 	// Full screen inside the browser window (not the browser's own full
 	// screen mode): the frame covers the page and shows only the log and a
 	// bar with the container filter and the exit button. The filter element

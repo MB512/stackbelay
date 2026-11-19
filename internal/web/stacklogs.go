@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"errors"
+	"html/template"
 	"io"
 	"net/http"
 	"slices"
@@ -102,8 +103,10 @@ type containerLogLine struct {
 	Container string
 	Time      string // in the manager's time zone, "2006-01-02 15:04:05"; "" if the line has none
 	ID        string // see logLineID; data-t of the line, for sorting in the browser
-	Text      string
-	Cut       bool
+	// Text is the line as HTML: escaped, with ANSI colors as spans
+	// (ansiHTML, issue #29).
+	Text template.HTML
+	Cut  bool
 }
 
 // Key identifies the container in the browser's filter (data-c): the
@@ -132,7 +135,7 @@ func logLineID(t time.Time) string {
 }
 
 func newContainerLogLine(stack string, l docker.LogLine, loc *time.Location) containerLogLine {
-	out := containerLogLine{Stack: stack, Container: l.Container, ID: logLineID(l.Time), Text: l.Text, Cut: l.Cut}
+	out := containerLogLine{Stack: stack, Container: l.Container, ID: logLineID(l.Time), Text: ansiHTML(l.Text), Cut: l.Cut}
 	if !l.Time.IsZero() {
 		out.Time = l.Time.In(loc).Format("2006-01-02 15:04:05")
 	}

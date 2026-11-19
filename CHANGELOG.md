@@ -18,6 +18,13 @@ time, while `STACKVAULT_MAX_DOWNTIMES` (default 1) still stops only one
 stack at a time. `<stack>.restore-tmp` and `<stack>.old-<time>`
 directories left by older versions can be deleted by hand.
 
+### Added
+
+- **Colors in container logs** (#29): the ANSI colors applications write
+  into their output are shown on the Logs tab and in the global log view;
+  other escape sequences no longer appear as stray characters. "Colors"
+  next to "Wrap lines" turns them off.
+
 ### Changed
 
 - **Every restore runs in place** (#33): only files that differ from the
