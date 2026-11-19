@@ -39,7 +39,7 @@
         {{- else}}{{template "job-age" .Check.Job}}{{end}}
         {{- if .Check.UpdateAvailable}} <a href="/stacks/{{.Name}}/update" class="badge run" title="The last check found newer images or versions pinned by a restore">update available</a>{{end}}</td>
       <td>{{if .LastImageUpdate.IsZero}}<span class="muted">never</span>
-        {{- else}}<span title="Last update that changed an image: {{when .LastImageUpdate}}">{{ago .LastImageUpdate}}</span>{{end}}</td>
+        {{- else}}<span title="Last update or compose change that replaced an image: {{when .LastImageUpdate}}">{{ago .LastImageUpdate}}</span>{{end}}</td>
     </tr>
     {{- end}}
   </tbody>

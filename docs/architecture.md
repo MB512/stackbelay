@@ -910,7 +910,8 @@ tooltip; job states are dots with a symbol, not color alone (✓ succeeded,
   page if that is newer; it lives in memory and is lost on a restart;
   "update available" links to the update page when that check found newer
   images or pinned versions), *Last update* (the newest update that
-  changed an image, `result.images_changed`, see "Update pipeline").
+  changed an image, `result.images_changed`, see "Update pipeline"; a compose
+  change through the editor that replaced an image counts too).
 
 "Refresh" reloads the rows (HTMX, `hx-select`), which reloads the State
 cells and recomputes the times. On narrow screens the table scrolls

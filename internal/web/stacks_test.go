@@ -259,7 +259,7 @@ func TestStackDetailShowsRepositoryAndSnapshots(t *testing.T) {
 		`title="Next run 2026-11-15 03:00 UTC (0 3 * * *)">in 17 h</span>`,
 		// Last check: the newest update job; last update: the one that changed an image.
 		`<a href="/jobs/01AAAAAAAAAAAAAAAAAAAAAAA4" title="2026-11-13 03:00 UTC: succeeded">1 d</a>`,
-		`title="Last update that changed an image: 2026-11-12 03:00 UTC">2 d</span>`,
+		`title="Last update or compose change that replaced an image: 2026-11-12 03:00 UTC">2 d</span>`,
 	} {
 		if !strings.Contains(r.body, want) {
 			t.Errorf("stack list lacks %s", want)

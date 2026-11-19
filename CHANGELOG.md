@@ -76,7 +76,8 @@ directories left by older versions can be deleted by hand.
   times as "4 h" / "25 d" with the exact time in the tooltip, and status
   dots (✓ / ✗ / running). A failed last backup also shows when the last
   successful one was; "update available" appears when the last check found
-  newer images.
+  newer images. "Last update" counts updates and compose changes that
+  replaced an image.
 - **Stacks without directory are hidden** in the stack list (#27); "Show
   stacks without directory (N)" lists them again. A stack imported from
   another host that is not restored yet stays visible, marked "not

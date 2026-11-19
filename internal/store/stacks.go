@@ -74,8 +74,9 @@ type StackSummary struct {
 	LastBackup           JobBrief  // newest backup job in any state; zero if there is none
 	LastSuccessfulBackup time.Time // finish of the newest succeeded backup; zero if there is none
 	LastUpdate           JobBrief  // newest update job in any state; zero if there is none
-	// LastImageUpdate is the finish of the newest succeeded update job
-	// that changed the image of a running service; zero if there is none.
+	// LastImageUpdate is the finish of the newest succeeded update or
+	// compose apply that changed the image of a running service; zero if
+	// there is none.
 	LastImageUpdate time.Time
 }
 
@@ -86,7 +87,7 @@ func (s *Store) StackSummaries(ctx context.Context) ([]StackSummary, error) {
 	if err != nil {
 		return nil, err
 	}
-	lastSuccess, err := s.lastSucceeded(ctx, jobs.TypeBackup, false)
+	lastSuccess, err := s.lastSucceeded(ctx, false, jobs.TypeBackup)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +95,7 @@ func (s *Store) StackSummaries(ctx context.Context) ([]StackSummary, error) {
 	if err != nil {
 		return nil, err
 	}
-	lastImageUpdate, err := s.lastSucceeded(ctx, jobs.TypeUpdate, true)
+	lastImageUpdate, err := s.lastSucceeded(ctx, true, jobs.TypeUpdate, jobs.TypeComposeApply)
 	if err != nil {
 		return nil, err
 	}

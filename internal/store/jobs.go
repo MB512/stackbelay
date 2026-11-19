@@ -276,19 +276,24 @@ func (s *Store) latestJobs(ctx context.Context, typ jobs.Type) (map[int64]JobBri
 }
 
 // lastSucceeded returns, per stack id, when the newest succeeded job of
-// type typ finished. With imagesChanged only jobs that changed the image of
-// a running service count (result.images_changed, see "Update pipeline" in
+// one of the types finished. With imagesChanged only jobs that changed the
+// image of a running service count (result.images_changed, recorded by
+// updates and compose applies, see "Update pipeline" in
 // docs/architecture.md). Stacks without such a job are missing from the
 // map.
-func (s *Store) lastSucceeded(ctx context.Context, typ jobs.Type, imagesChanged bool) (map[int64]time.Time, error) {
+func (s *Store) lastSucceeded(ctx context.Context, imagesChanged bool, types ...jobs.Type) (map[int64]time.Time, error) {
+	typeList, err := json.Marshal(types)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT stack_id, MAX(finished_at) FROM jobs
-		 WHERE type = ? AND state = ? AND finished_at IS NOT NULL
+		 WHERE type IN (SELECT value FROM json_each(?)) AND state = ? AND finished_at IS NOT NULL
 		   AND (NOT ? OR json_array_length(result, '$.images_changed') > 0)
 		 GROUP BY stack_id`,
-		typ, jobs.StateSucceeded, imagesChanged)
+		string(typeList), jobs.StateSucceeded, imagesChanged)
 	if err != nil {
-		return nil, fmt.Errorf("listing last succeeded %s jobs: %w", typ, err)
+		return nil, fmt.Errorf("listing last succeeded %v jobs: %w", types, err)
 	}
 	defer rows.Close()
 	out := make(map[int64]time.Time)
@@ -296,7 +301,7 @@ func (s *Store) lastSucceeded(ctx context.Context, typ jobs.Type, imagesChanged 
 		var stackID int64
 		var at string
 		if err := rows.Scan(&stackID, &at); err != nil {
-			return nil, fmt.Errorf("listing last succeeded %s jobs: %w", typ, err)
+			return nil, fmt.Errorf("listing last succeeded %v jobs: %w", types, err)
 		}
 		if out[stackID], err = parseTime(at); err != nil {
 			return nil, err

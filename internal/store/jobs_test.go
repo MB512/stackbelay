@@ -200,6 +200,11 @@ func TestStackSummariesLastJobs(t *testing.T) {
 	addResult("01AAAAAAAAAAAAAAAAAAAAAAA6", web, jobs.TypeUpdate, jobs.StateSucceeded, t0.Add(60*h), t0.Add(60*h), t0.Add(61*h),
 		JobResult{Unchanged: true})
 	add("01AAAAAAAAAAAAAAAAAAAAAAA7", web, jobs.TypeUpdate, jobs.StateFailed, t0.Add(70*h), t0.Add(70*h), t0.Add(71*h))
+	// A compose change that replaced an image is an update too (it is not
+	// a check); one that changed no image is not.
+	addResult("01AAAAAAAAAAAAAAAAAAAAAAA8", db, jobs.TypeComposeApply, jobs.StateSucceeded, t0.Add(80*h), t0.Add(80*h), t0.Add(81*h),
+		JobResult{ImagesChanged: []string{"app"}})
+	add("01AAAAAAAAAAAAAAAAAAAAAAA9", web, jobs.TypeComposeApply, jobs.StateSucceeded, t0.Add(90*h), t0.Add(90*h), t0.Add(91*h))
 
 	sums, err := s.StackSummaries(ctx)
 	if err != nil || len(sums) != 2 {
@@ -224,8 +229,8 @@ func TestStackSummariesLastJobs(t *testing.T) {
 	if !w.LastImageUpdate.Equal(t0.Add(51 * h)) {
 		t.Errorf("web last image update: %v", w.LastImageUpdate)
 	}
-	// db has no update jobs.
-	if d.LastUpdate.ID != "" || !d.LastImageUpdate.IsZero() {
+	// db has no update jobs, but a compose change that replaced an image.
+	if d.LastUpdate.ID != "" || !d.LastImageUpdate.Equal(t0.Add(81*h)) {
 		t.Errorf("db updates: %+v %v", d.LastUpdate, d.LastImageUpdate)
 	}
 }
