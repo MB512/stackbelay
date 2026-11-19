@@ -237,6 +237,7 @@ docker run --detach --name stackvault-job-<id>
   --mount type=bind,source=<host docker socket>,target=/var/run/docker.sock
   --mount <host jobs dir>/<ID> -> /job   (bind, or volume with volume-subpath)
   --mount type=volume,source=stackvault-restic-cache,target=/cache
+  [--mount <manager's /root/.docker or /root/.docker/config.json>,readonly]
   --env STACKS_ROOT --env STACKVAULT_HOSTNAME --env RESTIC_CACHE_DIR
   --env STACKVAULT_JOB_TIMEOUT --env STACKVAULT_DOWNTIME_TIMEOUT [--env STACKVAULT_LOG_LEVEL]
   --env RESTIC_REPOSITORY --env RESTIC_PASSWORD --env <backend variables>
@@ -244,7 +245,12 @@ docker run --detach --name stackvault-job-<id>
 ```
 
 The manager finds the host side of its mounts and its own image by
-inspecting its own container (id from `/proc/self/mountinfo`).
+inspecting its own container (id from `/proc/self/mountinfo`). If the
+manager has the docker client configuration mounted at `/root/.docker`
+(directory) or `/root/.docker/config.json` (file), every worker gets the
+same mount read-only (`dockerConfigMount`, issue #14): the registry
+credentials of `docker login` for pulls of private images (update, pinned
+restore, starts that pull); the manager's update check uses them too.
 `STACKS_ROOT` must be bind-mounted from the same path; `/data` may be a
 bind mount or a named volume (Docker >= 26 for `volume-subpath`). Outside a
 container (development) paths are used as they are and

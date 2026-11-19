@@ -24,6 +24,10 @@ directories left by older versions can be deleted by hand.
   into their output are shown on the Logs tab and in the global log view;
   other escape sequences no longer appear as stray characters. "Colors"
   next to "Wrap lines" turns them off.
+- **Private registries** (#14): a docker client configuration mounted
+  into the manager at `/root/.docker` (or just its `config.json`) is
+  passed read-only to every worker, so updates and pinned restores can pull
+  private images; see "Private registries" in the README.
 
 ### Changed
 

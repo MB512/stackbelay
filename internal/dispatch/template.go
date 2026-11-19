@@ -56,6 +56,10 @@ type Template struct {
 	// JobTimeout and DowntimeTimeout are passed as STACKVAULT_JOB_TIMEOUT
 	// and STACKVAULT_DOWNTIME_TIMEOUT; 0 leaves the worker's default.
 	JobTimeout, DowntimeTimeout time.Duration
+	// DockerConfig is the manager's own mount of the docker client
+	// configuration (registry credentials, issue #14), passed read-only to
+	// every worker at the same path; nil if the manager has none.
+	DockerConfig *docker.Mount
 	// OwnStack is the name of the stack the manager itself belongs to (its
 	// compose project directory is a stack directory under STACKS_ROOT),
 	// or "" if it is not one of the stacks.
@@ -98,18 +102,22 @@ func (t Template) Spec(jobID string, repo restic.Repo) (docker.ContainerSpec, er
 		}
 		env[k] = v
 	}
+	mounts := []docker.Mount{
+		{Type: "bind", Source: t.StacksRoot, Target: t.StacksRoot},
+		{Type: "bind", Source: t.Socket, Target: dockerSocket},
+		jobMount,
+		{Type: "volume", Source: CacheVolume, Target: workerCacheDir},
+	}
+	if t.DockerConfig != nil {
+		mounts = append(mounts, *t.DockerConfig)
+	}
 	return docker.ContainerSpec{
 		Name:   ContainerName(jobID),
 		Image:  t.Image,
 		Labels: map[string]string{LabelWorker: "true", LabelJob: jobID},
-		Mounts: []docker.Mount{
-			{Type: "bind", Source: t.StacksRoot, Target: t.StacksRoot},
-			{Type: "bind", Source: t.Socket, Target: dockerSocket},
-			jobMount,
-			{Type: "volume", Source: CacheVolume, Target: workerCacheDir},
-		},
-		Env: env,
-		Cmd: []string{WorkerBinary, "run", WorkerJobDir},
+		Mounts: mounts,
+		Env:    env,
+		Cmd:    []string{WorkerBinary, "run", WorkerJobDir},
 		// The image's HEALTHCHECK is the manager's (GET /healthz).
 		NoHealthcheck: true,
 	}, nil
@@ -172,6 +180,7 @@ func NewTemplate(cfg TemplateConfig, self *docker.SelfInfo) (Template, error) {
 	if m, _, ok := mountFor(self.Mounts, dockerSocket); ok && m.Type == "bind" {
 		t.Socket = m.Source
 	}
+	t.DockerConfig = dockerConfigMount(self.Mounts)
 	m, rel, ok = mountFor(self.Mounts, cfg.JobsDir)
 	if !ok {
 		return Template{}, fmt.Errorf("the data directory (%s) must be a mounted volume or host directory, "+
@@ -184,6 +193,27 @@ func NewTemplate(cfg TemplateConfig, self *docker.SelfInfo) (Template, error) {
 		t.Jobs = docker.Mount{Type: "volume", Source: m.Source, SubPath: path.Join(m.SubPath, rel)}
 	}
 	return t, nil
+}
+
+// Where the docker CLI of the manager and the workers (both run as root)
+// reads its configuration, including registry credentials ("docker login").
+const (
+	dockerConfigDir  = "/root/.docker"
+	dockerConfigFile = dockerConfigDir + "/config.json"
+)
+
+// dockerConfigMount returns the manager's mount of the docker client
+// configuration, as the read-only mount for workers: a directory mounted
+// at /root/.docker or a single file at /root/.docker/config.json (issue
+// #14: credentials for private registries, used by updates and pinned
+// restores). Nil if there is none.
+func dockerConfigMount(mounts []docker.Mount) *docker.Mount {
+	for _, m := range mounts {
+		if (m.Target == dockerConfigDir || m.Target == dockerConfigFile) && (m.Type == "bind" || m.Type == "volume") {
+			return &docker.Mount{Type: m.Type, Source: m.Source, Target: m.Target, SubPath: m.SubPath, ReadOnly: true}
+		}
+	}
+	return nil
 }
 
 // ownStack returns the stack name of a compose working directory if it is a

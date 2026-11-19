@@ -156,6 +156,25 @@ The image is `ghcr.io/mb512/stackvault` (linux/amd64, linux/arm64). It
 contains the manager (web UI, scheduler) and the worker; the manager starts
 its workers from its own image.
 
+### Private registries
+
+To pull images from a private registry (updates, pinned restores, the
+update check), give the manager the docker client configuration with the
+registry credentials. Mount either a directory or a single file (read-only):
+
+```yaml
+    volumes:
+      - /root/.docker/config.json:/root/.docker/config.json:ro
+```
+
+The manager passes the same mount, read-only, to every worker container.
+The file must contain the credentials itself (`"auths"`, as written by
+`docker login` without a credential helper): credential helpers such as
+`credsStore: desktop` or `pass` do not exist inside the containers. Create
+it e.g. with `DOCKER_CONFIG=/etc/stackvault/docker docker login
+registry.example.com` and mount `/etc/stackvault/docker` at
+`/root/.docker`.
+
 Tags: `<major>.<minor>.<patch>`, `<major>.<minor>` and `latest` for
 releases. `dev` is an untested development build of an arbitrary commit,
 moved to each new dev build without a version number (the UI shows

@@ -100,6 +100,10 @@ attackers reaching the UI, a leaked database file.
    `AZURE_ACCOUNT_SAS`, `GOOGLE_ACCESS_TOKEN`). User names, key ids, regions
    and paths are not secret and not redacted (redacting a user name "demo"
    would also hide the stack name "demo-web").
+   Registry credentials (issue #14) are not stored by StackVault: the
+   operator mounts a docker client configuration into the manager, which
+   passes that mount read-only to the workers; it never appears in job
+   specs, logs or the database.
 6. **Authentication.** argon2id password hashes (m=64 MiB, t=3, p=2, PHC
    format); random 256-bit session tokens, stored as SHA-256 only; cookie
    `__Host-stackvault_session` with `HttpOnly`, `Secure`, `SameSite=Lax`

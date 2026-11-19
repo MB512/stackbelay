@@ -56,3 +56,6 @@ services:
       - ./data:/data
       # Optional, see above:
       # - /etc/stackvault/secret.key:/run/secrets/stackvault.key:ro
+      # Optional: registry credentials for private images (README,
+      # "Private registries"); passed read-only to the workers.
+      # - /etc/stackvault/docker:/root/.docker:ro

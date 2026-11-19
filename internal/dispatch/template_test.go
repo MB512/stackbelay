@@ -131,3 +131,42 @@ func TestOwnStack(t *testing.T) {
 		t.Fatalf("OwnStack = %q, %v", tpl.OwnStack, err)
 	}
 }
+
+// The manager's docker client configuration (registry credentials) is
+// passed read-only to every worker at the same path (issue #14).
+func TestTemplateDockerConfig(t *testing.T) {
+	cfg := TemplateConfig{StacksRoot: "/home/docker", JobsDir: "/data/jobs", Hostname: "host-a"}
+	base := []docker.Mount{
+		{Type: "bind", Source: "/home/docker", Target: "/home/docker"},
+		{Type: "bind", Source: "/srv/sv/data", Target: "/data"},
+	}
+	for name, tc := range map[string]struct {
+		extra []docker.Mount
+		want  *docker.Mount
+	}{
+		"none":      {nil, nil},
+		"directory": {[]docker.Mount{{Type: "bind", Source: "/home/admin/.docker", Target: "/root/.docker"}}, &docker.Mount{Type: "bind", Source: "/home/admin/.docker", Target: "/root/.docker", ReadOnly: true}},
+		"file":      {[]docker.Mount{{Type: "bind", Source: "/etc/sv/config.json", Target: "/root/.docker/config.json"}}, &docker.Mount{Type: "bind", Source: "/etc/sv/config.json", Target: "/root/.docker/config.json", ReadOnly: true}},
+		"elsewhere": {[]docker.Mount{{Type: "bind", Source: "/x", Target: "/root/other"}}, nil},
+	} {
+		t.Run(name, func(t *testing.T) {
+			tpl, err := NewTemplate(cfg, &docker.SelfInfo{ImageID: "sha256:self", Mounts: append(append([]docker.Mount{}, base...), tc.extra...)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			cs, err := tpl.Spec("01ABCDEFGHJKMNPQRSTVWXYZ01", restic.Repo{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got *docker.Mount
+			for _, m := range cs.Mounts {
+				if strings.HasPrefix(m.Target, "/root/.docker") {
+					got = &m
+				}
+			}
+			if (got == nil) != (tc.want == nil) || (got != nil && *got != *tc.want) {
+				t.Errorf("docker config mount = %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
