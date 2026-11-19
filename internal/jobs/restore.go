@@ -280,7 +280,7 @@ func (p *Pipeline) resolveSnapshot(ctx context.Context, log *slog.Logger, id, st
 	if err != nil {
 		return restic.Snapshot{}, "", err
 	}
-	log.Info("snapshot verified", "id", snap.ID, "host", snap.Hostname, "path", srcPath, "time", snap.Time)
+	log.Info("snapshot verified", "id", snap.ID, "host", snap.Hostname, "path", srcPath, "snapshot_time", snap.Time)
 	return snap, srcPath, nil
 }
 

@@ -15,6 +15,8 @@ All notable changes to StackVault. The format is based on
 - A cancelled or timed-out job **killed restic**, which left its lock in
   the repository (an append-only repository cannot remove it; #30). restic
   is now interrupted like Ctrl+C and killed only after 30 s.
+- The job log showed the **snapshot's time instead of the log time** for
+  the line "snapshot verified" of a restore (#31).
 
 ## [0.4.0] - 2026-11-18
 
