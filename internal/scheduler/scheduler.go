@@ -195,8 +195,8 @@ func (s *Scheduler) Fire(ctx context.Context, scheduleID int64) {
 			detail = "only if new, without backup if the stack has no repository"
 			break
 		}
-		job.Options = store.JobOptions{OnlyIfNew: true, NoPreStop: !sc.PreStop, RollbackInPlace: sc.RollbackInPlace}
-		detail = fmt.Sprintf("only if new, pre-stop snapshot: %t, rollback in place: %t", sc.PreStop, sc.RollbackInPlace)
+		job.Options = store.JobOptions{OnlyIfNew: true, NoPreStop: !sc.PreStop}
+		detail = fmt.Sprintf("only if new, pre-stop snapshot: %t", sc.PreStop)
 	default:
 		log.Error("skipping schedule with unknown job type")
 		return

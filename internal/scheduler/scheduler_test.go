@@ -156,7 +156,7 @@ func TestFire(t *testing.T) {
 	t.Run("queues a scheduled update: only if new, with its options", func(t *testing.T) {
 		e := newEnv(t)
 		for _, sc := range []store.Schedule{
-			{StackID: e.web.ID, CronExpr: "@daily", Type: jobs.TypeUpdate, PreStop: false, RollbackInPlace: true},
+			{StackID: e.web.ID, CronExpr: "@daily", Type: jobs.TypeUpdate, PreStop: false},
 			{StackID: e.db.ID, CronExpr: "@daily", Type: jobs.TypeUpdate, PreStop: true},
 		} {
 			e.s.Fire(ctx, e.scheduleOf(t, sc))
@@ -165,7 +165,7 @@ func TestFire(t *testing.T) {
 		if len(got) != 2 {
 			t.Fatalf("submitted %d jobs, want 2", len(got))
 		}
-		want := []store.JobOptions{{OnlyIfNew: true, NoPreStop: true, RollbackInPlace: true}, {OnlyIfNew: true}}
+		want := []store.JobOptions{{OnlyIfNew: true, NoPreStop: true}, {OnlyIfNew: true}}
 		for i, j := range got {
 			if j.Type != jobs.TypeUpdate || j.Trigger != store.TriggerSchedule || j.Options != want[i] {
 				t.Errorf("job %d = %+v, options want %+v", i, j, want[i])

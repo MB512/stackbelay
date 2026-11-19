@@ -17,7 +17,7 @@ const testJobID = "01JCZ8G3T4S5V6W7X8Y9Z0ABCD"
 func TestSpecRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	want := Spec{ID: testJobID, Type: TypeRestore, Stack: "web", SnapshotID: "0123abcd", NoStart: true, PinImages: true,
-		InPlace: true, CarryOverJobs: "data/jobs", Trigger: "manual", Requester: "alice"}
+		CarryOverJobs: "data/jobs", Trigger: "manual", Requester: "alice"}
 	if err := WriteSpec(dir, want); err != nil {
 		t.Fatal(err)
 	}
@@ -33,7 +33,7 @@ func TestSpecRoundTrip(t *testing.T) {
 
 func TestUpdateSpecRoundTrip(t *testing.T) {
 	dir := t.TempDir()
-	want := Spec{ID: testJobID, Type: TypeUpdate, Stack: "web", OnlyIfNew: true, RollbackInPlace: true, NoPreStop: true, CarryOverJobs: "data/jobs", Trigger: "manual"}
+	want := Spec{ID: testJobID, Type: TypeUpdate, Stack: "web", OnlyIfNew: true, NoPreStop: true, CarryOverJobs: "data/jobs", Trigger: "manual"}
 	if err := WriteSpec(dir, want); err != nil {
 		t.Fatal(err)
 	}
@@ -101,12 +101,8 @@ func TestReadSpecRejects(t *testing.T) {
 		{"restore with flag-like snapshot", `{"version":1,"id":"` + testJobID + `","type":"restore","stack":"web","snapshot_id":"--help"}`},
 		{"backup with restore option", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"web","no_start":true}`},
 		{"backup with pinned images", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"web","pin_images":true}`},
-		{"backup in place", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"web","in_place":true}`},
 		{"only-if-new on a compose apply", `{"version":1,"id":"` + testJobID + `","type":"compose-apply","stack":"web","only_if_new":true,"compose_sha256":"` + strings.Repeat("a", 64) + `","compose_base_sha256":"` + strings.Repeat("b", 64) + `"}`},
 		{"no-pre-stop on a backup", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"web","no_pre_stop":true}`},
-		{"rollback in place on a restore", `{"version":1,"id":"` + testJobID + `","type":"restore","stack":"web","snapshot_id":"0123abcd","rollback_in_place":true}`},
-		{"rollback in place without backup", `{"version":1,"id":"` + testJobID + `","type":"update","stack":"web","no_backup":true,"rollback_in_place":true}`},
-		{"update in place", `{"version":1,"id":"` + testJobID + `","type":"update","stack":"web","in_place":true}`},
 		{"restore with backup option", `{"version":1,"id":"` + testJobID + `","type":"restore","stack":"web","snapshot_id":"0123abcd","pre_stop":true}`},
 		{"carry-over outside the stack", `{"version":1,"id":"` + testJobID + `","type":"restore","stack":"web","snapshot_id":"0123abcd","carry_over_jobs":"../manager/data"}`},
 		{"absolute carry-over", `{"version":1,"id":"` + testJobID + `","type":"restore","stack":"web","snapshot_id":"0123abcd","carry_over_jobs":"/data/jobs"}`},
@@ -132,7 +128,7 @@ func TestReadSpecRejects(t *testing.T) {
 		{"cleanup options on a backup", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"web","image_min_age_hours":5}`},
 		{"stack job without stack", `{"version":1,"id":"` + testJobID + `","type":"backup"}`},
 		{"import on a backup", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"web","import":true}`},
-		{"import in place", `{"version":1,"id":"` + testJobID + `","type":"restore","stack":"web","snapshot_id":"0123abcd","import":true,"in_place":true}`},
+		{"removed option in_place (#33)", `{"version":1,"id":"` + testJobID + `","type":"restore","stack":"web","snapshot_id":"0123abcd","in_place":true}`},
 		{"import without safety snapshot", `{"version":1,"id":"` + testJobID + `","type":"restore","stack":"web","snapshot_id":"0123abcd","import":true,"skip_safety_snapshot":true}`},
 		{"negative download limit", `{"version":1,"id":"` + testJobID + `","type":"restore","stack":"web","snapshot_id":"0123abcd","limit_download_kib":-5}`},
 		{"download limit on an update", `{"version":1,"id":"` + testJobID + `","type":"update","stack":"web","limit_download_kib":5}`},

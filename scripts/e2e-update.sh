@@ -4,8 +4,8 @@
 #
 #   1. update with backup succeeds (pull, pre-stop + final snapshot, up)
 #   2. update with backup fails (service unhealthy) -> automatic rollback
+#      (in place)
 #   1b. update "only if new" without a new image -> nothing touched
-#   2b. update with backup fails, rollback in place
 #   3. update without backup fails -> no rollback, stack left as it is
 #   4. compose-apply (compose editor job) with a valid change
 #   5. compose-apply with an image that does not exist -> rollback to the
@@ -99,35 +99,21 @@ export RESTIC_REPOSITORY="$WORK/repo" RESTIC_PASSWORD_FILE="$WORK/pw"
 unset RESTIC_REPOSITORY RESTIC_PASSWORD_FILE
 pass "pulled, compared, nothing backed up or recreated"
 
-step "2. update with backup fails: automatic rollback"
+step "2. update with backup fails: automatic rollback (in place)"
 echo v2 >"$DIR/data/value.txt" # the state the rollback must return to
+inode="$(stat -c %i "$DIR")"
 set_broken "touch /flags/broken"
 if env "${REPO_ENV[@]}" bin/worker update "$STACK" 2>"$WORK/update2.log"; then
 	cat "$WORK/update2.log"
 	fail "update succeeded although the service is unhealthy"
 fi
 has_msg "$WORK/update2.log" "rolled back to the state before the update" || { cat "$WORK/update2.log"; fail "no rollback"; }
-old=("$ROOT/$STACK".old-*)
-[[ -d "${old[0]}" ]] || fail "failed version directory not kept"
 [[ "$(cat "$DIR/data/value.txt")" == v2 ]] || fail "stack data after rollback: $(cat "$DIR/data/value.txt")"
 has_msg "$WORK/update2.log" "image pinned" || fail "rollback did not pin the previous image"
-pass "rolled back (data v2, image pinned, failed version kept at ${old[0]##*/})"
-rm -rf "${old[@]}"
-
-step "2b. update with backup fails: rollback in place"
-echo v3 >"$DIR/data/value.txt"
-inode="$(stat -c %i "$DIR")"
-set_broken "touch /flags/broken"
-if env "${REPO_ENV[@]}" bin/worker update --rollback-in-place "$STACK" 2>"$WORK/update2b.log"; then
-	cat "$WORK/update2b.log"
-	fail "update succeeded although the service is unhealthy"
-fi
-has_msg "$WORK/update2b.log" "restoring in place" || { cat "$WORK/update2b.log"; fail "not restored in place"; }
-has_msg "$WORK/update2b.log" "rolled back to the state before the update" || { cat "$WORK/update2b.log"; fail "no rollback"; }
-[[ "$(cat "$DIR/data/value.txt")" == v3 ]] || fail "stack data after rollback: $(cat "$DIR/data/value.txt")"
 [[ "$(stat -c %i "$DIR")" == "$inode" ]] || fail "stack directory replaced instead of restored in place"
-compgen -G "$ROOT/$STACK.old-*" >/dev/null && fail "previous-version directory created by an in-place rollback"
-pass "rolled back in place (data v3, same directory, no .old-*)"
+compgen -G "$ROOT/$STACK.*" >/dev/null && fail "a sibling directory was created by the rollback"
+[[ ! -e "$DIR/.stackvault-restore-incomplete" ]] || fail "incomplete-restore marker left after the rollback"
+pass "rolled back in place (data v2, image pinned, same directory)"
 
 step "3. update without backup fails: no rollback"
 set_broken "touch /flags/broken"
@@ -137,7 +123,7 @@ if bin/worker update --no-backup "$STACK" 2>"$WORK/update3.log"; then
 fi
 has_msg "$WORK/update3.log" "NOT ROLLED BACK" || { cat "$WORK/update3.log"; fail "missing no-rollback message"; }
 ! has_msg "$WORK/update3.log" "rolling back" || fail "rolled back without backup"
-compgen -G "$ROOT/$STACK.old-*" >/dev/null && fail "a directory was swapped without backup"
+compgen -G "$ROOT/$STACK.*" >/dev/null && fail "a sibling directory was created without backup"
 [[ "$(container_id)" != "$before" ]] || fail "update without backup did not recreate the container"
 pass "left as it is (new container kept, no restore)"
 
@@ -186,6 +172,5 @@ cmp -s "$DIR/compose.yml" "$WORK/compose.before5" || fail "compose file not roll
 [[ "$(state app)" == running ]] || fail "app not running after rollback"
 python3 -I -c 'import json,sys; assert json.load(open(sys.argv[1]))["rolled_back"]' "$WORK/job5/status.json" || fail "status not rolled_back"
 pass "rolled back to the previous compose file, app running"
-rm -rf "$ROOT/$STACK".old-*
 
 printf '\n\033[32mall update checks passed\033[0m\n'

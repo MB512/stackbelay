@@ -32,7 +32,7 @@ func TestRestorePinnedImages(t *testing.T) {
 		"docker.Services",
 		"docker.Stop",
 		"restic.Backup tag=pre-restore parent= host=host-a",
-		"restic.Restore " + snapID + ":/home/docker/web",
+		restoreCall(),
 		"restic.Node " + snapID + ":/home/docker/web",
 		"docker.EnsureImage " + testDigest,
 		"docker.EnsureImage " + dbDigest,
@@ -61,12 +61,14 @@ func TestRestorePinnedImages(t *testing.T) {
 	}
 }
 
-func TestRestorePinnedImagesFailsBeforeSwap(t *testing.T) {
+// A pinning problem shows after the files are restored (in place, issue
+// #33): the stack is restored but left stopped, and nothing else runs.
+func TestRestorePinnedImagesFailsAfterRestore(t *testing.T) {
 	tests := []struct {
 		name     string
 		setup    func(e *env)
 		wantErr  string
-		wantLast string // last call before the rollback starts the old stack
+		wantLast string // last call: nothing starts after the failure
 	}{
 		{"pull fails", func(e *env) {
 			e.restic.restoreFiles[MetadataFile] = pinMetadata
@@ -89,16 +91,17 @@ func TestRestorePinnedImagesFailsBeforeSwap(t *testing.T) {
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Fatalf("err = %v, want %q", err, tt.wantErr)
 			}
+			if !strings.Contains(err.Error(), "restored, but the stack was not started") {
+				t.Errorf("err = %v", err)
+			}
 			calls := e.calls.list()
-			n := len(calls)
-			if n < 3 || !strings.HasPrefix(calls[n-3], tt.wantLast) ||
-				calls[n-2] != "docker.Start app,db" || calls[n-1] != "docker.WaitHealthy" {
-				t.Fatalf("calls do not end with %q and the rollback start:\n  %s", tt.wantLast, strings.Join(calls, "\n  "))
+			if last := calls[len(calls)-1]; !strings.HasPrefix(last, tt.wantLast) {
+				t.Fatalf("calls do not end with %q:\n  %s", tt.wantLast, strings.Join(calls, "\n  "))
 			}
-			if got := readData(t, e.stack.Dir); got != "original" {
-				t.Errorf("stack dir was replaced: %q", got)
+			if got := readData(t, e.stack.Dir); got != "restored" {
+				t.Errorf("stack dir has %q", got)
 			}
-			assertNoStaging(t, e)
+			assertMarker(t, e.stack.Dir, false)
 		})
 	}
 }

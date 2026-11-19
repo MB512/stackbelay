@@ -25,10 +25,9 @@ type JobOptions struct {
 	SkipSafetySnapshot bool   `json:"skip_safety_snapshot,omitempty"` // restore
 	NoStart            bool   `json:"no_start,omitempty"`             // restore
 	PinImages          bool   `json:"pin_images,omitempty"`           // restore: image versions from metadata.txt
-	InPlace            bool   `json:"in_place,omitempty"`             // restore: over the stack directory, no swap
 	// Import (restore): the stack directory does not exist yet (a stack
-	// imported from another host); restore into a new directory, nothing
-	// to stop or to protect.
+	// imported from another host), or only partly after an incomplete
+	// import; nothing to stop or to protect.
 	Import bool `json:"import,omitempty"`
 	// LimitDownloadKiB (restore): restic --limit-download, KiB/s; 0 = none.
 	LimitDownloadKiB int `json:"limit_download_kib,omitempty"`
@@ -41,10 +40,8 @@ type JobOptions struct {
 	// effect if the stack still has no repository when the job starts.
 	NoBackup bool `json:"no_backup,omitempty"`
 	// OnlyIfNew (update): end after the pull if no running service gets a
-	// new image. RollbackInPlace (update, compose-apply): restore the final
-	// snapshot in place on a rollback.
-	OnlyIfNew       bool `json:"only_if_new,omitempty"`
-	RollbackInPlace bool `json:"rollback_in_place,omitempty"`
+	// new image.
+	OnlyIfNew bool `json:"only_if_new,omitempty"`
 	// NoPreStop (update): no snapshot while the stack still runs.
 	NoPreStop bool `json:"no_pre_stop,omitempty"`
 	// Compose editor (compose-apply): the stack's main compose file (base
@@ -59,9 +56,11 @@ type JobOptions struct {
 type JobResult struct {
 	PreStopSnapshot string `json:"pre_stop_snapshot,omitempty"`
 	SafetySnapshot  string `json:"safety_snapshot,omitempty"`
-	PreviousDir     string `json:"previous_dir,omitempty"`
-	RolledBack      bool   `json:"rolled_back,omitempty"` // update: failed and restored to the job's snapshot
-	Unchanged       bool   `json:"unchanged,omitempty"`   // update "only if new": no new image, nothing done
+	// PreviousDir: the previous stack directory a restore of StackVault
+	// 0.4 or older kept (shown for old jobs only).
+	PreviousDir string `json:"previous_dir,omitempty"`
+	RolledBack  bool   `json:"rolled_back,omitempty"` // update: failed and restored to the job's snapshot
+	Unchanged   bool   `json:"unchanged,omitempty"`   // update "only if new": no new image, nothing done
 	// ImagesChanged: update, compose apply: services whose running image
 	// (image id) differs after the change.
 	ImagesChanged []string `json:"images_changed,omitempty"`

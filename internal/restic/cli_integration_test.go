@@ -86,7 +86,7 @@ func TestCLIIntegration(t *testing.T) {
 	}
 
 	target := filepath.Join(tmp, "restore")
-	if err := c.Restore(ctx, repo, id, snaps[0].Paths[0], target); err != nil {
+	if err := c.Restore(ctx, repo, id, snaps[0].Paths[0], target, nil); err != nil {
 		t.Fatal(err)
 	}
 	// Contents land directly in target, not under target/<abs path>.
@@ -99,8 +99,8 @@ func TestCLIIntegration(t *testing.T) {
 	}
 }
 
-// RestoreInPlace rewrites changed files, deletes files that are not in the
-// snapshot and leaves excluded directories alone.
+// Restore over an existing directory rewrites changed files, deletes files
+// that are not in the snapshot and leaves excluded paths alone.
 func TestCLIRestoreInPlace(t *testing.T) {
 	if _, err := exec.LookPath("restic"); err != nil {
 		t.Skip("restic not in PATH")
@@ -139,13 +139,15 @@ func TestCLIRestoreInPlace(t *testing.T) {
 	write("data/new-file", "created after the snapshot")
 	write("data/jobs/J1/log.txt", "current log")
 	write("data/jobs/J2/status.json", "{}")
-	if err := c.RestoreInPlace(ctx, repo, id, stack, stack, []string{"data/jobs"}); err != nil {
+	write(".stackvault-restore-incomplete", "")
+	if err := c.Restore(ctx, repo, id, stack, stack, []string{"data/jobs", ".stackvault-restore-incomplete"}); err != nil {
 		t.Fatal(err)
 	}
 	for rel, want := range map[string]string{
-		"data/db":                  "v1",
-		"data/jobs/J1/log.txt":     "current log", // excluded: untouched
-		"data/jobs/J2/status.json": "{}",          // excluded: not deleted
+		"data/db":                        "v1",
+		"data/jobs/J1/log.txt":           "current log", // excluded: untouched
+		"data/jobs/J2/status.json":       "{}",          // excluded: not deleted
+		".stackvault-restore-incomplete": "",            // excluded file: not deleted
 	} {
 		if got, err := os.ReadFile(filepath.Join(stack, rel)); err != nil || string(got) != want {
 			t.Errorf("%s: %q, %v; want %q", rel, got, err, want)
@@ -156,7 +158,7 @@ func TestCLIRestoreInPlace(t *testing.T) {
 	}
 
 	for _, bad := range []string{"", ".", "/data", "../x", "data/*", "a/./b", "x[1]"} {
-		if err := c.RestoreInPlace(ctx, repo, id, stack, stack, []string{bad}); err == nil {
+		if err := c.Restore(ctx, repo, id, stack, stack, []string{bad}); err == nil {
 			t.Errorf("exclude %q accepted", bad)
 		}
 	}

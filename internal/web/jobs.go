@@ -99,6 +99,9 @@ type restorePage struct {
 	// another host, or one whose directory vanished): the restore creates
 	// it, with nothing to stop, protect or switch over.
 	Import bool
+	// Incomplete: the last restore into the stack directory did not
+	// complete; this one continues it.
+	Incomplete bool
 	// ForeignHost: the snapshot is from another host (the stack's source
 	// host); host-specific settings may not fit this host.
 	ForeignHost bool
@@ -149,6 +152,7 @@ func (s *Server) restoreForm(w http.ResponseWriter, r *http.Request) {
 	}
 	s.render(w, r, http.StatusOK, "restore.html", pageData{Title: "Restore " + st.Name,
 		Error: s.jobsUnavailable(), Data: restorePage{Stack: st, Snapshot: sn, Import: !st.Present,
+			Incomplete:  stacks.RestoreIncomplete(filepath.Join(s.StacksRoot, st.Name)),
 			ForeignHost: s.foreignSource(st), ThisHost: s.Hostname}})
 }
 
@@ -204,7 +208,6 @@ func (s *Server) startRestore(w http.ResponseWriter, r *http.Request) {
 		LimitDownloadKiB: limit,
 	}
 	if st.Present {
-		opts.InPlace = r.PostFormValue("method") == "in-place"
 		// The safety snapshot is the way back if the restore was a mistake.
 		opts.SkipSafetySnapshot = authFrom(r.Context()).User.IsAdmin && r.PostFormValue("safety_snapshot") != "on"
 		// A restore into a stopped stack stops nothing: it need not wait
@@ -220,9 +223,9 @@ func (s *Server) startRestore(w http.ResponseWriter, r *http.Request) {
 		opts.Import, opts.Background = true, true
 	}
 	s.submitJob(w, r, st, store.Job{Type: jobs.TypeRestore, Options: opts},
-		fmt.Sprintf("restore of snapshot %s (host %s), import: %t, safety snapshot: %t, start: %t, pinned images: %t, in place: %t, download limit: %d KiB/s, background: %t",
+		fmt.Sprintf("restore of snapshot %s (host %s), import: %t, safety snapshot: %t, start: %t, pinned images: %t, download limit: %d KiB/s, background: %t",
 			sn.ShortID, sn.Hostname, opts.Import, !opts.SkipSafetySnapshot && !opts.Import, !opts.NoStart, opts.PinImages,
-			opts.InPlace, opts.LimitDownloadKiB, opts.Background), true)
+			opts.LimitDownloadKiB, opts.Background), true)
 }
 
 // loadJob resolves the job in the URL and checks that the user may view

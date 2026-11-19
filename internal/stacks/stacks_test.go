@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 )
 
 func mkStack(t *testing.T, root, name, composeName string) {
@@ -164,17 +163,38 @@ func TestValidName(t *testing.T) {
 	}
 }
 
-func TestRestoreDirsAreNotStacks(t *testing.T) {
-	s := Stack{Name: "web", Dir: "/stacks/web"}
-	for _, dir := range []string{StagingDir(s), OldDir(s, time.Now())} {
-		if ValidName(filepath.Base(dir)) {
-			t.Errorf("%s would be discovered as a stack", dir)
+func TestImportTarget(t *testing.T) {
+	root := t.TempDir()
+	mkStack(t, root, "exists", "compose.yml")
+	mkStack(t, root, "incomplete", "")
+	if err := os.WriteFile(filepath.Join(root, "incomplete", IncompleteMarker), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "file"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(root, "incomplete"), filepath.Join(root, "link")); err != nil {
+		t.Fatal(err)
+	}
+	for name, wantErr := range map[string]error{
+		"new":        nil,
+		"incomplete": nil, // continues an incomplete import
+		"exists":     ErrExists,
+		"file":       ErrExists,
+		"link":       ErrExists, // never follows a symlink
+	} {
+		s, err := ImportTarget(root, name)
+		if !errors.Is(err, wantErr) {
+			t.Errorf("%s: err = %v, want %v", name, err, wantErr)
 		}
-		if filepath.Dir(dir) != "/stacks" {
-			t.Errorf("%s is not a sibling of the stack directory", dir)
+		if err == nil && s.Dir != filepath.Join(root, name) {
+			t.Errorf("%s: dir %s", name, s.Dir)
 		}
 	}
-	if got := OldDir(s, time.Date(2026, 11, 13, 21, 26, 15, 0, time.FixedZone("CET", 3600))); got != "/stacks/web.old-20261113T202615Z" {
-		t.Errorf("OldDir = %s", got)
+	if _, err := ImportTarget(root, "web.old-1"); err == nil {
+		t.Error("reserved name accepted")
+	}
+	if !RestoreIncomplete(filepath.Join(root, "incomplete")) || RestoreIncomplete(filepath.Join(root, "exists")) {
+		t.Error("RestoreIncomplete")
 	}
 }

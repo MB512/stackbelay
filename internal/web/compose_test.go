@@ -85,14 +85,13 @@ func TestComposeEditor(t *testing.T) {
 
 	// Valid change: CRLF normalized, job with content and checksums.
 	newContent := "services:\n  app:\n    image: nginx:1.27\n"
-	r = post("web", strings.ReplaceAll(newContent, "\n", "\r\n"), base, "rollback_in_place", "on")
+	r = post("web", strings.ReplaceAll(newContent, "\n", "\r\n"), base)
 	if r.status != http.StatusSeeOther || !strings.HasPrefix(r.location, jobLocation) {
 		t.Fatalf("apply: %d %s", r.status, r.body)
 	}
 	id := strings.TrimPrefix(r.location, jobLocation)
 	j, err := e.st.JobByID(ctx, id)
 	if err != nil || j.Type != jobs.TypeComposeApply || j.Options.ComposeFile != "compose.yaml" || j.Options.NoBackup ||
-		!j.Options.RollbackInPlace ||
 		j.Options.ComposeBaseSHA256 != base || j.Options.ComposeSHA256 != jobs.SHA256Hex([]byte(newContent)) {
 		t.Fatalf("job %+v, %v", j, err)
 	}
@@ -136,11 +135,11 @@ func TestComposeEditor(t *testing.T) {
 	if r = post("db", "services:\n  x: {}\n", dbBase); r.status != http.StatusBadRequest {
 		t.Fatalf("unconfirmed: %d", r.status)
 	}
-	r = post("db", "services:\n  x: {}\n", dbBase, "confirm_no_backup", "on", "rollback_in_place", "on")
+	r = post("db", "services:\n  x: {}\n", dbBase, "confirm_no_backup", "on")
 	if r.status != http.StatusSeeOther {
 		t.Fatalf("confirmed: %d %s", r.status, r.body)
 	}
-	if j, _ := e.st.JobByID(ctx, strings.TrimPrefix(r.location, jobLocation)); !j.Options.NoBackup || j.Options.RollbackInPlace {
+	if j, _ := e.st.JobByID(ctx, strings.TrimPrefix(r.location, jobLocation)); !j.Options.NoBackup {
 		t.Fatalf("db job %+v", j)
 	}
 	_ = dbFile

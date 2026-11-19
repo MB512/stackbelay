@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # End-to-end smoke test of the worker against the local Docker daemon and a
 # local restic repository. Creates a throwaway stack in a temp directory,
-# backs it up, changes data, restores (with swap and in place) and checks the
-# result.
+# backs it up, changes data, restores (in place, also an incomplete restore)
+# and checks the result.
 #
 # Requirements: docker (with compose plugin) usable without sudo, restic >= 0.17, go.
 # Usage: scripts/e2e-local.sh            (KEEP=1 keeps the temp directory)
@@ -115,44 +115,47 @@ pass "log.txt written as JSON lines, password not in log"
 [[ "$(state app)" == running ]] || fail "app not restarted after job"
 pass "app restarted"
 
-step "change data, then restore"
+step "change data, then restore (in place)"
 echo v2 >"$DIR/data/value.txt"
+echo stale >"$DIR/data/created-after-backup.txt"
+before_inode="$(stat -c %i "$DIR")"
 ./bin/worker restore "$STACK" "${SNAP:0:8}" 2>"$WORK/restore.log" || { cat "$WORK/restore.log"; fail "restore failed"; }
-OLD="$(log_field "$WORK/restore.log" "job succeeded" previous_dir)"
 SAFETY="$(log_field "$WORK/restore.log" "job succeeded" safety_snapshot)"
 [[ "$(cat "$DIR/data/value.txt")" == v1 ]] || fail "data not restored"
 pass "data restored (v1)"
+[[ ! -e "$DIR/data/created-after-backup.txt" ]] || fail "file created after the backup not deleted"
+[[ "$(stat -c %i "$DIR")" == "$before_inode" ]] || fail "stack directory was replaced instead of restored in place"
+compgen -G "$DIR.*" >/dev/null && fail "a sibling directory was created: $(ls -d "$DIR".*)"
+pass "restored in place (extra file deleted, same directory, no sibling directories)"
 [[ "$(stat -c %a "$DIR")" == 750 ]] || fail "stack dir mode not restored: $(stat -c %a "$DIR")"
 pass "stack directory mode restored (750)"
-[[ -n "$OLD" && "$(cat "$OLD/data/value.txt")" == v2 ]] || fail "previous dir missing or wrong: $OLD"
-pass "previous version kept at $(basename "$OLD")"
-if ./bin/worker backup "$(basename "$OLD")" 2>"$WORK/old.log"; then fail "previous version is accepted as a stack"; fi
-grep -q 'stack not found' "$WORK/old.log" || { cat "$WORK/old.log"; fail "unexpected error for previous version"; }
-pass "previous version is not a stack (backup rejected)"
+[[ ! -e "$DIR/.stackvault-restore-incomplete" ]] || fail "incomplete-restore marker left after a complete restore"
 [[ -n "$SAFETY" ]] && restic snapshots --json --tag pre-restore | grep -q "$SAFETY" || fail "no pre-restore snapshot"
 pass "pre-restore safety snapshot $SAFETY"
 [[ "$(state app)" == running ]] || fail "app not running after restore"
-# Read the file inside the container: after the directory swap the bind mount
-# must point to the restored directory, not to the renamed previous one.
+# Read the file inside the container: the bind mount must show the
+# restored data.
 SEEN="$(docker compose --project-directory "$DIR" exec -T app cat /data/value.txt)"
 [[ "$SEEN" == v1 ]] || fail "app sees '$SEEN' instead of restored data"
 pass "app running and its bind mount shows restored data"
 [[ "$(state oneshot)" != running ]] || fail "oneshot running after restore"
 pass "oneshot not started (was not running at backup time)"
 
-step "restore in place"
+step "an incomplete restore blocks other jobs and is continued by the next restore"
+# What a restore that stopped half-way leaves behind (timeout, network error).
 echo v3 >"$DIR/data/value.txt"
-echo stale >"$DIR/data/created-after-backup.txt"
-before_inode="$(stat -c %i "$DIR")"
-./bin/worker restore --in-place "$STACK" "${SNAP:0:8}" 2>"$WORK/inplace.log" || { cat "$WORK/inplace.log"; fail "in-place restore failed"; }
-[[ "$(cat "$DIR/data/value.txt")" == v1 ]] || fail "data not restored in place"
-[[ ! -e "$DIR/data/created-after-backup.txt" ]] || fail "file created after the backup not deleted"
-[[ "$(stat -c %i "$DIR")" == "$before_inode" ]] || fail "stack directory was replaced instead of restored in place"
-[[ -z "$(log_field "$WORK/inplace.log" "job succeeded" previous_dir)" ]] || fail "in-place restore reports a previous directory"
-[[ "$(stat -c %a "$DIR")" == 750 ]] || fail "stack dir mode not restored: $(stat -c %a "$DIR")"
-SEEN="$(docker compose --project-directory "$DIR" exec -T app cat /data/value.txt)"
-[[ "$SEEN" == v1 ]] || fail "app sees '$SEEN' instead of restored data"
-pass "restored in place (v1, extra file deleted, same directory, app running)"
+docker compose --project-directory "$DIR" stop >/dev/null 2>&1
+: >"$DIR/.stackvault-restore-incomplete"
+if ./bin/worker backup "$STACK" 2>"$WORK/blocked.log"; then fail "backup of a partly restored stack succeeded"; fi
+grep -q 'did not complete' "$WORK/blocked.log" || { cat "$WORK/blocked.log"; fail "unexpected error for the blocked backup"; }
+if ./bin/worker start "$STACK" 2>"$WORK/blocked.log"; then fail "start of a partly restored stack succeeded"; fi
+[[ "$(state app)" != running ]] || fail "partly restored stack was started"
+pass "backup and start refused while the restore is incomplete"
+./bin/worker restore "$STACK" "${SNAP:0:8}" 2>"$WORK/continue.log" || { cat "$WORK/continue.log"; fail "continuing restore failed"; }
+[[ -z "$(log_field "$WORK/continue.log" "job succeeded" safety_snapshot)" ]] || fail "safety snapshot of a partly restored directory"
+[[ "$(cat "$DIR/data/value.txt")" == v1 && ! -e "$DIR/.stackvault-restore-incomplete" ]] || fail "restore not continued"
+[[ "$(state app)" == running ]] || fail "app not running after the continued restore"
+pass "restore continued (no safety snapshot, marker removed, app running)"
 
 step "restore with an invalid snapshot is rejected before stopping"
 if ./bin/worker restore "$STACK" deadbeef 2>"$WORK/bad.log"; then fail "restore of unknown snapshot succeeded"; fi

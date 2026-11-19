@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -73,6 +74,10 @@ type stackTab struct {
 type stackHeader struct {
 	Stack store.Stack
 	Tabs  []stackTab
+	// RestoreIncomplete: the last restore into the stack directory did not
+	// complete (stacks.IncompleteMarker); jobs other than a restore, stop
+	// and down refuse the stack until a restore completes.
+	RestoreIncomplete bool
 }
 
 // Tab ids, also the last path segment of the tab ("" = the stack's root).
@@ -102,7 +107,8 @@ func (s *Server) newStackHeader(user store.User, perm store.Permission, st store
 		tabs = append(tabs, stackTab{Label: "Compose", URL: base + "/" + tabCompose, Active: active == tabCompose})
 		tabs = append(tabs, stackTab{Label: "Settings", URL: base + "/" + tabSettings, Active: active == tabSettings})
 	}
-	return stackHeader{Stack: st, Tabs: tabs}
+	incomplete := s.StacksRoot != "" && stacks.RestoreIncomplete(filepath.Join(s.StacksRoot, st.Name))
+	return stackHeader{Stack: st, Tabs: tabs, RestoreIncomplete: incomplete}
 }
 
 // backupsTab is the data of the "Backups" tab: repository and snapshots.
@@ -331,7 +337,6 @@ type newSchedule struct {
 	CronExpr        string
 	Update          bool // job type update (default: backup)
 	PreStop         bool
-	RollbackInPlace bool
 	ConfirmNoBackup bool // update on a stack without repository: "no backup, no rollback" confirmed
 }
 

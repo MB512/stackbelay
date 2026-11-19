@@ -6,8 +6,8 @@
 //
 //	worker run <job-dir>
 //	worker backup  [--pre-stop] <stack>
-//	worker restore [--no-safety-snapshot] [--no-start] [--pin-images] [--in-place] [--import] [--limit-download <KiB/s>] <stack> <snapshot-id>
-//	worker update  [--no-backup] [--only-if-new] [--rollback-in-place] [--no-pre-stop] <stack>
+//	worker restore [--no-safety-snapshot] [--no-start] [--pin-images] [--import] [--limit-download <KiB/s>] <stack> <snapshot-id>
+//	worker update  [--no-backup] [--only-if-new] [--no-pre-stop] <stack>
 //	worker stop|start|restart|up|down <stack>
 //	worker cleanup [--image-min-age <duration>]
 //
@@ -48,8 +48,8 @@ import (
 const usage = `usage:
   worker run <job-dir>
   worker backup  [--pre-stop] <stack>
-  worker restore [--no-safety-snapshot] [--no-start] [--pin-images] [--in-place] [--import] [--limit-download <KiB/s>] <stack> <snapshot-id>
-  worker update  [--no-backup] [--only-if-new] [--rollback-in-place] [--no-pre-stop] <stack>
+  worker restore [--no-safety-snapshot] [--no-start] [--pin-images] [--import] [--limit-download <KiB/s>] <stack> <snapshot-id>
+  worker update  [--no-backup] [--only-if-new] [--no-pre-stop] <stack>
   worker stop|start|restart|up|down <stack>
   worker cleanup [--image-min-age <duration>]
 `
@@ -164,8 +164,7 @@ func run(args []string, getenv func(string) string, stderr io.Writer) int {
 	switch state {
 	case jobs.StateSucceeded:
 		log.Info("job succeeded", "type", spec.Type, "stack", spec.Stack, "snapshot", status.Snapshot,
-			"pre_stop_snapshot", status.PreStopSnapshot, "safety_snapshot", status.SafetySnapshot,
-			"previous_dir", status.PreviousDir)
+			"pre_stop_snapshot", status.PreStopSnapshot, "safety_snapshot", status.SafetySnapshot)
 	case jobs.StateCancelled:
 		status.Error, code = redact(err.Error(), secrets), 1
 		log.Error("job cancelled", "error", err)
@@ -175,17 +174,6 @@ func run(args []string, getenv func(string) string, stderr io.Writer) int {
 	}
 	if jobDir != "" && !writeFinalStatus(jobDir, status, log, stderr) {
 		return 1
-	}
-	if jobDir != "" && spec.CarryOverJobs != "" && status.PreviousDir != "" {
-		// The manager restored its own stack: our job directory moved away
-		// with the previous version. The job files were carried over into
-		// the restored stack before it started; complete that copy, so the
-		// restarted manager sees the final result and the whole log.
-		carried := filepath.Join(cfg.StacksRoot, spec.Stack, spec.CarryOverJobs, spec.ID)
-		if err := finishCarriedOver(jobDir, carried, status); err != nil {
-			fmt.Fprintf(stderr, "updating carried-over job files: %v\n", err)
-			return 1
-		}
 	}
 	return code
 }
@@ -239,14 +227,13 @@ func parseArgs(args []string) (jobs.Spec, string, error) {
 		noSafety := fs.Bool("no-safety-snapshot", false, "skip the pre-restore safety snapshot")
 		noStart := fs.Bool("no-start", false, "do not start the stack after restoring")
 		pin := fs.Bool("pin-images", false, "start with the image versions recorded in the snapshot")
-		inPlace := fs.Bool("in-place", false, "restore over the stack directory instead of swapping in a restored copy")
 		imp := fs.Bool("import", false, "first restore of a stack from another host: create its directory")
 		limit := fs.Int("limit-download", 0, "limit downloads from the repository (KiB/s)")
 		if err := fs.Parse(args[1:]); err != nil || fs.NArg() != 2 {
-			return jobs.Spec{}, "", fmt.Errorf("%w: restore expects [--no-safety-snapshot] [--no-start] [--pin-images] [--in-place] [--import] [--limit-download <KiB/s>] <stack> <snapshot-id>", errUsage)
+			return jobs.Spec{}, "", fmt.Errorf("%w: restore expects [--no-safety-snapshot] [--no-start] [--pin-images] [--import] [--limit-download <KiB/s>] <stack> <snapshot-id>", errUsage)
 		}
 		return jobs.Spec{Type: jobs.TypeRestore, Stack: fs.Arg(0), SnapshotID: fs.Arg(1),
-			SkipSafetySnapshot: *noSafety, NoStart: *noStart, PinImages: *pin, InPlace: *inPlace,
+			SkipSafetySnapshot: *noSafety, NoStart: *noStart, PinImages: *pin,
 			Import: *imp, LimitDownloadKiB: *limit}, "", nil
 
 	case "update":
@@ -254,16 +241,12 @@ func parseArgs(args []string) (jobs.Spec, string, error) {
 		fs.SetOutput(io.Discard)
 		noBackup := fs.Bool("no-backup", false, "update without snapshots and without rollback (no repository)")
 		onlyIfNew := fs.Bool("only-if-new", false, "stop after the pull if no running service gets a new image")
-		rollbackInPlace := fs.Bool("rollback-in-place", false, "on a rollback, restore the final snapshot in place")
 		noPreStop := fs.Bool("no-pre-stop", false, "no snapshot while the stack still runs")
 		if err := fs.Parse(args[1:]); err != nil || fs.NArg() != 1 {
-			return jobs.Spec{}, "", fmt.Errorf("%w: update expects [--no-backup] [--only-if-new] [--rollback-in-place] [--no-pre-stop] <stack>", errUsage)
-		}
-		if *noBackup && *rollbackInPlace {
-			return jobs.Spec{}, "", fmt.Errorf("%w: --rollback-in-place needs a backup (not with --no-backup)", errUsage)
+			return jobs.Spec{}, "", fmt.Errorf("%w: update expects [--no-backup] [--only-if-new] [--no-pre-stop] <stack>", errUsage)
 		}
 		return jobs.Spec{Type: jobs.TypeUpdate, Stack: fs.Arg(0), NoBackup: *noBackup, OnlyIfNew: *onlyIfNew,
-			RollbackInPlace: *rollbackInPlace, NoPreStop: *noPreStop}, "", nil
+			NoPreStop: *noPreStop}, "", nil
 
 	case "cleanup":
 		fs := flag.NewFlagSet("cleanup", flag.ContinueOnError)
@@ -292,9 +275,9 @@ func execute(ctx context.Context, p *jobs.Pipeline, cfg config.Worker, spec jobs
 	}
 	p.Repo.LimitDownloadKiB = spec.LimitDownloadKiB
 	if spec.Import {
-		// The first restore from another host: the stack is not on disk yet,
-		// so it cannot be looked up; ImportTarget checks the name and that
-		// no such directory exists.
+		// The first restore from another host: the stack is not on disk yet
+		// (or only partly, after an incomplete import), so it cannot be
+		// looked up; ImportTarget checks the name and the directory.
 		if !cfg.HasRepo() {
 			return errors.New("no repository configured (RESTIC_REPOSITORY and RESTIC_PASSWORD(_FILE) are required for this job)")
 		}
@@ -321,16 +304,13 @@ func execute(ctx context.Context, p *jobs.Pipeline, cfg config.Worker, spec jobs
 	case jobs.TypeRestore:
 		res, err := p.Restore(ctx, stack, jobs.RestoreOptions{
 			SnapshotID: spec.SnapshotID, SkipSafetySnapshot: spec.SkipSafetySnapshot, NoStart: spec.NoStart,
-			PinImages: spec.PinImages, InPlace: spec.InPlace, CarryOver: spec.CarryOverJobs,
+			PinImages: spec.PinImages, CarryOver: spec.CarryOverJobs,
 		})
-		status.Snapshot, status.SafetySnapshot, status.PreviousDir = res.Snapshot, res.SafetySnapshot, res.OldDir
-		if res.OldDir != "" {
-			log.Info("previous stack directory kept", "dir", res.OldDir)
-		}
+		status.Snapshot, status.SafetySnapshot = res.Snapshot, res.SafetySnapshot
 		return err
 	case jobs.TypeUpdate:
 		res, err := p.Update(ctx, stack, jobs.UpdateOptions{Backup: !spec.NoBackup, CarryOver: spec.CarryOverJobs,
-			OnlyIfNew: spec.OnlyIfNew, RollbackInPlace: spec.RollbackInPlace, NoPreStop: spec.NoPreStop})
+			OnlyIfNew: spec.OnlyIfNew, NoPreStop: spec.NoPreStop})
 		recordChange(status, res)
 		return err
 	case jobs.TypeComposeApply:
@@ -343,7 +323,7 @@ func execute(ctx context.Context, p *jobs.Pipeline, cfg config.Worker, spec jobs
 		}
 		res, err := p.ComposeApply(ctx, stack, jobs.ComposeApplyOptions{
 			Content: content, BaseSHA256: spec.ComposeBaseSHA256, Backup: !spec.NoBackup, CarryOver: spec.CarryOverJobs,
-			RollbackInPlace: spec.RollbackInPlace, PreviousCopy: filepath.Join(jobDir, jobs.ComposePreviousFile),
+			PreviousCopy: filepath.Join(jobDir, jobs.ComposePreviousFile),
 		})
 		recordChange(status, res)
 		return err
@@ -392,7 +372,7 @@ func needsRepository(spec jobs.Spec) bool {
 // recordChange stores the result of an update or compose apply in status.
 func recordChange(status *jobs.Status, res jobs.ChangeResult) {
 	status.Snapshot, status.PreStopSnapshot = res.Snapshot, res.PreStopSnapshot
-	status.PreviousDir, status.RolledBack, status.Unchanged = res.OldDir, res.RolledBack, res.Unchanged
+	status.RolledBack, status.Unchanged = res.RolledBack, res.Unchanged
 	status.ImagesChanged, status.ReplacedImages = res.ImagesChanged, res.ReplacedImages
 }
 
@@ -429,22 +409,6 @@ func writeFinalStatus(dir string, s jobs.Status, log *slog.Logger, stderr io.Wri
 		return false
 	}
 	return true
-}
-
-// finishCarriedOver writes the final status and the complete log into the
-// carried-over copy of the job directory.
-func finishCarriedOver(jobDir, carried string, status jobs.Status) error {
-	if err := os.MkdirAll(carried, 0o700); err != nil {
-		return err
-	}
-	if err := jobs.MatchDirOwner(carried); err != nil {
-		return err
-	}
-	// Log first: once the status is final the manager stops reading.
-	if err := jobs.CopyTree(filepath.Join(jobDir, jobs.LogFile), filepath.Join(carried, jobs.LogFile)); err != nil {
-		return err
-	}
-	return jobs.WriteStatus(carried, status)
 }
 
 func redact(s string, secrets []string) string {

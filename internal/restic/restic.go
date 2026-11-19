@@ -159,13 +159,11 @@ type Runner interface {
 	// Snapshots lists snapshots; with ids, only those snapshots.
 	Snapshots(ctx context.Context, repo Repo, ids ...string) ([]Snapshot, error)
 	// Restore restores the contents of subpath within the snapshot
-	// (restic restore <id>:<subpath>) into target.
-	Restore(ctx context.Context, repo Repo, snapshotID, subpath, target string) error
-	// RestoreInPlace restores subpath within the snapshot over the existing
-	// directory target: unchanged files are kept, changed ones rewritten,
-	// files that are not in the snapshot deleted. exclude lists directories
-	// (relative to target) that are left completely untouched.
-	RestoreInPlace(ctx context.Context, repo Repo, snapshotID, subpath, target string, exclude []string) error
+	// (restic restore <id>:<subpath>) over the directory target (created
+	// if missing): unchanged files are kept, changed ones rewritten, files
+	// that are not in the snapshot deleted. exclude lists files and
+	// directories (relative to target) that are left completely untouched.
+	Restore(ctx context.Context, repo Repo, snapshotID, subpath, target string, exclude []string) error
 	// Node returns the metadata of path inside the snapshot (restic ls).
 	// Restore uses it to apply mode and owner of the stack directory itself,
 	// which "restic restore <id>:<subpath>" does not restore.

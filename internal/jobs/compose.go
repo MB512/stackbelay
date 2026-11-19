@@ -25,10 +25,9 @@ type ComposeApplyOptions struct {
 	// BaseSHA256 is the SHA-256 (hex) of the file the editor started from.
 	// If the file changed since, the job fails before anything happens.
 	BaseSHA256 string
-	// Backup, CarryOver and RollbackInPlace: see UpdateOptions.
-	Backup          bool
-	CarryOver       string
-	RollbackInPlace bool
+	// Backup and CarryOver: see UpdateOptions.
+	Backup    bool
+	CarryOver string
 	// PreviousCopy, if set, is where the current content is saved before it
 	// is replaced (the job directory), for a manual revert.
 	PreviousCopy string
@@ -54,7 +53,7 @@ func (p *Pipeline) ComposeApply(ctx context.Context, stack stacks.Stack, opts Co
 		return ChangeResult{}, fmt.Errorf("new compose file has an invalid size (%d bytes)", len(opts.Content))
 	}
 	return p.runChange(ctx, stack, change{
-		name: "compose-apply", backup: opts.Backup, carryOver: opts.CarryOver, rollbackInPlace: opts.RollbackInPlace,
+		name: "compose-apply", backup: opts.Backup, carryOver: opts.CarryOver,
 		prepare: func(context.Context, []docker.ServiceState, []string) error {
 			current, err := os.ReadFile(stack.ComposeFile)
 			if err != nil {

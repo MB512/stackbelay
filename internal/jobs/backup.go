@@ -42,6 +42,9 @@ func (p *Pipeline) Backup(ctx context.Context, stack stacks.Stack, opts BackupOp
 	log := p.logger().With("stack", stack.Name, "job", "backup")
 
 	// 1. Preflight.
+	if err := requireComplete(stack); err != nil {
+		return res, err
+	}
 	log.Info("checking repository")
 	if err := p.Restic.CheckRepo(ctx, p.Repo); err != nil {
 		return res, fmt.Errorf("repository not reachable: %w", err)

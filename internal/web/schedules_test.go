@@ -124,29 +124,19 @@ func TestSchedules(t *testing.T) {
 		t.Errorf("reloads = %d, want 4 (create, disable, enable, delete)", reloader.count())
 	}
 
-	// An update schedule with its options; rollback in place is rejected
-	// for backups (the form disables it). An update schedule is not a
+	// An update schedule with its options. An update schedule is not a
 	// "next scheduled backup".
-	expect(t, post("/stacks/web/schedules", url.Values{"cron_expr": {"@weekly"}, "job_type": {"update"},
-		"rollback_in_place": {"on"}}), http.StatusSeeOther, "/stacks/web/settings")
-	r = post("/stacks/web/schedules", url.Values{"cron_expr": {"@daily"}, "job_type": {"backup"},
-		"pre_stop": {"on"}, "rollback_in_place": {"on"}})
-	expect(t, r, http.StatusBadRequest, "")
-	if !strings.Contains(r.body, "only an option for update schedules") {
-		t.Errorf("backup with rollback in place not explained:\n%s", r.body)
-	}
-	if !strings.Contains(r.body, `name="rollback_in_place" data-enable-when="job_type=update"`) {
-		t.Errorf("rollback option not tied to update schedules:\n%s", r.body)
-	}
+	expect(t, post("/stacks/web/schedules", url.Values{"cron_expr": {"@weekly"}, "job_type": {"update"}}),
+		http.StatusSeeOther, "/stacks/web/settings")
 	expect(t, post("/stacks/web/schedules", url.Values{"cron_expr": {"@daily"}, "job_type": {"backup"}}),
 		http.StatusSeeOther, "/stacks/web/settings")
 	list, _ = e.st.ListSchedules(ctx, web.ID)
-	if len(list) != 2 || list[0].Type != jobs.TypeUpdate || !list[0].RollbackInPlace || list[0].PreStop ||
-		list[1].Type != jobs.TypeBackup || list[1].RollbackInPlace {
+	if len(list) != 2 || list[0].Type != jobs.TypeUpdate || list[0].PreStop ||
+		list[1].Type != jobs.TypeBackup {
 		t.Fatalf("schedules = %+v", list)
 	}
 	r = e.get("/stacks/web/settings")
-	if !strings.Contains(r.body, "<td>Update</td>") || !strings.Contains(r.body, "only if new, rollback in place") {
+	if !strings.Contains(r.body, "<td>Update</td>") || !strings.Contains(r.body, "only if new") {
 		t.Errorf("update schedule not listed:\n%s", r.body)
 	}
 	expect(t, post("/stacks/web/schedules/"+itoa(list[1].ID)+"/delete", url.Values{}), http.StatusSeeOther, "/stacks/web/settings")
@@ -155,8 +145,8 @@ func TestSchedules(t *testing.T) {
 	}
 	r = post("/stacks/web/schedules", url.Values{"cron_expr": {"@daily"}, "job_type": {"restore"}})
 	expect(t, r, http.StatusBadRequest, "")
-	r = post("/stacks/web/schedules", url.Values{"cron_expr": {"nope"}, "job_type": {"update"}, "rollback_in_place": {"on"}})
-	if !strings.Contains(r.body, `name="job_type" value="update" checked`) || !strings.Contains(r.body, `name="rollback_in_place" data-enable-when="job_type=update" checked`) {
+	r = post("/stacks/web/schedules", url.Values{"cron_expr": {"nope"}, "job_type": {"update"}})
+	if !strings.Contains(r.body, `name="job_type" value="update" checked`) || strings.Contains(r.body, "rollback_in_place") {
 		t.Errorf("update input not kept:\n%s", r.body)
 	}
 
@@ -226,7 +216,7 @@ func TestUpdateScheduleWithoutRepository(t *testing.T) {
 	token := e.csrf("/stacks/db/settings")
 	form := func(stack string, extra url.Values) response {
 		v := url.Values{"csrf_token": {token}, "cron_expr": {"0 4 * * *"}, "job_type": {"update"},
-			"pre_stop": {"on"}, "rollback_in_place": {"on"}}
+			"pre_stop": {"on"}}
 		for k, vs := range extra {
 			v[k] = vs
 		}
@@ -238,7 +228,7 @@ func TestUpdateScheduleWithoutRepository(t *testing.T) {
 	}
 	expect(t, form("db", url.Values{"confirm_no_backup": {"on"}}), http.StatusSeeOther, "/stacks/db/settings")
 	list, _ := e.st.ListSchedules(ctx, db.ID)
-	if len(list) != 1 || !list[0].NoBackup || list[0].PreStop || list[0].RollbackInPlace {
+	if len(list) != 1 || !list[0].NoBackup || list[0].PreStop {
 		t.Fatalf("stored: %+v", list)
 	}
 	if r := e.get("/stacks/db/settings"); !strings.Contains(r.body, "without backup and rollback</strong> while the stack has no repository") {
@@ -248,7 +238,7 @@ func TestUpdateScheduleWithoutRepository(t *testing.T) {
 	// With a repository the confirmation is ignored: backup as usual.
 	expect(t, form("web", url.Values{"confirm_no_backup": {"on"}}), http.StatusSeeOther, "/stacks/web/settings")
 	list, _ = e.st.ListSchedules(ctx, web.ID)
-	if len(list) != 1 || list[0].NoBackup || !list[0].PreStop || !list[0].RollbackInPlace {
+	if len(list) != 1 || list[0].NoBackup || !list[0].PreStop {
 		t.Fatalf("stored on web: %+v", list)
 	}
 	// Backup schedules need no confirmation (they fail without repository).

@@ -65,7 +65,7 @@ func TestHostJobsMigration(t *testing.T) {
 		t.Fatalf("compose content after migration: %q, %v", c, err)
 	}
 	sc, err := s.ScheduleByID(ctx, 7)
-	if err != nil || sc.StackID != 1 || sc.CronExpr != "@daily" || !sc.PreStop || sc.Enabled || sc.Type != jobs.TypeUpdate || !sc.RollbackInPlace {
+	if err != nil || sc.StackID != 1 || sc.CronExpr != "@daily" || !sc.PreStop || sc.Enabled || sc.Type != jobs.TypeUpdate {
 		t.Fatalf("schedule after migration: %+v, %v", sc, err)
 	}
 	var fkProblems int

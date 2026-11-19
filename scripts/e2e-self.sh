@@ -4,7 +4,8 @@
 # of that stack) and backs up and restores itself through its own UI.
 #
 # Checks that after the self-restore the manager runs with the database from
-# the snapshot, knows the restore job (carried over and reconciled) and shows
+# the snapshot, knows the restore job (its job files are excluded from the
+# restore and reconciled) and shows
 # the self-backup with its real result.
 #
 # Requirements: docker (with compose plugin) usable without sudo, go, curl,
@@ -54,7 +55,7 @@ trap cleanup EXIT
 c() { curl -sS -c "$JAR" -b "$JAR" "$@"; }
 # job_ids: ids of all job directories (they belong to root: list them in a container).
 job_ids() {
-	docker run --rm -v "$ROOT:/r:ro" busybox:1.36 sh -c "ls /r/$NAME/data/jobs /r/$NAME.old-*/data/jobs 2>/dev/null" |
+	docker run --rm -v "$ROOT:/r:ro" busybox:1.36 sh -c "ls /r/$NAME/data/jobs 2>/dev/null" |
 		grep -E '^[0-9A-Z]{26}$' | sort -u || true
 }
 # job_state <job path>: state badge of the job page ("" while the manager is down).
@@ -135,8 +136,6 @@ RESTORE="${RESTORE#"$B"}"
 S="$(wait_job "$RESTORE")"
 [[ "$S" == succeeded ]] || fail "self-restore: '$S' (job page after restart: $(c -o /dev/null -w '%{http_code}' "$B$RESTORE"))"
 pass "self-restore succeeded and is known to the restarted manager ($RESTORE)"
-c "$B$RESTORE" | grep -q "$NAME.old-" || fail "previous directory not shown"
-pass "previous directory recorded"
 
 step "state after the restore"
 wait_healthy
@@ -145,8 +144,9 @@ pass "database is the one from the snapshot (user 'later' gone)"
 S="$(job_state "$BACKUP")"
 [[ "$S" == succeeded ]] || fail "self-backup shown as '$S' after the restore"
 pass "self-backup still shown as succeeded"
-compgen -G "$ROOT/$NAME.old-*" >/dev/null || fail "previous directory missing"
-pass "previous version kept"
+compgen -G "$ROOT/$NAME.*" >/dev/null && fail "a sibling directory was created"
+[[ ! -e "$ROOT/$NAME/.stackvault-restore-incomplete" ]] || fail "incomplete-restore marker left"
+pass "restored in place (no sibling directories, no marker)"
 sleep 5
 IDS="$(job_ids)"
 [[ "$(wc -w <<<"$IDS")" -ge 2 ]] || fail "expected at least 2 job directories, found: $IDS"

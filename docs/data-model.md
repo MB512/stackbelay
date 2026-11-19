@@ -70,7 +70,7 @@ CREATE TABLE schedules (
   enabled     INTEGER NOT NULL DEFAULT 1,
   -- migration 0008:
   job_type    TEXT NOT NULL DEFAULT 'backup' CHECK (job_type IN ('backup', 'update', 'cleanup')),
-  rollback_in_place INTEGER NOT NULL DEFAULT 0, -- updates: roll back in place
+  -- rollback_in_place (0008) was dropped by migration 0014 (issue #33: every rollback runs in place)
   -- migration 0010:
   no_backup   INTEGER NOT NULL DEFAULT 0,   -- updates: "no backup, no rollback" confirmed (stack had no repository)
   CHECK ((stack_id IS NULL) = (job_type = 'cleanup'))   -- migration 0011

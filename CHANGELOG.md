@@ -8,6 +8,21 @@ All notable changes to StackVault. The format is based on
 
 ### Changed
 
+- **Every restore runs in place** (#33): only files that differ from the
+  snapshot are downloaded and rewritten, files not in the snapshot are
+  deleted. The "switch over" method (restore into `<stack>.restore-tmp`,
+  keep `<stack>.old-<time>`) and the "roll back in place" options of
+  updates, the compose editor and update schedules are gone; automatic
+  rollbacks run in place too. Left-over `.restore-tmp` and `.old-*`
+  directories of older versions are still ignored by discovery and can be
+  deleted by hand.
+- **Interrupted restores continue** (#33): a restore or import that stops
+  half-way (timeout, network error, cancel) keeps what it restored and
+  marks the stack directory (`.stackvault-restore-incomplete`). Restoring
+  again continues it, downloading only what is missing, without a safety
+  snapshot of the partly restored directory. Until a restore completes,
+  the stack shows "restore incomplete" and backups, updates, compose
+  changes and starts are refused.
 - **Job timeout** raised from 6 h to 48 h and configurable on the manager
   with `STACKVAULT_JOB_TIMEOUT` (e.g. `72h`; #32). Before, the variable was
   only read by the worker and the manager did not pass it on, so large

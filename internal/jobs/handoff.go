@@ -123,9 +123,9 @@ type Spec struct {
 	SkipSafetySnapshot bool   `json:"skip_safety_snapshot,omitempty"`
 	NoStart            bool   `json:"no_start,omitempty"`
 	PinImages          bool   `json:"pin_images,omitempty"` // see RestoreOptions.PinImages
-	InPlace            bool   `json:"in_place,omitempty"`   // see RestoreOptions.InPlace
 	// Import: the first restore of a stack from another host; its
-	// directory does not exist yet (Pipeline.Import).
+	// directory does not exist yet, or is left by an incomplete import
+	// (Pipeline.Import).
 	Import bool `json:"import,omitempty"`
 	// LimitDownloadKiB (restore): restic --limit-download, KiB/s; 0 = none.
 	LimitDownloadKiB int `json:"limit_download_kib,omitempty"`
@@ -142,8 +142,6 @@ type Spec struct {
 	// OnlyIfNew and NoPreStop (update): see UpdateOptions.
 	OnlyIfNew bool `json:"only_if_new,omitempty"`
 	NoPreStop bool `json:"no_pre_stop,omitempty"`
-	// RollbackInPlace (update, compose-apply): see UpdateOptions.RollbackInPlace.
-	RollbackInPlace bool `json:"rollback_in_place,omitempty"`
 
 	// Cleanup options (host job, Stack is empty): see CleanupOptions.
 	ImageMinAgeHours int      `json:"image_min_age_hours,omitempty"`
@@ -182,8 +180,8 @@ func (s Spec) Validate() error {
 	if s.LimitDownloadKiB < 0 || s.LimitDownloadKiB > restic.MaxLimitKiB {
 		return fmt.Errorf("invalid download limit %d KiB/s", s.LimitDownloadKiB)
 	}
-	if s.Import && (s.InPlace || s.SkipSafetySnapshot || s.CarryOverJobs != "") {
-		return errors.New("an import restores into a new directory: no in-place, safety snapshot or carry-over options")
+	if s.Import && (s.SkipSafetySnapshot || s.CarryOverJobs != "") {
+		return errors.New("an import restores into a new directory: no safety snapshot or carry-over options")
 	}
 	switch {
 	case s.Trigger != "" && s.Trigger != "manual" && s.Trigger != "schedule":
@@ -197,12 +195,9 @@ func (s Spec) Validate() error {
 	if (s.OnlyIfNew || s.NoPreStop) && s.Type != TypeUpdate {
 		return fmt.Errorf("update options set on a job of type %s", s.Type)
 	}
-	if s.RollbackInPlace && (s.Type != TypeUpdate && s.Type != TypeComposeApply || s.NoBackup) {
-		return errors.New("rollback_in_place set on a job without rollback")
-	}
 	switch s.Type {
 	case TypeBackup:
-		if s.SnapshotID != "" || s.SkipSafetySnapshot || s.NoStart || s.PinImages || s.InPlace || s.CarryOverJobs != "" {
+		if s.SnapshotID != "" || s.SkipSafetySnapshot || s.NoStart || s.PinImages || s.CarryOverJobs != "" {
 			return errors.New("restore options set on a backup job")
 		}
 		if s.NoBackup {
@@ -223,7 +218,7 @@ func (s Spec) Validate() error {
 		}
 	case TypeUpdate, TypeComposeApply:
 		// The pre-stop snapshot is always taken (with a repository).
-		if s.PreStop || s.SnapshotID != "" || s.SkipSafetySnapshot || s.NoStart || s.PinImages || s.InPlace {
+		if s.PreStop || s.SnapshotID != "" || s.SkipSafetySnapshot || s.NoStart || s.PinImages {
 			return fmt.Errorf("backup or restore options set on a job of type %s", s.Type)
 		}
 		if s.CarryOverJobs != "" && !ValidCarryOver(s.CarryOverJobs) {
@@ -233,7 +228,7 @@ func (s Spec) Validate() error {
 			return errors.New("invalid compose checksums")
 		}
 	case TypeCleanup:
-		if s.PreStop || s.SnapshotID != "" || s.SkipSafetySnapshot || s.NoStart || s.PinImages || s.InPlace ||
+		if s.PreStop || s.SnapshotID != "" || s.SkipSafetySnapshot || s.NoStart || s.PinImages ||
 			s.CarryOverJobs != "" || s.NoBackup {
 			return errors.New("stack options set on a cleanup job")
 		}
@@ -249,7 +244,7 @@ func (s Spec) Validate() error {
 			}
 		}
 	case TypeStop, TypeStart, TypeRestart, TypeUp, TypeDown:
-		if s.PreStop || s.SnapshotID != "" || s.SkipSafetySnapshot || s.NoStart || s.PinImages || s.InPlace ||
+		if s.PreStop || s.SnapshotID != "" || s.SkipSafetySnapshot || s.NoStart || s.PinImages ||
 			s.CarryOverJobs != "" || s.NoBackup {
 			return fmt.Errorf("options set on a job of type %s", s.Type)
 		}
@@ -271,7 +266,6 @@ type Status struct {
 	Snapshot        string `json:"snapshot,omitempty"`          // backup, update: final snapshot; restore: restored snapshot
 	PreStopSnapshot string `json:"pre_stop_snapshot,omitempty"` // backup, update
 	SafetySnapshot  string `json:"safety_snapshot,omitempty"`   // restore
-	PreviousDir     string `json:"previous_dir,omitempty"`      // restore, rolled-back update: kept for manual rollback
 	RolledBack      bool   `json:"rolled_back,omitempty"`       // update: failed and restored to Snapshot
 	Unchanged       bool   `json:"unchanged,omitempty"`         // update "only if new": no new image, nothing done
 	// ImagesChanged: update, compose apply: services whose running image

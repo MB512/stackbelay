@@ -87,12 +87,12 @@ func TestSourceHostAndImportRestore(t *testing.T) {
 	}
 	// A sync of a running stack: not in the background.
 	r = e.post("/stacks/web/restore", url.Values{"csrf_token": {token}, "snapshot_id": {"bbbbbbbb11111111"},
-		"method": {"in-place"}, "images": {"pinned"}})
+		"images": {"pinned"}})
 	if r.status != http.StatusSeeOther {
 		t.Fatalf("sync restore: %d\n%s", r.status, r.body)
 	}
 	j, _ := e.st.JobByID(ctx, strings.TrimPrefix(r.location, "/jobs/"))
-	if j.Options.Import || !j.Options.InPlace || !j.Options.NoStart || j.Options.Background || !j.Options.PinImages {
+	if j.Options.Import || !j.Options.NoStart || j.Options.Background || !j.Options.PinImages {
 		t.Errorf("sync options %+v", j.Options)
 	}
 	if err := e.st.FinishJob(ctx, j.ID, jobs.StateSucceeded, "", "", store.JobResult{}, time.Now()); err != nil {

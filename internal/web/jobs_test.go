@@ -14,6 +14,7 @@ import (
 	"github.com/MB512/stackvault/internal/dispatch"
 	"github.com/MB512/stackvault/internal/jobs"
 	"github.com/MB512/stackvault/internal/restic"
+	"github.com/MB512/stackvault/internal/stacks"
 	"github.com/MB512/stackvault/internal/store"
 )
 
@@ -180,8 +181,8 @@ func TestRestoreJob(t *testing.T) {
 	if strings.Contains(r.body, `name="safety_snapshot"`) {
 		t.Fatal("non-admin may not skip the safety snapshot")
 	}
-	if !strings.Contains(r.body, `value="in-place"`) {
-		t.Fatal("no in-place option for a user with restore right")
+	if strings.Contains(r.body, `name="method"`) {
+		t.Fatal("restore method offered: every restore runs in place (#33)")
 	}
 	for _, bad := range []string{"bbbbbbbb22222222", "../x", ""} {
 		expect(t, e.do(bob, http.MethodGet, "/stacks/web/restore?snapshot="+url.QueryEscape(bad), nil, nil), http.StatusNotFound, "")
@@ -190,14 +191,13 @@ func TestRestoreJob(t *testing.T) {
 	// Bob tries to skip the safety snapshot: ignored.
 	token := csrfOf(e, bob, "/stacks/web")
 	r = e.do(bob, http.MethodPost, "/stacks/web/restore",
-		url.Values{"csrf_token": {token}, "snapshot_id": {"aaaaaaaa11111111"}, "start": {"on"}, "images": {"pinned"},
-			"method": {"in-place"}}, nil)
+		url.Values{"csrf_token": {token}, "snapshot_id": {"aaaaaaaa11111111"}, "start": {"on"}, "images": {"pinned"}}, nil)
 	if r.status != http.StatusSeeOther {
 		t.Fatalf("restore: %d\n%s", r.status, r.body)
 	}
 	j, _ := e.st.JobByID(context.Background(), strings.TrimPrefix(r.location, jobLocation))
 	if j.Type != jobs.TypeRestore || j.Options.SnapshotID != "aaaaaaaa11111111" || j.Options.SkipSafetySnapshot || j.Options.NoStart ||
-		!j.Options.PinImages || !j.Options.InPlace {
+		!j.Options.PinImages {
 		t.Fatalf("restore job: %+v", j.Options)
 	}
 	expect(t, e.do(bob, http.MethodPost, "/stacks/web/restore",
@@ -209,7 +209,7 @@ func TestRestoreJob(t *testing.T) {
 	}
 	r = e.post("/stacks/web/restore", url.Values{"csrf_token": {e.csrf("/stacks/web")}, "snapshot_id": {"aaaaaaaa11111111"}})
 	j, _ = e.st.JobByID(context.Background(), strings.TrimPrefix(r.location, jobLocation))
-	if !j.Options.SkipSafetySnapshot || !j.Options.NoStart || j.Options.PinImages || j.Options.InPlace {
+	if !j.Options.SkipSafetySnapshot || !j.Options.NoStart || j.Options.PinImages {
 		t.Fatalf("admin restore options: %+v", j.Options)
 	}
 }
@@ -290,4 +290,29 @@ func TestSharedRepositoryShowsOwnSnapshotsOnly(t *testing.T) {
 	expect(t, e.post("/stacks/web/restore", url.Values{"csrf_token": {e.csrf("/stacks/web")}, "snapshot_id": {"cccccccc33333333"}}),
 		http.StatusBadRequest, "")
 	expect(t, e.get("/stacks/web/restore?snapshot=aaaaaaaa11111111"), http.StatusOK, "")
+}
+
+// A stack whose last restore did not complete is marked on every stack
+// page, and the restore page says the restore continues it (issue #33).
+func TestRestoreIncompleteShown(t *testing.T) {
+	e, _, bob := setupJobsEnv(t)
+	e.server.StacksRoot = t.TempDir()
+	if err := os.Mkdir(filepath.Join(e.server.StacksRoot, "web"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(e.server.StacksRoot, "web", stacks.IncompleteMarker)
+	if r := e.do(bob, http.MethodGet, "/stacks/web/backups", nil, nil); strings.Contains(r.body, "restore incomplete") {
+		t.Fatal("complete stack shown as incomplete")
+	}
+	if err := os.WriteFile(marker, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r := e.do(bob, http.MethodGet, "/stacks/web/backups", nil, nil)
+	if !strings.Contains(r.body, "restore incomplete") || !strings.Contains(r.body, "cannot be started, backed up") {
+		t.Fatalf("incomplete restore not shown:\n%s", r.body)
+	}
+	r = e.do(bob, http.MethodGet, "/stacks/web/restore?snapshot=aaaaaaaa11111111", nil, nil)
+	if !strings.Contains(r.body, "This restore continues it") {
+		t.Fatalf("restore page does not say it continues:\n%s", r.body)
+	}
 }

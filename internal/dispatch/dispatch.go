@@ -218,7 +218,7 @@ func (d *Dispatcher) reconcileDir(ctx context.Context, id string, importing bool
 		ID: id, StackID: st.ID, StackName: st.Name, Type: spec.Type, Trigger: spec.Trigger, QueuedAt: queued,
 		Options: store.JobOptions{PreStop: spec.PreStop, SnapshotID: spec.SnapshotID,
 			SkipSafetySnapshot: spec.SkipSafetySnapshot, NoStart: spec.NoStart, PinImages: spec.PinImages,
-			InPlace: spec.InPlace, Import: spec.Import, LimitDownloadKiB: spec.LimitDownloadKiB, NoBackup: spec.NoBackup, OnlyIfNew: spec.OnlyIfNew, RollbackInPlace: spec.RollbackInPlace,
+			Import: spec.Import, LimitDownloadKiB: spec.LimitDownloadKiB, NoBackup: spec.NoBackup, OnlyIfNew: spec.OnlyIfNew,
 			NoPreStop: spec.NoPreStop},
 	}
 	if j.Trigger == "" {
@@ -329,10 +329,8 @@ func (d *Dispatcher) start(ctx context.Context, j store.Job) {
 		ID: j.ID, Type: j.Type, Stack: j.StackName,
 		PreStop: j.Options.PreStop, SnapshotID: j.Options.SnapshotID,
 		SkipSafetySnapshot: j.Options.SkipSafetySnapshot, NoStart: j.Options.NoStart, PinImages: j.Options.PinImages,
-		InPlace: j.Options.InPlace, Import: j.Options.Import, LimitDownloadKiB: j.Options.LimitDownloadKiB,
+		Import: j.Options.Import, LimitDownloadKiB: j.Options.LimitDownloadKiB,
 		OnlyIfNew: j.Options.OnlyIfNew, NoPreStop: j.Options.NoPreStop, Trigger: j.Trigger, Requester: j.Requester, NoBackup: noBackup,
-		// Without backup there is no rollback, in place or not.
-		RollbackInPlace: j.Options.RollbackInPlace && !noBackup,
 	}
 	if j.Type == jobs.TypeComposeApply {
 		spec.ComposeSHA256, spec.ComposeBaseSHA256 = j.Options.ComposeSHA256, j.Options.ComposeBaseSHA256
@@ -457,7 +455,7 @@ func (d *Dispatcher) finishWithStatus(ctx context.Context, j store.Job, st jobs.
 // resultOf returns the job result a worker reported in its final status.
 func resultOf(st jobs.Status) store.JobResult {
 	return store.JobResult{
-		PreStopSnapshot: st.PreStopSnapshot, SafetySnapshot: st.SafetySnapshot, PreviousDir: st.PreviousDir,
+		PreStopSnapshot: st.PreStopSnapshot, SafetySnapshot: st.SafetySnapshot,
 		RolledBack: st.RolledBack, Unchanged: st.Unchanged, ImagesChanged: st.ImagesChanged,
 		ReplacedImages:    st.ReplacedImages,
 		RemovedContainers: st.RemovedContainers, RemovedImages: st.RemovedImages, FreedBytes: st.FreedBytes,

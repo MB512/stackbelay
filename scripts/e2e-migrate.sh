@@ -2,7 +2,7 @@
 # End-to-end test of moving a stack to another host (issue #1) with the
 # worker, the local Docker daemon and a local restic repository shared by
 # both "hosts": host A backs the stack up, host B imports it (first
-# restore creates the directory), syncs it in place with a newer snapshot,
+# restore creates the directory), syncs it with a newer snapshot,
 # and takes over after A's final backup.
 #
 # Both hosts share one Docker daemon here, and compose identifies a stack
@@ -85,7 +85,7 @@ step "host B imports the stack (first restore creates the directory, not started
 on_b restore --import --no-start --limit-download 102400 "$STACK" "${SNAP1:0:8}" 2>"$WORK/import.log" ||
 	{ cat "$WORK/import.log"; fail "import failed"; }
 [[ "$(cat "$DIR_B/data/value.txt")" == v1 ]] || fail "imported data wrong"
-[[ ! -e "$DIR_B.restore-tmp" ]] || fail "staging directory left behind"
+[[ ! -e "$DIR_B/.stackvault-restore-incomplete" ]] || fail "incomplete-restore marker left after a complete import"
 grep -q '"msg":"stopping stack"' "$WORK/import.log" && fail "an import stopped something"
 grep -q 'pre-restore' "$WORK/import.log" && fail "an import took a safety snapshot"
 [[ -z "$(docker compose --project-name "$PROJECT" ps --quiet)" ]] || fail "imported stack was started"
@@ -100,7 +100,7 @@ pass "refused"
 step "host A backs up v2, host B syncs in place (no safety snapshot, not started)"
 SNAP2="$(backup_a v2)"
 static_inode="$(stat -c %i "$DIR_B/data/static.txt")"
-on_b restore --in-place --no-safety-snapshot --no-start "$STACK" "${SNAP2:0:8}" 2>"$WORK/sync.log" ||
+on_b restore --no-safety-snapshot --no-start "$STACK" "${SNAP2:0:8}" 2>"$WORK/sync.log" ||
 	{ cat "$WORK/sync.log"; fail "sync failed"; }
 [[ "$(cat "$DIR_B/data/value.txt")" == v2 ]] || fail "sync did not bring v2"
 [[ "$(stat -c %i "$DIR_B/data/static.txt")" == "$static_inode" ]] || fail "unchanged file was rewritten"
@@ -109,7 +109,7 @@ pass "v2 synced in place, unchanged file kept"
 
 step "final backup on A (stopped), final restore on B with start and pinned images"
 SNAP3="$(backup_a v3)"
-on_b restore --in-place --no-safety-snapshot --pin-images "$STACK" "${SNAP3:0:8}" 2>"$WORK/final.log" ||
+on_b restore --no-safety-snapshot --pin-images "$STACK" "${SNAP3:0:8}" 2>"$WORK/final.log" ||
 	{ cat "$WORK/final.log"; fail "final restore failed"; }
 SEEN="$(docker compose --project-directory "$DIR_B" exec -T app cat /data/value.txt)"
 [[ "$SEEN" == v3 ]] || fail "app on B sees '$SEEN'"

@@ -129,7 +129,7 @@ container (`RESTIC_REPOSITORY`, `RESTIC_PASSWORD`, backend variables). The
 manager sets them with `docker run -e NAME` (name only), so the values come
 from the docker CLI's own environment and never appear in a command line or
 a file. The worker writes `status.json` atomically (state, timestamps,
-snapshot ids, previous directory, error; see `jobs.Status`) when the job
+snapshot ids, error; see `jobs.Status`) when the job
 starts and when it ends, `log.txt` as JSON lines, and `progress.json`
 while it runs (see "Job progress"). Both log and error are
 filtered for the credential values. If the spec is invalid, the worker
@@ -145,17 +145,13 @@ carries trigger and requester for this; a directory without status becomes
 `failed`). Audit entry `job.import`.
 
 **Self-restore.** The manager's jobs directory lies inside its own stack
-(`/data` is part of it). Restoring that stack would move the job files away
-with the previous version and bring back an older database. So for a
+(`/data` is part of it). Restoring that stack would bring back older job
+files (and delete the newer ones) along with an older database. So for a
 restore of the stack that contains the jobs directory (and for an update
 or compose apply with backup, whose rollback is such a restore), the spec
-carries
-`carry_over_jobs` (the jobs directory relative to the stack, e.g.
-`data/jobs`): right after the swap, before the stack starts, the worker
-copies it from the previous version into the restored stack, and at the
-end writes its final status and complete log into that copy too. An
-in-place restore excludes that directory from the restore instead (see
-"In-place restore"); the job files never move. The
+carries `carry_over_jobs` (the jobs directory relative to the stack, e.g.
+`data/jobs`), which the restore excludes: the job files are left as they
+are. The
 restarted manager then reconciles: the self-backup that was running when
 the snapshot was taken is finished from its real result, and the restore
 itself (and any later jobs) are imported. Users, repositories and
@@ -295,77 +291,77 @@ web        exited   -                    -                                sha256
 
 ## Restore pipeline
 
+Every restore runs **in place** (issue #33): the snapshot is restored over
+the stack directory itself, there is no second copy and no directory swap.
+Only files that differ from the snapshot are read from the repository, so
+a restore of a large stack is fast and needs no room for a second copy, and
+a restore that stopped half-way (timeout, network error, cancel) continues
+where it stopped when it is run again.
+
 1. **Preflight**: permission re-checked by the manager, snapshot exists, lock.
-2. **Safety snapshot**: back up the current state with tag `pre-restore`
-   (stack is stopped first to keep it consistent; skip only if explicitly
-   disabled by an admin). Skipped if the stack directory does not exist yet.
-3. **Stop** the stack (skipped if it does not exist yet).
-4. **Restore to staging**: `restic restore <snap>:<snapshot path> --target <root>/<stack>.restore-tmp`
-   on the same filesystem (so renames are atomic). The `<snap>:<subfolder>`
-   syntax restores the *contents* of the snapshot's stack directory directly
-   into the target, without recreating the absolute path
-   (`<target>/home/docker/<stack>/...`). `<snapshot path>` is taken from the
-   snapshot's `paths[0]`, so it works regardless of the source host's
-   `STACKS_ROOT`. This form does not restore the metadata of the stack
-   directory itself (restic creates the target with mode 0700), so owner,
-   mode and mtime are read with `restic ls --json <snap> <snapshot path>`
-   and applied to the staging directory before the swap.
-5. **Swap**: rename `<stack>` to `<stack>.old-<ts>`, rename staging to `<stack>`
-   (for a new stack: just rename staging to `<stack>`).
-6. **Start** the stack (services that were running at snapshot time, taken from
+2. **Stop** the stack.
+3. **Safety snapshot**: back up the stopped (consistent) stack with tag
+   `pre-restore`; skipped only if explicitly disabled by an admin, for a
+   rollback (its final snapshot was taken minutes before) and when the
+   last restore did not complete (see below: it would only save a partly
+   restored directory).
+4. **Restore**: create the marker file `.stackvault-restore-incomplete`
+   in the stack directory, then
+   `restic restore <snap>:<snapshot path> --target <root>/<stack> --delete
+   --overwrite if-changed --exclude /.stackvault-restore-incomplete
+   [--exclude /<carry_over_jobs>]` (restic >= 0.17). Files with the same
+   size and modification time as in the snapshot count as unchanged and
+   are neither read nor written; the others are verified and rewritten
+   where their content differs; files that are not in the snapshot are
+   deleted (excluded paths are neither restored nor deleted). The
+   `<snap>:<subfolder>` syntax restores the *contents* of the snapshot's
+   stack directory directly into the target, without recreating the
+   absolute path (`<target>/home/docker/<stack>/...`). `<snapshot path>` is
+   taken from the snapshot's `paths[0]`, so it works regardless of the
+   source host's `STACKS_ROOT`. Then the compose file is checked, and the
+   metadata of the stack directory itself (owner, mode, mtime; restic does
+   not restore it with this syntax) is read with
+   `restic ls --json <snap> <snapshot path>` and applied; the marker is
+   removed just before the mtime is set.
+5. **Start** the stack (services that were running at snapshot time, taken from
    `metadata.txt`; fallback: all) with `docker compose up -d --force-recreate`.
    Recreating is required: containers must pick up the restored compose
-   configuration, and Docker Desktop (WSL integration) pins bind mounts per
-   container, so a plain `start` would still show the renamed old directory.
-   Volumes are not removed. Image versions are chosen per the restore
-   option "image versions" (see "Pinning image versions on restore").
-7. **Verify** health. On failure, report; keep `.old-<ts>` for manual rollback.
-   Cleanup of `.old-*` is a separate explicit action.
+   configuration. Volumes are not removed. Image versions are chosen per
+   the restore option "image versions" (see "Pinning image versions on
+   restore").
+6. **Verify** health. On failure, report.
 
-Self-restore works for the same reason as self-backup. Mount the parent
-directory, never the stack folder itself, otherwise the swap would pull the
-mount point away from under the worker.
+Failure handling depends on whether restic started writing:
 
-### In-place restore
-
-Restore option **method** (UI radio buttons, default "switch over"; job
-option `in_place`, worker flag `--in-place`), for any user with the restore
-right. Restoring into staging and swapping needs room for a complete second
-copy and downloads the whole snapshot, which is slow and expensive for
-large stacks (photo libraries, file sync). In place, steps 4 and 5 become:
-
-4. `restic restore <snap>:<snapshot path> --target <root>/<stack> --delete
-   --overwrite if-changed [--exclude /<carry_over_jobs>]` (restic >= 0.17).
-   Files with the same size and modification time as in the snapshot count
-   as unchanged and are neither read nor written; the others are verified
-   and rewritten where their content differs; files that are not in the
-   snapshot are deleted. The manager's jobs directory (self-restore) is
-   excluded, which also protects it from `--delete`. Then the compose file
-   check, the directory metadata and the image pinning run on the stack
-   directory itself.
-5. No swap and no `<stack>.old-<ts>` directory.
-
-Failure handling differs once restic has started writing: the old state is
-gone, and starting a half-restored stack could damage its data further.
-
-- Failure before that (stop, safety snapshot): as with a swap, the stack is
-  started again as it was.
-- Failure during the restore or before the stack is completely restored
-  (restic, directory metadata): the job fails, the stack **stays
-  stopped**, and the error says how to get back: restore again, or restore
-  the safety snapshot. Without a safety snapshot (admins only) there is no
-  way back to the state before.
+- Failure before that (stop, safety snapshot): the stack is started again
+  as it was.
+- Failure during the restore, before the directory is completely restored
+  (restic, compose file check, directory metadata): the job fails, the
+  stack **stays stopped** (starting a half-restored stack could damage its
+  data further) and keeps the marker. The error says how to get back:
+  restore again (continues the restore), or restore the safety snapshot.
 - Failure after a complete restore but before the start (e.g. a pinned
   image that cannot be pulled): the stack stays stopped with the restored
   files.
 - Failure of the start: reported like any failed start.
 
-The safety snapshot is therefore the only rollback of an in-place restore;
-the UI says so next to the option.
+**Incomplete restore** (`stacks.IncompleteMarker`): while the marker
+exists, the directory may be partly restored. Backup, update, compose
+apply, start, restart and up refuse the stack (`requireComplete`), so a
+partly restored stack is neither started nor recorded as a valid snapshot;
+stop and down are allowed. The next restore continues the incomplete one
+without a safety snapshot. Every stack page shows a "restore incomplete"
+badge and warning, the restore page says that the restore continues the
+incomplete one. The safety snapshot of the restore that did not complete
+is the way back to the state before it.
 
-Automatic restores (the rollback of an update or a compose apply) use the
-swap unless the user chose "roll back in place" for that job (update form,
-compose editor).
+Self-restore works for the same reason as self-backup. Mount the parent
+directory, never the stack folder itself.
+
+Up to StackVault 0.4 a restore went into `<stack>.restore-tmp` and swapped
+it in, keeping the previous directory as `<stack>.old-<time>`. Directories
+with these names are still never discovered as stacks (see "Stack
+discovery"); left-over ones can be deleted by hand.
 
 ## Restore from another host
 
@@ -391,21 +387,28 @@ rest of the path may differ (`/home/docker/web` on A restores into
 
 - **First restore (import)**: `Pipeline.Import`, job option / spec field
   `import`. The stack directory does not exist (`stacks.ImportTarget`:
-  valid name, neither the directory nor its staging directory exists), so
-  there is nothing to stop, to protect with a safety snapshot or to swap:
-  the snapshot is restored into the staging directory, checked (compose
-  file, directory metadata), the image digests in `metadata.txt` are
+  valid name, no directory), so there is nothing to stop or to protect
+  with a safety snapshot. The worker creates the directory (`mkdir`, which
+  never replaces anything that appeared in the meantime) with the
+  incomplete-restore marker and restores into it like any restore (see
+  "Restore pipeline"); then the image digests in `metadata.txt` are
   compared with the local images (missing ones are logged; a start pulls
-  them, by digest with pinned image versions) and the staging directory is
-  renamed to the stack directory (a rename never replaces a non-empty
-  directory). It starts only if asked; with "pin image versions"
-  (recommended for migrations). Any failure before the rename removes the
-  staging directory.
+  them, by digest with pinned image versions). It starts only if asked;
+  with "pin image versions" (recommended for migrations).
+- **Incomplete import** (issue #33): a failed import keeps what it
+  restored, with the marker. `stacks.ImportTarget` also accepts such a
+  directory (a real directory, not a symlink, containing the marker), so
+  running the restore again continues the import: only missing and changed
+  files are downloaded. A long first import over the internet does not
+  start from zero after a timeout or a network error. Once the compose
+  file is restored, discovery may already list the stack as present; its
+  next restore is then a normal restore that continues the incomplete one
+  (no safety snapshot of the partly restored directory).
 - **Later syncs** are normal restores of the source host's newer
-  snapshots, usually in place (only changed files are read and written)
-  and without safety snapshot, not started; the last one after the final
-  backup on host A with start and pinned images. So a large stack moves
-  with repeated, ever faster syncs and a short final downtime.
+  snapshots (only changed files are read and written), not started; the
+  last one after the final backup on host A with start and pinned images.
+  So a large stack moves with repeated, ever faster syncs and a short
+  final downtime.
 - **Source host** (`stacks.source_host`, Settings tab): whose snapshots
   the Backups tab lists and the restore accepts (`StackSnapshots` with
   that host instead of `STACKVAULT_HOSTNAME`). Offered are this host and
@@ -413,9 +416,9 @@ rest of the path may differ (`/home/docker/web` on A restores into
   snapshots is admin-only (restore links hidden, form and action answer
   403). Backups are always made under this host's name.
 - **Restore page**: for a stack without directory it offers no safety
-  snapshot and no method (the restore creates the directory), "start"
-  off and pinned image versions on; for another host's snapshot it
-  preselects "in place", "do not start" and pinned versions, and lists the
+  snapshot (the restore creates the directory), "start" off and pinned
+  image versions on; for another host's snapshot it preselects "do not
+  start" and pinned versions, and lists the
   caveats (numeric UID/GID restored as is; ports, external networks and
   absolute paths outside the stack directory may not fit; only bind mounts
   inside the stack directory are in the snapshot).
@@ -440,14 +443,12 @@ Restore option **image versions**:
 - `pinned`: use the repo digests from `metadata.txt`.
 
 How `pinned` works (`jobs.Pipeline.preparePinning`; the stack's own
-`compose.yml` is never modified). Steps 1–3 run after the restore into the
-staging directory and **before the swap**, so any failure (no or invalid
-`metadata.txt`, an image that cannot be pulled, `COMPOSE_FILE` in `.env`)
-aborts the restore with the normal rollback: staging removed, the old stack
-started again. In place there is nothing to go back to: the stack is left
-stopped with the restored files (see "In-place restore").
+`compose.yml` is never modified). Steps 1–3 run after the restore and
+before the start, so any failure (no or invalid `metadata.txt`, an image
+that cannot be pulled, `COMPOSE_FILE` in `.env`) leaves the stack stopped
+with the restored files (see "Restore pipeline").
 
-1. Parse `metadata.txt` from the staging directory (`ParseMetadata`, every
+1. Parse `metadata.txt` from the restored directory (`ParseMetadata`, every
    field validated; repo digests must match the digest syntax).
 2. For each service with a repo digest: `docker.Client.EnsureImage` — keep
    it if `docker image inspect` finds it, else `docker pull name@sha256:...`.
@@ -488,7 +489,7 @@ Notes and limits (show them in the UI):
   image change and recreate containers with the tag version.
 - Multi-arch: the repo digest recorded from `docker image inspect` identifies
   the manifest that was pulled; pulling by it yields the same platform content.
-- Without `metadata.txt` (very old snapshots) a pinned restore fails before the swap (the UI cannot know in advance without reading the snapshot).
+- Without `metadata.txt` (very old snapshots) a pinned restore fails before the start (the UI cannot know in advance without reading the snapshot).
 
 ## Update pipeline
 
@@ -539,15 +540,12 @@ cancel):
    - with repository: **automatic rollback** = the restore pipeline on the
      final snapshot without safety snapshot (the final snapshot already is
      the state before the update), with image pinning (old digests from its
-     `metadata.txt`), carrying the manager's job files over if it is the
-     manager's own stack. By default the snapshot is restored into a new
-     directory and swapped in; the failed version's directory is kept as
-     `<stack>.old-<time>`. With the option **roll back in place**
-     (`rollback_in_place`, worker flag `--rollback-in-place`) it is
-     restored in place (see "In-place restore"): only the few files
-     changed since the final snapshot are rewritten, nothing of the failed
-     version is kept, and a rollback that fails half-way leaves the stack
-     stopped. The rollback also runs if the job was cancelled during step 6
+     `metadata.txt`), leaving the manager's job files alone if it is the
+     manager's own stack. Like every restore it runs in place: only the
+     few files changed since the final snapshot are rewritten, nothing of
+     the failed version is kept, and a rollback that fails half-way leaves
+     the stack stopped and marked as incomplete (see "Restore pipeline").
+     The rollback also runs if the job was cancelled during step 6
      (own timeout, 2 h). The job ends `failed` with `result.rolled_back`.
    - without repository: **no rollback at all**, not even starting the old
      images (they could damage data a new version already migrated). The
@@ -594,8 +592,8 @@ argument lists:
    container started by a pinned restore or rollback
    (`name@sha256:...` instead of the tag) is compared by digest and marked
    as pinned. If running services are pinned, the update page offers
-   **Unpin now** (with a repository): it queues an update with "only if new" and
-   rollback by swap, which recreates them with their tag (and, as any
+   **Unpin now** (with a repository): it queues an update with "only if new",
+   which recreates them with their tag (and, as any
    update, pulls newer images of the tags). The column shows running and available version: the version
    label if the image has one, else creation date and short digest.
 
@@ -672,8 +670,6 @@ editable.
    compose --project-directory <stack> --file <tmp> config --quiet`, so
    `.env` and relative paths resolve as for the real file. Compose's message
    is shown in the form (with the real file name).
-   With a repository, the checkbox "roll back in place" sets
-   `rollback_in_place` (see "Update pipeline", step 7).
 3. A `compose-apply` job is queued. The new content is stored in
    `job_compose` (not in the job's options), the options carry the file
    name and both checksums. The audit entry (`job.create`) has checksum and
@@ -968,7 +964,7 @@ the running (or earlier queued) job of its stack, or a free slot when
 - The pipeline reports phases to `Pipeline.Progress` (`jobs.ProgressReporter`;
   nil reports nothing). `restic.CLI.Progress` receives restic's `--json`
   status lines of `backup` and `restore` (restic >= 0.17 for restore;
-  skipped bytes of an in-place restore count as done). With it set,
+  skipped bytes of a restore count as done). With it set,
   restic runs with `RESTIC_PROGRESS_FPS=1`, so it prints one status line
   per second instead of up to 60; the first comes after one second, so
   transfers shorter than that show no numbers.
@@ -1189,8 +1185,8 @@ runs. A schedule has a job type (Settings tab, admins):
 - **backup**, with the option "pre-stop snapshot";
 - **update**, always with "only if new" (a scheduled update never stops or
   backs up a stack when no running service gets a new image or is pinned),
-  with the options "pre-stop snapshot" (`no_pre_stop` in the job when off)
-  and "roll back in place". It fails if the stack is not running. On a
+  with the option "pre-stop snapshot" (`no_pre_stop` in the job when off).
+  It fails if the stack is not running. On a
   stack without repository, creating an update schedule requires the same
   confirmation as a manual update ("no backup and no rollback": a checkbox
   checked by the server, and a dialog, `static/forms.js` with
@@ -1203,10 +1199,6 @@ runs. A schedule has a job type (Settings tab, admins):
 - **cleanup**, a host schedule (no stack, admin "Host" tab, no options):
   queues a host cleanup (see "Host cleanup"); disabled stacks do not
   matter.
-
-"Roll back in place" applies to updates only: the form disables it while
-"Backup" is selected (`static/forms.js`, `data-enable-when="job_type=update"`),
-and the server rejects it for a backup schedule instead of dropping it.
 
 - Expressions: the standard 5 fields (minute hour day-of-month month
   day-of-week) or descriptors (`@daily`, `@weekly`, `@every 6h`, ...).
@@ -1240,9 +1232,9 @@ stack. Accepted names are those `docker compose` looks for, in its order:
 `compose.yaml`, `compose.yml`, `docker-compose.yml`, `docker-compose.yaml`;
 the first one that exists as a regular file (not a symlink) is the stack's
 main file (`stacks.MainFileNames()`). The directory name is the stack ID. Names ending
-in `.restore-tmp` or containing `.old-` are reserved for the restore
-pipeline's staging and previous-version directories and are never
-discovered, so a restore does not create new stacks. Stacks can be
+in `.restore-tmp` or containing `.old-` are reserved (the staging and
+previous-version directories of restores up to StackVault 0.4) and are
+never discovered. Stacks can be
 disabled per stack. Discovery is the source of stack names and paths; the
 only other source is an admin's "Import stack" from a repository's snapshot
 paths (see "Restore from another host").
@@ -1296,8 +1288,8 @@ to them. `restic restore <id>:<subpath>` requires restic >= 0.17.
 ```
 worker run <job-dir>
 worker backup  [--pre-stop] <stack>
-worker restore [--no-safety-snapshot] [--no-start] [--pin-images] [--in-place] [--import] [--limit-download <KiB/s>] <stack> <snapshot-id>
-worker update  [--no-backup] [--only-if-new] [--rollback-in-place] [--no-pre-stop] <stack>
+worker restore [--no-safety-snapshot] [--no-start] [--pin-images] [--import] [--limit-download <KiB/s>] <stack> <snapshot-id>
+worker update  [--no-backup] [--only-if-new] [--no-pre-stop] <stack>
 worker stop|start|restart|up|down <stack>
 worker cleanup [--image-min-age <duration>]
 ```
@@ -1340,6 +1332,6 @@ backup (no rollback); and the compose-apply job: a valid change and one
 with a missing image (rollback to the previous compose file).
 `scripts/e2e-migrate.sh` moves a stack between two simulated hosts (two
 stacks roots and host names, one repository): import without start,
-refused second import, in-place sync without safety snapshot, final
+refused second import, sync without safety snapshot, final
 restore with start and pinned images, and backups under the new host's
 name.

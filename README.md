@@ -22,14 +22,13 @@ already trust until it has proven itself on your hosts. Upgrading from 0.3
   snapshot while running (shorter downtime) -> `compose stop` -> final
   snapshot -> `compose start`. The stack is started again in every case,
   also when the backup fails or is cancelled.
-- **Restores** into a staging directory first, then swap: the previous
-  directory is kept (`<stack>.old-<time>`), a safety snapshot of the current
-  state is taken before. For large stacks a restore can run **in place**
-  instead: only files that differ from the snapshot are downloaded and
-  rewritten. Optionally with the **image versions from backup time**
-  (pinned by digest).
+- **Restores** in place, after a safety snapshot of the current state: only
+  files that differ from the snapshot are downloaded and rewritten, so a
+  restore of a large stack is fast, and one that was interrupted continues
+  where it stopped when it is run again. Optionally with the **image
+  versions from backup time** (pinned by digest).
 - **Move a stack to another host** (or rebuild a host) through its
-  repository: import it, sync it with repeated in-place restores while it
+  repository: import it, sync it with repeated restores while it
   still runs on the old host, take over after the final backup.
 - **Updates** with backup and automatic rollback: pull newer images, back
   up, recreate the services, roll back to the backup if they do not come

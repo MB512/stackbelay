@@ -4,11 +4,13 @@ package jobs
 import (
 	"cmp"
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/MB512/stackvault/internal/docker"
 	"github.com/MB512/stackvault/internal/restic"
+	"github.com/MB512/stackvault/internal/stacks"
 )
 
 // Snapshot tags written by the pipelines.
@@ -71,6 +73,19 @@ func orDefault(d, def time.Duration) time.Duration {
 		return def
 	}
 	return d
+}
+
+// requireComplete refuses a stack whose last restore did not complete
+// (stacks.IncompleteMarker): starting, backing up or changing a partly
+// restored stack could damage its data further or record it as a valid
+// backup. Only a restore (which continues the incomplete one), stop and
+// down are allowed.
+func requireComplete(stack stacks.Stack) error {
+	if stacks.RestoreIncomplete(stack.Dir) {
+		return fmt.Errorf("the last restore of stack %s did not complete, so its directory may be partly restored; "+
+			"restore a snapshot first", stack.Name)
+	}
+	return nil
 }
 
 // services reads the stack's services (docker.Client.Services, which also

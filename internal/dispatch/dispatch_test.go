@@ -489,7 +489,7 @@ func TestRestoreOfManagerStackCarriesJobsOver(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
 	e.d.Template.Jobs = docker.Mount{Type: "bind", Source: "/home/docker/web/data/jobs"} // the manager lives in "web"
-	own := e.submit("web", jobs.TypeRestore, store.JobOptions{SnapshotID: "aaaaaaaa11111111", InPlace: true})
+	own := e.submit("web", jobs.TypeRestore, store.JobOptions{SnapshotID: "aaaaaaaa11111111"})
 	other := e.submit("db", jobs.TypeRestore, store.JobOptions{SnapshotID: "aaaaaaaa11111111"})
 	e.d.Step(ctx)
 	for id, want := range map[string]string{own.ID: "data/jobs", other.ID: ""} {
@@ -499,9 +499,6 @@ func TestRestoreOfManagerStackCarriesJobsOver(t *testing.T) {
 		}
 		if spec.CarryOverJobs != want || spec.Trigger != store.TriggerManual {
 			t.Errorf("spec of %s: carry-over %q, trigger %q", spec.Stack, spec.CarryOverJobs, spec.Trigger)
-		}
-		if spec.InPlace != (id == own.ID) { // in place, the carry-over directory is excluded from the restore
-			t.Errorf("spec of %s: in place %t", spec.Stack, spec.InPlace)
 		}
 	}
 }
@@ -552,8 +549,7 @@ func TestUpdateRepositoryHandling(t *testing.T) {
 		t.Fatalf("update without repository and confirmation: %+v", got)
 	}
 
-	// The rollback option is dropped without backup (there is no rollback).
-	opts := store.JobOptions{NoBackup: true, OnlyIfNew: true, RollbackInPlace: true}
+	opts := store.JobOptions{NoBackup: true, OnlyIfNew: true}
 	confirmed := e.submit("norepo", jobs.TypeUpdate, opts)
 	withRepo := e.submit("web", jobs.TypeUpdate, opts) // repository wins
 	e.d.Step(ctx)
@@ -576,8 +572,8 @@ func TestUpdateRepositoryHandling(t *testing.T) {
 		if spec.NoBackup != tc.wantNoBackup || spec.CarryOverJobs != tc.wantCarry {
 			t.Errorf("spec of %s: no_backup %v, carry-over %q", spec.Stack, spec.NoBackup, spec.CarryOverJobs)
 		}
-		if !spec.OnlyIfNew || spec.RollbackInPlace != !tc.wantNoBackup {
-			t.Errorf("spec of %s: only_if_new %v, rollback_in_place %v", spec.Stack, spec.OnlyIfNew, spec.RollbackInPlace)
+		if !spec.OnlyIfNew {
+			t.Errorf("spec of %s: only_if_new %v", spec.Stack, spec.OnlyIfNew)
 		}
 		var env map[string]string
 		for _, cs := range e.docker.started {
@@ -592,9 +588,9 @@ func TestUpdateRepositoryHandling(t *testing.T) {
 
 	// A rolled-back update keeps its result.
 	e.workerDone(withRepo.ID, jobs.Status{State: jobs.StateFailed, Snapshot: "aaaaaaaa11111111",
-		PreviousDir: "/home/docker/web.old-x", RolledBack: true, Error: "update failed and was rolled back"})
+		RolledBack: true, Error: "update failed and was rolled back"})
 	e.d.Step(ctx)
-	if got := e.job(withRepo.ID); !got.Result.RolledBack || got.Result.PreviousDir == "" || got.Snapshot == "" {
+	if got := e.job(withRepo.ID); !got.Result.RolledBack || got.Snapshot == "" {
 		t.Fatalf("rolled-back update: %+v", got)
 	}
 	// A successful update keeps the services whose image changed.

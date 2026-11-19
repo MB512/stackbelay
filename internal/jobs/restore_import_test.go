@@ -34,26 +34,27 @@ func TestImport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Nothing to stop, no safety snapshot, no swap: restore, check the
-	// images, rename, start what ran at snapshot time.
+	// Nothing to stop and no safety snapshot: create the directory,
+	// restore, check the images, start what ran at snapshot time.
 	assertCalls(t, e.calls.list(), []string{
 		"restic.CheckRepo",
 		"restic.Snapshots " + snapID[:8],
-		"restic.Restore " + snapID + ":/home/docker/web",
+		"restic.Restore " + snapID + ":/home/docker/web exclude=" + stacks.IncompleteMarker,
 		"restic.Node " + snapID + ":/home/docker/web",
 		"docker.ImageExists nginx@sha256:" + strings.Repeat("ab", 32),
 		"docker.Services",
 		"docker.Up app",
 		"docker.WaitHealthy",
 	})
-	if res.Snapshot != snapID || res.OldDir != "" || res.SafetySnapshot != "" {
+	if res.Snapshot != snapID || res.SafetySnapshot != "" {
 		t.Errorf("result %+v", res)
 	}
 	if got := readData(t, target.Dir); got != "restored" {
 		t.Errorf("stack dir has %q", got)
 	}
-	if _, err := os.Stat(stacks.StagingDir(target)); !os.IsNotExist(err) {
-		t.Errorf("staging directory left: %v", err)
+	assertMarker(t, target.Dir, false)
+	if side, _ := filepath.Glob(target.Dir + ".*"); len(side) > 0 {
+		t.Errorf("sibling directories created: %v", side)
 	}
 }
 
@@ -73,23 +74,51 @@ func TestImportWithoutStart(t *testing.T) {
 	}
 }
 
-func TestImportFailureLeavesNothing(t *testing.T) {
+// A failed import keeps what it restored, marked as incomplete; running it
+// again continues it (issue #33: a long first import over the internet
+// must not start from zero after a timeout or a network error).
+func TestImportFailureCanBeContinued(t *testing.T) {
 	e, target := importEnv(t)
 	e.restic.failOn["Restore"] = errors.New("connection reset")
-	if _, err := e.p.Import(context.Background(), target, RestoreOptions{SnapshotID: snapID[:8]}); err == nil {
-		t.Fatal("expected error")
+	_, err := e.p.Import(context.Background(), target, RestoreOptions{SnapshotID: snapID[:8]})
+	if err == nil || !strings.Contains(err.Error(), "run the restore again to continue it") {
+		t.Fatalf("err = %v", err)
 	}
-	for _, dir := range []string{target.Dir, stacks.StagingDir(target)} {
-		if _, err := os.Stat(dir); !os.IsNotExist(err) {
-			t.Errorf("%s left behind: %v", dir, err)
-		}
+	assertMarker(t, target.Dir, true)
+	again, err := stacks.ImportTarget(filepath.Dir(target.Dir), "web")
+	if err != nil {
+		t.Fatalf("ImportTarget after an incomplete import: %v", err)
+	}
+
+	delete(e.restic.failOn, "Restore")
+	if _, err := e.p.Import(context.Background(), again, RestoreOptions{SnapshotID: snapID[:8], NoStart: true}); err != nil {
+		t.Fatal(err)
+	}
+	assertMarker(t, target.Dir, false)
+	if got := readData(t, target.Dir); got != "restored" {
+		t.Errorf("stack dir has %q", got)
+	}
+	if _, err := stacks.ImportTarget(filepath.Dir(target.Dir), "web"); !errors.Is(err, stacks.ErrExists) {
+		t.Errorf("ImportTarget after a complete import: %v", err)
+	}
+}
+
+// A failure before the directory exists leaves nothing behind.
+func TestImportFailureBeforeCreatingLeavesNothing(t *testing.T) {
+	e, target := importEnv(t)
+	e.restic.failOn["CheckRepo"] = errBoom
+	if _, err := e.p.Import(context.Background(), target, RestoreOptions{SnapshotID: snapID[:8]}); !errors.Is(err, errBoom) {
+		t.Fatalf("err = %v", err)
+	}
+	if _, err := os.Stat(target.Dir); !os.IsNotExist(err) {
+		t.Errorf("%s created: %v", target.Dir, err)
 	}
 }
 
 func TestImportRefusesExistingDirectory(t *testing.T) {
 	e, target := importEnv(t)
 	// The directory appears while the job runs (e.g. created by hand):
-	// the rename must not replace it.
+	// the import must not write into it.
 	if err := os.MkdirAll(filepath.Join(target.Dir, "keep"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -99,8 +128,10 @@ func TestImportRefusesExistingDirectory(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(target.Dir, "keep")); err != nil {
 		t.Errorf("existing directory touched: %v", err)
 	}
-	if _, err := os.Stat(stacks.StagingDir(target)); !os.IsNotExist(err) {
-		t.Errorf("staging directory left: %v", err)
+	for _, c := range e.calls.list() {
+		if strings.HasPrefix(c, "restic.Restore") {
+			t.Fatalf("restored into an existing directory: %v", e.calls.list())
+		}
 	}
 	if _, err := stacks.ImportTarget(filepath.Dir(target.Dir), "web"); !errors.Is(err, stacks.ErrExists) {
 		t.Errorf("ImportTarget on an existing directory: %v", err)
@@ -110,7 +141,6 @@ func TestImportRefusesExistingDirectory(t *testing.T) {
 func TestImportRejectsStackOptions(t *testing.T) {
 	e, target := importEnv(t)
 	for _, opts := range []RestoreOptions{
-		{SnapshotID: snapID[:8], InPlace: true},
 		{SnapshotID: snapID[:8], SkipSafetySnapshot: true},
 		{SnapshotID: snapID[:8], CarryOver: "data/jobs"},
 	} {

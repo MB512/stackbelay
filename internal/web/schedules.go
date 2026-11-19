@@ -83,7 +83,6 @@ func (s *Server) createSchedule(w http.ResponseWriter, r *http.Request) {
 		Update:   r.PostFormValue("job_type") == string(jobs.TypeUpdate),
 		PreStop:  r.PostFormValue("pre_stop") == "on",
 	}
-	in.RollbackInPlace = r.PostFormValue("rollback_in_place") == "on"
 	in.ConfirmNoBackup = r.PostFormValue("confirm_no_backup") == "on"
 	expr := in.CronExpr
 	fail := func(msg string) {
@@ -91,13 +90,6 @@ func (s *Server) createSchedule(w http.ResponseWriter, r *http.Request) {
 	}
 	if t := r.PostFormValue("job_type"); t != "" && t != string(jobs.TypeBackup) && t != string(jobs.TypeUpdate) {
 		fail("Unknown job type.")
-		return
-	}
-	if in.RollbackInPlace && !in.Update {
-		// The form disables the checkbox for backups (static/forms.js);
-		// without JavaScript it can still arrive. Say so instead of
-		// dropping it: a backup never restores.
-		fail("Rolling back in place is only an option for update schedules.")
 		return
 	}
 	if _, err := scheduler.Parse(expr); err != nil {
@@ -113,8 +105,7 @@ func (s *Server) createSchedule(w http.ResponseWriter, r *http.Request) {
 		fail(fmt.Sprintf("A stack can have at most %d schedules.", maxSchedulesPerStack))
 		return
 	}
-	sc := store.Schedule{StackID: st.ID, CronExpr: expr, Type: jobs.TypeBackup, PreStop: in.PreStop,
-		RollbackInPlace: in.RollbackInPlace}
+	sc := store.Schedule{StackID: st.ID, CronExpr: expr, Type: jobs.TypeBackup, PreStop: in.PreStop}
 	if in.Update {
 		sc.Type = jobs.TypeUpdate
 		hasRepo, err := s.hasRepository(ctx, st)
@@ -130,7 +121,7 @@ func (s *Server) createSchedule(w http.ResponseWriter, r *http.Request) {
 				fail("This stack has no repository: confirm that its scheduled updates run without backup and without rollback.")
 				return
 			}
-			sc.NoBackup, sc.PreStop, sc.RollbackInPlace = true, false, false
+			sc.NoBackup, sc.PreStop = true, false
 		}
 	}
 	id, err := s.Store.CreateSchedule(ctx, sc)
@@ -139,8 +130,8 @@ func (s *Server) createSchedule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(r, store.AuditEntry{UserID: authFrom(ctx).User.ID, Action: "schedule.create", StackID: st.ID,
-		Detail: fmt.Sprintf("schedule %d: %s %s, pre-stop snapshot: %t, rollback in place: %t, without backup: %t",
-			id, sc.Type, expr, sc.PreStop, sc.RollbackInPlace, sc.NoBackup)})
+		Detail: fmt.Sprintf("schedule %d: %s %s, pre-stop snapshot: %t, without backup: %t",
+			id, sc.Type, expr, sc.PreStop, sc.NoBackup)})
 	s.reloadSchedules(ctx)
 	http.Redirect(w, r, settingsURL(st), http.StatusSeeOther) //nolint:gosec // G710: same-site path, see settingsURL
 }

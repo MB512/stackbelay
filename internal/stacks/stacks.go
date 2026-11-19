@@ -13,7 +13,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
-	"time"
 )
 
 // mainFileNames are the file names that mark a directory as a stack, in the
@@ -30,24 +29,25 @@ func MainFileNames() []string {
 // path separators, "." and ".." and leading dots/dashes.
 var namePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
 
-// Sibling directories created by the restore pipeline next to a stack
-// directory. They contain a compose file but are not stacks: names matching
-// them are reserved and never discovered.
-const (
-	stagingSuffix = ".restore-tmp"
-	oldInfix      = ".old-"
-)
-
-// reservedPattern matches staging directories and previous versions kept
-// after a restore (also when renamed by hand, e.g. "web.old-keep").
+// reservedPattern matches the sibling directories that restores of
+// StackVault 0.4 and older created next to a stack directory (staging
+// "<stack>.restore-tmp", previous version "<stack>.old-<time>", also when
+// renamed by hand, e.g. "web.old-keep"). They contain a compose file but
+// are not stacks: such names are reserved and never discovered.
 var reservedPattern = regexp.MustCompile(`(\.restore-tmp$|\.old-)`)
 
-// StagingDir is the directory a restore writes into before the swap.
-func StagingDir(s Stack) string { return s.Dir + stagingSuffix }
+// IncompleteMarker is the file a restore creates in the stack directory
+// before restic writes into it and removes once the directory is completely
+// restored (issue #33). While it exists, the directory may be partly
+// restored: the stack must not be started, backed up or changed, and the
+// next restore continues the incomplete one.
+const IncompleteMarker = ".stackvault-restore-incomplete"
 
-// OldDir is where the previous stack directory is moved during a restore.
-func OldDir(s Stack, t time.Time) string {
-	return s.Dir + oldInfix + t.UTC().Format("20060102T150405Z")
+// RestoreIncomplete reports whether the last restore into dir did not
+// complete (IncompleteMarker exists).
+func RestoreIncomplete(dir string) bool {
+	_, err := os.Lstat(filepath.Join(dir, IncompleteMarker))
+	return err == nil
 }
 
 // ErrNotFound is returned by Lookup when no stack with that name was discovered.
@@ -117,14 +117,16 @@ func Lookup(root, name string) (Stack, error) {
 	return Stack{}, fmt.Errorf("stack %q: %w", name, ErrNotFound)
 }
 
-// ErrExists is returned by ImportTarget when the stack directory (or a
-// staging directory of it) already exists.
+// ErrExists is returned by ImportTarget when the stack directory already
+// exists (and is not left over from an incomplete import).
 var ErrExists = errors.New("stack directory already exists")
 
 // ImportTarget returns the stack a first restore from another host creates
-// below root (issue #1): name must be a valid stack name, and neither the
-// directory nor its staging directory may exist. The name comes from the
-// snapshot's own path (validated by the restore), never from user input.
+// below root (issue #1): name must be a valid stack name, and the directory
+// must not exist, or be a directory (not a symlink) left by an incomplete
+// restore (IncompleteMarker), which the import then continues. The name
+// comes from the snapshot's own path (validated by the restore), never from
+// user input.
 func ImportTarget(root, name string) (Stack, error) {
 	if !filepath.IsAbs(root) {
 		return Stack{}, fmt.Errorf("stacks root %q is not an absolute path", root)
@@ -133,14 +135,17 @@ func ImportTarget(root, name string) (Stack, error) {
 		return Stack{}, fmt.Errorf("invalid stack name %q", name)
 	}
 	s := Stack{Name: name, Dir: filepath.Join(root, name)}
-	for _, dir := range []string{s.Dir, StagingDir(s)} {
-		if _, err := os.Lstat(dir); err == nil {
-			return Stack{}, fmt.Errorf("%s: %w", dir, ErrExists)
-		} else if !errors.Is(err, fs.ErrNotExist) {
-			return Stack{}, fmt.Errorf("checking %s: %w", dir, err)
-		}
+	fi, err := os.Lstat(s.Dir)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return s, nil
+	case err != nil:
+		return Stack{}, fmt.Errorf("checking %s: %w", s.Dir, err)
+	case fi.IsDir() && RestoreIncomplete(s.Dir):
+		return s, nil
+	default:
+		return Stack{}, fmt.Errorf("%s: %w", s.Dir, ErrExists)
 	}
-	return s, nil
 }
 
 // HasComposeFile reports whether dir directly contains a compose file

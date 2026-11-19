@@ -171,8 +171,8 @@ type fakeRestic struct {
 	// ids overrides the snapshot id returned by Backup per tag (default
 	// "snap-<tag>").
 	ids map[string]string
-	// inPlaceVisit, if set, is called by RestoreInPlace with the target.
-	inPlaceVisit func(target string)
+	// restoreVisit, if set, is called by Restore with the target.
+	restoreVisit func(target string)
 }
 
 func (f *fakeRestic) CheckRepo(ctx context.Context, repo restic.Repo) error {
@@ -201,26 +201,17 @@ func (f *fakeRestic) Snapshots(ctx context.Context, repo restic.Repo, ids ...str
 	return f.snapshots, f.failOn["Snapshots"]
 }
 
-func (f *fakeRestic) Restore(ctx context.Context, repo restic.Repo, id, subpath, target string) error {
-	f.calls.add("restic.Restore %s:%s", id, subpath)
-	// Like restic, create the target (0700) and write some files before failing.
+// Restore works like "restic restore --delete" over target: it creates
+// target if missing, removes top-level entries that are neither restored
+// nor excluded and writes restoreFiles (also when it then fails, like a
+// restore that stops half-way).
+func (f *fakeRestic) Restore(ctx context.Context, repo restic.Repo, id, subpath, target string, exclude []string) error {
+	f.calls.add("restic.Restore %s:%s exclude=%s", id, subpath, strings.Join(exclude, ","))
+	if f.restoreVisit != nil {
+		f.restoreVisit(target)
+	}
 	if err := os.MkdirAll(target, 0o700); err != nil {
 		return err
-	}
-	for name, content := range f.restoreFiles {
-		if err := os.WriteFile(filepath.Join(target, name), []byte(content), 0o644); err != nil {
-			return err
-		}
-	}
-	return f.failOn["Restore"]
-}
-
-// RestoreInPlace writes restoreFiles into target and, like restic
-// --delete, removes other top-level entries that are not excluded.
-func (f *fakeRestic) RestoreInPlace(ctx context.Context, repo restic.Repo, id, subpath, target string, exclude []string) error {
-	f.calls.add("restic.RestoreInPlace %s:%s exclude=%s", id, subpath, strings.Join(exclude, ","))
-	if f.inPlaceVisit != nil {
-		f.inPlaceVisit(target)
 	}
 	entries, err := os.ReadDir(target)
 	if err != nil {
@@ -241,7 +232,7 @@ func (f *fakeRestic) RestoreInPlace(ctx context.Context, repo restic.Repo, id, s
 			return err
 		}
 	}
-	return f.failOn["RestoreInPlace"]
+	return f.failOn["Restore"]
 }
 
 func (f *fakeRestic) Node(ctx context.Context, repo restic.Repo, id, path string) (restic.Node, error) {

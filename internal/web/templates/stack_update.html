@@ -25,7 +25,6 @@
     <form method="post" action="/stacks/{{$.Data.Stack.Name}}/update">
       <input type="hidden" name="csrf_token" value="{{$.Data.CSRF}}">
       <input type="hidden" name="only_if_new" value="on">
-      <input type="hidden" name="rollback" value="swap">
       <input type="hidden" name="pre_stop" value="on">
       <button type="submit"{{if $.Data.Unavailable}} disabled{{end}}>Unpin now</button>
     </form>
@@ -77,16 +76,8 @@
     {{- if .HasRepo}}
     <label class="check"><input type="checkbox" name="pre_stop" checked>
       Snapshot before stopping (shorter downtime for large stacks)</label>
-    <fieldset>
-      <legend>Rollback</legend>
-      <label class="check"><input type="radio" name="rollback" value="swap" checked>
-        Into a new directory, then switch over (the failed version is kept as <code>{{.Stack.Name}}.old-…</code>)</label>
-      <label class="check"><input type="radio" name="rollback" value="in-place">
-        In place (only files changed since the backup are restored; for large stacks)</label>
-      <p class="hint">The rollback restores the final snapshot taken just before the update. In place it rewrites only the
-        few files that changed since then instead of downloading and copying the whole stack, but nothing of the failed
-        version is kept, and if the rollback itself fails half-way the stack stays stopped and partly restored.</p>
-    </fieldset>
+    <p class="hint">A rollback restores the final snapshot taken just before the update in place: only the files that
+      changed since then are rewritten.</p>
     {{- else}}
     <label class="check"><input type="checkbox" name="confirm_no_backup" required>
       I understand: no backup and no rollback.</label>

@@ -35,17 +35,13 @@ func TestProgress(t *testing.T) {
 	if _, err := c.Backup(ctx, repo, "/s/web", BackupOptions{Host: "h"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := c.Restore(ctx, repo, "0123abcd", "/s/web", "/t"); err != nil {
-		t.Fatal(err)
-	}
-	if err := c.RestoreInPlace(ctx, repo, "0123abcd", "/s/web", "/t", nil); err != nil {
+	if err := c.Restore(ctx, repo, "0123abcd", "/s/web", "/t", nil); err != nil {
 		t.Fatal(err)
 	}
 	want := []Progress{
 		{Percent: 0.25, BytesDone: 100, TotalBytes: 400, FilesDone: 1, TotalFiles: 4},
 		{Percent: 0.5, BytesDone: 200, TotalBytes: 400, FilesDone: 2, TotalFiles: 4, SecondsElapsed: 2, SecondsRemaining: 2},
 		// restored + skipped count as done
-		{Percent: 0.75, BytesDone: 300, TotalBytes: 400, FilesDone: 3, TotalFiles: 4, SecondsElapsed: 3},
 		{Percent: 0.75, BytesDone: 300, TotalBytes: 400, FilesDone: 3, TotalFiles: 4, SecondsElapsed: 3},
 	}
 	if len(got) != len(want) {

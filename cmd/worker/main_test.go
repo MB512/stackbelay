@@ -169,27 +169,27 @@ func TestReadComposeNew(t *testing.T) {
 }
 
 func TestParseRestoreArgs(t *testing.T) {
-	spec, _, err := parseArgs([]string{"restore", "--in-place", "--pin-images", "web", "0123abcd"})
+	spec, _, err := parseArgs([]string{"restore", "--pin-images", "web", "0123abcd"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := jobs.Spec{Type: jobs.TypeRestore, Stack: "web", SnapshotID: "0123abcd", PinImages: true, InPlace: true}
+	want := jobs.Spec{Type: jobs.TypeRestore, Stack: "web", SnapshotID: "0123abcd", PinImages: true}
 	if !reflect.DeepEqual(spec, want) {
 		t.Fatalf("got %+v, want %+v", spec, want)
 	}
 }
 
 func TestParseUpdateArgs(t *testing.T) {
-	spec, _, err := parseArgs([]string{"update", "--only-if-new", "--rollback-in-place", "--no-pre-stop", "web"})
+	spec, _, err := parseArgs([]string{"update", "--only-if-new", "--no-pre-stop", "web"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := jobs.Spec{Type: jobs.TypeUpdate, Stack: "web", OnlyIfNew: true, RollbackInPlace: true, NoPreStop: true}
+	want := jobs.Spec{Type: jobs.TypeUpdate, Stack: "web", OnlyIfNew: true, NoPreStop: true}
 	if !reflect.DeepEqual(spec, want) {
 		t.Fatalf("got %+v, want %+v", spec, want)
 	}
-	if _, _, err := parseArgs([]string{"update", "--no-backup", "--rollback-in-place", "web"}); !errors.Is(err, errUsage) {
-		t.Fatalf("no-backup with rollback-in-place: %v", err)
+	if _, _, err := parseArgs([]string{"update", "--rollback-in-place", "web"}); !errors.Is(err, errUsage) {
+		t.Fatalf("removed flag --rollback-in-place accepted: %v", err)
 	}
 }
 

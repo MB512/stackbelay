@@ -29,7 +29,6 @@ type ChangeResult struct {
 	PreStopSnapshot string // "" if not taken or failed
 	Snapshot        string // final snapshot: the state before the change
 	RolledBack      bool   // the change failed and the final snapshot was restored
-	OldDir          string // after a rollback with swap: directory of the failed version
 	// Unchanged: there was nothing to change (update "only if new" found
 	// no new image); the stack was not touched.
 	Unchanged bool
@@ -58,9 +57,6 @@ type change struct {
 	// migrated).
 	backup    bool
 	carryOver string // see RestoreOptions.CarryOver (for the rollback)
-	// rollbackInPlace restores the final snapshot in place instead of
-	// swapping directories (see RestoreOptions.InPlace).
-	rollbackInPlace bool
 	// noPreStop skips the pre-stop snapshot (the final snapshot then has no
 	// parent and takes longer, during which the stack is stopped).
 	noPreStop bool
@@ -92,6 +88,9 @@ func (p *Pipeline) runChange(ctx context.Context, stack stacks.Stack, c change) 
 	log := p.logger().With("stack", stack.Name, "job", c.name)
 
 	// 1. Preflight and state.
+	if err := requireComplete(stack); err != nil {
+		return res, err
+	}
 	if c.backup {
 		log.Info("checking repository")
 		if err := p.Restic.CheckRepo(ctx, p.Repo); err != nil {
@@ -216,31 +215,24 @@ func (p *Pipeline) runChange(ctx context.Context, stack stacks.Stack, c change) 
 			"The stack is left as it is; check it manually.")
 		return res, fmt.Errorf("%s failed and was not rolled back (no repository): %w", c.name, failure)
 	}
-	log.Warn("rolling back: restoring the final snapshot with the previous image versions", "snapshot", res.Snapshot,
-		"in_place", c.rollbackInPlace)
+	log.Warn("rolling back: restoring the final snapshot with the previous image versions", "snapshot", res.Snapshot)
 	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), orDefault(p.RollbackTimeout, DefaultRollbackTimeout))
 	defer cancel()
 	// The restore's phases show as "rollback: ...".
 	p.phase("rollback")
 	p.phasePrefix = "rollback: "
-	rres, rerr := p.Restore(rctx, stack, RestoreOptions{
+	_, rerr := p.Restore(rctx, stack, RestoreOptions{
 		SnapshotID: res.Snapshot, SkipSafetySnapshot: true, PinImages: true, CarryOver: c.carryOver,
-		InPlace: c.rollbackInPlace,
 	})
 	p.phasePrefix = ""
-	res.OldDir = rres.OldDir
 	if rerr != nil {
 		log.Error("ROLLBACK FAILED; manual intervention required", "snapshot", res.Snapshot, "error", rerr)
 		return res, errors.Join(fmt.Errorf("%s failed: %w", c.name, failure),
 			fmt.Errorf("rollback to snapshot %s failed: %w", shortID(res.Snapshot), rerr))
 	}
 	res.RolledBack = true
-	log.Info("rolled back to the state before the "+c.name, "snapshot", res.Snapshot, "failed_version_dir", rres.OldDir)
-	if rres.OldDir == "" { // in place: nothing of the failed version is kept
-		return res, fmt.Errorf("%s failed and was rolled back in place to snapshot %s: %w", c.name, shortID(res.Snapshot), failure)
-	}
-	return res, fmt.Errorf("%s failed and was rolled back to snapshot %s (the failed version is kept at %s): %w",
-		c.name, shortID(res.Snapshot), rres.OldDir, failure)
+	log.Info("rolled back to the state before the "+c.name, "snapshot", res.Snapshot)
+	return res, fmt.Errorf("%s failed and was rolled back to snapshot %s: %w", c.name, shortID(res.Snapshot), failure)
 }
 
 // upAndVerify recreates the services in start with "compose up" and waits

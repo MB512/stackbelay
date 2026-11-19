@@ -21,9 +21,6 @@ type Schedule struct {
 	// stack, jobs.TypeCleanup for the host.
 	Type    jobs.Type
 	PreStop bool // take a pre-stop snapshot first
-	// RollbackInPlace (updates): restore the final snapshot in place if
-	// the update is rolled back.
-	RollbackInPlace bool
 	// NoBackup (updates): the admin confirmed that the update runs without
 	// backup and without rollback while the stack has no repository. A
 	// stack that has a repository when the job starts is backed up anyway.
@@ -31,18 +28,18 @@ type Schedule struct {
 	Enabled  bool
 }
 
-const scheduleSelect = `SELECT sc.id, sc.stack_id, COALESCE(s.name, ''), sc.cron_expr, sc.job_type, sc.pre_stop, sc.rollback_in_place, sc.no_backup, sc.enabled
+const scheduleSelect = `SELECT sc.id, sc.stack_id, COALESCE(s.name, ''), sc.cron_expr, sc.job_type, sc.pre_stop, sc.no_backup, sc.enabled
 	FROM schedules sc LEFT JOIN stacks s ON s.id = sc.stack_id `
 
 func scanSchedule(row interface{ Scan(...any) error }, sc *Schedule) error {
 	var stackID sql.NullInt64
-	err := row.Scan(&sc.ID, &stackID, &sc.StackName, &sc.CronExpr, &sc.Type, &sc.PreStop, &sc.RollbackInPlace, &sc.NoBackup, &sc.Enabled)
+	err := row.Scan(&sc.ID, &stackID, &sc.StackName, &sc.CronExpr, &sc.Type, &sc.PreStop, &sc.NoBackup, &sc.Enabled)
 	sc.StackID = stackID.Int64
 	return err
 }
 
-// CreateSchedule inserts sc (StackID, CronExpr, Type, PreStop,
-// RollbackInPlace, NoBackup) as an enabled schedule and returns its id. A
+// CreateSchedule inserts sc (StackID, CronExpr, Type, PreStop, NoBackup)
+// as an enabled schedule and returns its id. A
 // host schedule (cleanup) has StackID 0 and no options.
 func (s *Store) CreateSchedule(ctx context.Context, sc Schedule) (int64, error) {
 	switch {
@@ -50,19 +47,17 @@ func (s *Store) CreateSchedule(ctx context.Context, sc Schedule) (int64, error) 
 		return 0, fmt.Errorf("creating schedule: invalid job type %q", sc.Type)
 	case (sc.StackID == 0) != sc.Type.Host():
 		return 0, fmt.Errorf("creating schedule: a %s schedule must have a stack exactly if it is not a host job", sc.Type)
-	case sc.Type.Host() && (sc.PreStop || sc.RollbackInPlace || sc.NoBackup):
+	case sc.Type.Host() && (sc.PreStop || sc.NoBackup):
 		return 0, errors.New("creating schedule: a host schedule has no options")
-	case sc.RollbackInPlace && sc.Type != jobs.TypeUpdate:
-		return 0, errors.New("creating schedule: rollback_in_place is only for updates")
 	case sc.NoBackup && sc.Type != jobs.TypeUpdate:
 		return 0, errors.New("creating schedule: no_backup is only for updates")
-	case sc.NoBackup && (sc.RollbackInPlace || sc.PreStop):
+	case sc.NoBackup && sc.PreStop:
 		return 0, errors.New("creating schedule: an update without backup has no snapshots and no rollback")
 	}
 	res, err := s.db.ExecContext(ctx,
-		`INSERT INTO schedules (stack_id, cron_expr, job_type, pre_stop, rollback_in_place, no_backup, enabled)
-		 VALUES (?, ?, ?, ?, ?, ?, 1)`,
-		nullID(sc.StackID), sc.CronExpr, sc.Type, sc.PreStop, sc.RollbackInPlace, sc.NoBackup)
+		`INSERT INTO schedules (stack_id, cron_expr, job_type, pre_stop, no_backup, enabled)
+		 VALUES (?, ?, ?, ?, ?, 1)`,
+		nullID(sc.StackID), sc.CronExpr, sc.Type, sc.PreStop, sc.NoBackup)
 	if err != nil {
 		if isForeignKeyError(err) {
 			return 0, fmt.Errorf("stack %d: %w", sc.StackID, ErrNotFound)

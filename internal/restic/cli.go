@@ -319,29 +319,21 @@ func parseSnapshots(data []byte) ([]Snapshot, error) {
 	return snaps, nil
 }
 
-// Restore implements Runner.
-func (c *CLI) Restore(ctx context.Context, repo Repo, snapshotID, subpath, target string) error {
-	if !SnapshotIDPattern.MatchString(snapshotID) {
-		return fmt.Errorf("invalid snapshot id %q", snapshotID)
-	}
-	return c.runJSON(ctx, repo, c.onRestoreLine,
-		"restore", "--target", target, "--", snapshotID+":"+subpath)
-}
-
-// RestoreInPlace implements Runner: "restic restore --delete --overwrite
+// Restore implements Runner: "restic restore --delete --overwrite
 // if-changed". if-changed treats a file with the same size and modification
 // time as unchanged and only reads (and, on a mismatch, rewrites) the
 // others, so a large stack is restored without downloading or copying the
-// data that did not change. Each excluded directory becomes an anchored
-// pattern ("/data/jobs"), which also protects it from --delete.
-func (c *CLI) RestoreInPlace(ctx context.Context, repo Repo, snapshotID, subpath, target string, exclude []string) error {
+// data that did not change, and a restore that was interrupted continues
+// where it stopped. Each excluded path becomes an anchored pattern
+// ("/data/jobs"), which also protects it from --delete.
+func (c *CLI) Restore(ctx context.Context, repo Repo, snapshotID, subpath, target string, exclude []string) error {
 	if !SnapshotIDPattern.MatchString(snapshotID) {
 		return fmt.Errorf("invalid snapshot id %q", snapshotID)
 	}
 	args := []string{"restore", "--target", target, "--delete", "--overwrite", "if-changed"}
 	for _, dir := range exclude {
-		if !validExcludeDir(dir) {
-			return fmt.Errorf("invalid exclude directory %q", dir)
+		if !validExclude(dir) {
+			return fmt.Errorf("invalid exclude path %q", dir)
 		}
 		args = append(args, "--exclude", "/"+dir)
 	}
@@ -349,9 +341,9 @@ func (c *CLI) RestoreInPlace(ctx context.Context, repo Repo, snapshotID, subpath
 	return c.runJSON(ctx, repo, c.onRestoreLine, args...)
 }
 
-// validExcludeDir accepts clean relative paths without restic pattern
-// syntax (*, ?, [, \), so the pattern matches exactly that directory.
-func validExcludeDir(dir string) bool {
+// validExclude accepts clean relative paths without restic pattern syntax
+// (*, ?, [, \), so the pattern matches exactly that file or directory.
+func validExclude(dir string) bool {
 	return dir != "" && dir != "." && filepath.IsLocal(dir) && filepath.Clean(dir) == dir &&
 		!strings.ContainsAny(dir, "*?[\\\x00\n")
 }

@@ -212,7 +212,7 @@ func TestUpdateRollback(t *testing.T) {
 	restore := []string{
 		"restic.CheckRepo", "restic.Snapshots " + snapID, "docker.Services", "docker.Stop",
 		// no safety snapshot: the final snapshot is the state before the update
-		"restic.Restore " + snapID + ":/home/docker/web",
+		restoreCall(),
 		"restic.Node " + snapID + ":/home/docker/web",
 		"docker.Services",
 		"docker.Up app", // services running at snapshot time, per its metadata.txt
@@ -235,15 +235,14 @@ func TestUpdateRollback(t *testing.T) {
 			if err == nil || !errors.Is(err, errBoom) || !strings.Contains(err.Error(), "rolled back to snapshot "+snapID[:8]) {
 				t.Fatalf("err = %v", err)
 			}
-			wantOld := e.stack.Dir + ".old-20261113T100000Z"
-			if !res.RolledBack || res.OldDir != wantOld || res.Snapshot != snapID {
+			if !res.RolledBack || res.Snapshot != snapID {
 				t.Fatalf("result %+v", res)
 			}
 			assertCalls(t, e.calls.list(), tt.wantCalls)
 			if got := readData(t, e.stack.Dir); got != "restored" {
 				t.Errorf("stack dir has %q after rollback", got)
 			}
-			assertNoStaging(t, e)
+			assertNoSideDirs(t, e)
 		})
 	}
 }
@@ -259,10 +258,12 @@ func TestUpdateRollbackFails(t *testing.T) {
 	if res.RolledBack {
 		t.Fatal("reported as rolled back")
 	}
-	if got := readData(t, e.stack.Dir); got != "original" {
-		t.Errorf("stack dir has %q", got)
+	// The rollback stopped half-way: the stack stays stopped and marked as
+	// incomplete until a restore completes.
+	if !strings.Contains(err.Error(), "partly restored") {
+		t.Errorf("err = %v", err)
 	}
-	assertNoStaging(t, e)
+	assertMarker(t, e.stack.Dir, true)
 }
 
 func TestUpdateCancelledBeforeUpRestartsOldContainers(t *testing.T) {
@@ -294,30 +295,4 @@ func TestUpdateCancelledDuringUpStillRollsBack(t *testing.T) {
 	if err == nil || !res.RolledBack {
 		t.Fatalf("rollback did not run after cancellation: %+v, %v", res, err)
 	}
-}
-
-func TestUpdateRollbackInPlace(t *testing.T) {
-	e := rollbackEnv(t)
-	e.docker.upFailures = 1
-	res, err := e.p.Update(context.Background(), e.stack, UpdateOptions{Backup: true, RollbackInPlace: true})
-	if !errors.Is(err, errBoom) || !strings.Contains(err.Error(), "rolled back in place to snapshot "+snapID[:8]) {
-		t.Fatalf("err = %v", err)
-	}
-	if !res.RolledBack || res.OldDir != "" {
-		t.Fatalf("result %+v", res)
-	}
-	found := false
-	for _, c := range e.calls.list() {
-		found = found || c == "restic.RestoreInPlace "+snapID+":/home/docker/web exclude="
-		if strings.HasPrefix(c, "restic.Restore ") {
-			t.Fatalf("rolled back with swap: %v", e.calls.list())
-		}
-	}
-	if !found {
-		t.Fatalf("no in-place restore: %v", e.calls.list())
-	}
-	if got := readData(t, e.stack.Dir); got != "restored" {
-		t.Errorf("stack dir has %q after rollback", got)
-	}
-	assertNoSideDirs(t, e)
 }

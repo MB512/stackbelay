@@ -267,113 +267,6 @@ func readData(t *testing.T, dir string) string {
 	return string(b)
 }
 
-func assertNoStaging(t *testing.T, e *env) {
-	t.Helper()
-	if _, err := os.Stat(e.stack.Dir + ".restore-tmp"); !os.IsNotExist(err) {
-		t.Fatalf("staging directory left behind: %v", err)
-	}
-}
-
-func TestRestoreSuccess(t *testing.T) {
-	e := restoreEnv(t)
-	res, err := e.p.Restore(context.Background(), e.stack, RestoreOptions{SnapshotID: snapID[:8]})
-	if err != nil {
-		t.Fatal(err)
-	}
-	assertCalls(t, e.calls.list(), []string{
-		"restic.CheckRepo",
-		"restic.Snapshots " + snapID[:8],
-		"docker.Services",
-		"docker.Stop",
-		"restic.Backup tag=pre-restore parent= host=host-a",
-		"restic.Restore " + snapID + ":/home/docker/web",
-		"restic.Node " + snapID + ":/home/docker/web",
-		"docker.Services", // the restored file's services (orphans are not started)
-		"docker.Up app",   // only services running at backup time
-		"docker.WaitHealthy",
-	})
-	wantOld := e.stack.Dir + ".old-20261113T100000Z"
-	if res.OldDir != wantOld || res.SafetySnapshot != "snap-pre-restore" || res.Snapshot != snapID {
-		t.Errorf("unexpected result %+v", res)
-	}
-	if got := readData(t, e.stack.Dir); got != "restored" {
-		t.Errorf("stack dir has %q", got)
-	}
-	fi, err := os.Stat(e.stack.Dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if fi.Mode().Perm() != 0o750 || !fi.ModTime().Equal(e.restic.node.ModTime) {
-		t.Errorf("stack dir metadata not restored: mode %v, mtime %v", fi.Mode(), fi.ModTime())
-	}
-	if got := readData(t, wantOld); got != "original" {
-		t.Errorf("old dir has %q", got)
-	}
-	assertNoStaging(t, e)
-}
-
-func TestRestoreRollback(t *testing.T) {
-	tests := []struct {
-		name      string
-		setup     func(e *env)
-		wantCalls []string
-	}{
-		{
-			name:  "restic restore fails",
-			setup: func(e *env) { e.restic.failOn["Restore"] = errBoom },
-			wantCalls: []string{"restic.CheckRepo", "restic.Snapshots " + snapID[:8], "docker.Services", "docker.Stop",
-				"restic.Backup tag=pre-restore parent= host=host-a", "restic.Restore " + snapID + ":/home/docker/web",
-				"docker.Start app,db", "docker.WaitHealthy"},
-		},
-		{
-			name:  "reading directory metadata fails",
-			setup: func(e *env) { e.restic.failOn["Node"] = errBoom },
-			wantCalls: []string{"restic.CheckRepo", "restic.Snapshots " + snapID[:8], "docker.Services", "docker.Stop",
-				"restic.Backup tag=pre-restore parent= host=host-a", "restic.Restore " + snapID + ":/home/docker/web",
-				"restic.Node " + snapID + ":/home/docker/web", "docker.Start app,db", "docker.WaitHealthy"},
-		},
-		{
-			name:  "safety snapshot fails",
-			setup: func(e *env) { e.restic.failOn["Backup:pre-restore"] = errBoom },
-			wantCalls: []string{"restic.CheckRepo", "restic.Snapshots " + snapID[:8], "docker.Services", "docker.Stop",
-				"restic.Backup tag=pre-restore parent= host=host-a", "docker.Start app,db", "docker.WaitHealthy"},
-		},
-		{
-			name:  "stop fails",
-			setup: func(e *env) { e.docker.failOn["Stop"] = errBoom },
-			wantCalls: []string{"restic.CheckRepo", "restic.Snapshots " + snapID[:8], "docker.Services", "docker.Stop",
-				"docker.Start app,db", "docker.WaitHealthy"},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			e := restoreEnv(t)
-			tt.setup(e)
-			_, err := e.p.Restore(context.Background(), e.stack, RestoreOptions{SnapshotID: snapID[:8]})
-			if !errors.Is(err, errBoom) {
-				t.Fatalf("expected errBoom, got %v", err)
-			}
-			assertCalls(t, e.calls.list(), tt.wantCalls)
-			if got := readData(t, e.stack.Dir); got != "original" {
-				t.Errorf("original stack directory was modified: %q", got)
-			}
-			assertNoStaging(t, e)
-		})
-	}
-}
-
-func TestRestoreSnapshotWithoutComposeFileRollsBack(t *testing.T) {
-	e := restoreEnv(t)
-	delete(e.restic.restoreFiles, "compose.yml")
-	if _, err := e.p.Restore(context.Background(), e.stack, RestoreOptions{SnapshotID: snapID[:8]}); err == nil {
-		t.Fatal("expected error")
-	}
-	if got := readData(t, e.stack.Dir); got != "original" {
-		t.Errorf("original stack directory was modified: %q", got)
-	}
-	assertNoStaging(t, e)
-}
-
 func TestRestoreRejectedBeforeStop(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -388,11 +281,6 @@ func TestRestoreRejectedBeforeStop(t *testing.T) {
 		{"unclean path", snapID[:8], func(e *env) { e.restic.snapshots[0].Paths = []string{"/home/docker/../web"} }},
 		{"multiple paths", snapID[:8], func(e *env) { e.restic.snapshots[0].Paths = []string{"/a/web", "/b/web"} }},
 		{"id mismatch", "fedcba98", nil},
-		{"staging exists", snapID[:8], func(e *env) {
-			if err := os.Mkdir(e.stack.Dir+".restore-tmp", 0o755); err != nil {
-				t.Fatal(err)
-			}
-		}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -462,42 +350,6 @@ func TestRestoreStartVariants(t *testing.T) {
 }
 
 func ptr(s string) *string { return &s }
-
-// The manager restoring its own stack: its job files are carried over from
-// the previous version into the restored stack before it starts.
-func TestRestoreCarriesOverJobFiles(t *testing.T) {
-	e := restoreEnv(t)
-	jobDir := filepath.Join(e.stack.Dir, "data", "jobs", "J1")
-	if err := os.MkdirAll(jobDir, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(jobDir, "status.json"), []byte("newest"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	// Started after the files are copied: the stack sees them at start.
-	var seenAtStart string
-	e.docker.onUp = func() {
-		b, _ := os.ReadFile(filepath.Join(e.stack.Dir, "data", "jobs", "J1", "status.json"))
-		seenAtStart = string(b)
-	}
-	res, err := e.p.Restore(context.Background(), e.stack, RestoreOptions{SnapshotID: snapID[:8], CarryOver: "data/jobs"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if seenAtStart != "newest" {
-		t.Fatalf("job files at start: %q", seenAtStart)
-	}
-	if got := readData(t, e.stack.Dir); got != "restored" {
-		t.Fatalf("stack not restored: %q", got)
-	}
-	fi, err := os.Stat(filepath.Join(e.stack.Dir, "data", "jobs", "J1", "status.json"))
-	if err != nil || fi.Mode().Perm() != 0o600 {
-		t.Fatalf("carried-over file: %v %v", fi, err)
-	}
-	if _, err := os.Stat(filepath.Join(res.OldDir, "data", "jobs", "J1", "status.json")); err != nil {
-		t.Fatal("previous version must keep its files")
-	}
-}
 
 func TestValidCarryOver(t *testing.T) {
 	for dir, want := range map[string]bool{

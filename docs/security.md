@@ -28,9 +28,10 @@ attackers reaching the UI, a leaked database file.
    the snapshot paths of a repository (last component, `stacks.ValidName`;
    the admin chooses by index from the listed names, nothing is typed in).
    The first restore of an imported stack creates its directory only via
-   `stacks.ImportTarget` (valid name, neither the directory nor its staging
-   directory exists; the final rename never replaces a non-empty
-   directory). Between the two steps of an import the repository
+   `stacks.ImportTarget` (valid name; no directory, or a real directory,
+   not a symlink, left by an incomplete import with the marker
+   `.stackvault-restore-incomplete`; `mkdir` never replaces anything that
+   appeared in the meantime). Between the two steps of an import the repository
    credentials stay in the manager's memory (15 minutes, bound to the
    admin's user id, used once), never in the page. Snapshot IDs
    must match `^[0-9a-f]{8,64}$` and are verified against `restic snapshots`.
@@ -132,14 +133,14 @@ attackers reaching the UI, a leaked database file.
 10. **TLS.** The app speaks plain HTTP and is meant to run behind a reverse
     proxy that terminates TLS; the README says so prominently. Login over
     plain HTTP is refused unless `STACKVAULT_ALLOW_INSECURE_HTTP=true`.
-11. **Restore safety.** Restore takes a `pre-restore` safety snapshot (only
-    admins can skip it) and by default swaps directories, so the current
-    directory is untouched until the restored copy is complete. The
-    in-place restore (any user with the restore right, chosen explicitly)
-    overwrites the stack directory; its only way back is the safety
-    snapshot, and a failed in-place restore leaves the stack stopped
-    instead of starting a partly restored one. Automatic rollbacks always
-    swap.
+11. **Restore safety.** Every restore runs in place (issue #33) and
+    overwrites the stack directory; its way back is the `pre-restore`
+    safety snapshot taken before (only admins can skip it). A restore that
+    fails half-way leaves the stack stopped and marked as incomplete
+    (`.stackvault-restore-incomplete`) instead of starting a partly
+    restored one; until a restore completes, no backup, update, compose
+    change or start runs on it, so partly restored data is neither started
+    nor recorded as a valid snapshot.
 12. **Backup of the backup tool.** The manager's `/data` (DB, job files) is
     inside its stack folder and gets backed up with it. With the default key
     source, `/data/secret.key` is in that backup too, so a restore of the
