@@ -23,6 +23,10 @@ All notable changes to StackVault. The format is based on
   snapshot of the partly restored directory. Until a restore completes,
   the stack shows "restore incomplete" and backups, updates, compose
   changes and starts are refused.
+- **The safety snapshot before a restore is mandatory** (#33): admins can
+  no longer skip it (it is the only way back from an in-place restore),
+  and the worker flag `--no-safety-snapshot` is gone. Only an automatic
+  rollback restores without one.
 - **Job timeout** raised from 6 h to 48 h and configurable on the manager
   with `STACKVAULT_JOB_TIMEOUT` (e.g. `72h`; #32). Before, the variable was
   only read by the worker and the manager did not pass it on, so large

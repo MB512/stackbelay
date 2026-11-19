@@ -27,8 +27,8 @@ import (
 // PinImages by digest).
 func (p *Pipeline) Import(ctx context.Context, target stacks.Stack, opts RestoreOptions) (res RestoreResult, err error) {
 	log := p.logger().With("stack", target.Name, "job", "import", "snapshot", opts.SnapshotID)
-	if opts.SkipSafetySnapshot || opts.CarryOver != "" {
-		return res, errors.New("an import restores into a new directory: no safety snapshot or carry-over options")
+	if opts.CarryOver != "" {
+		return res, errors.New("an import restores into a new directory: no carry-over option")
 	}
 	snap, srcPath, err := p.resolveSnapshot(ctx, log, opts.SnapshotID, target.Name)
 	if err != nil {

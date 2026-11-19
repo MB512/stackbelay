@@ -6,7 +6,7 @@
 //
 //	worker run <job-dir>
 //	worker backup  [--pre-stop] <stack>
-//	worker restore [--no-safety-snapshot] [--no-start] [--pin-images] [--import] [--limit-download <KiB/s>] <stack> <snapshot-id>
+//	worker restore [--no-start] [--pin-images] [--import] [--limit-download <KiB/s>] <stack> <snapshot-id>
 //	worker update  [--no-backup] [--only-if-new] [--no-pre-stop] <stack>
 //	worker stop|start|restart|up|down <stack>
 //	worker cleanup [--image-min-age <duration>]
@@ -48,7 +48,7 @@ import (
 const usage = `usage:
   worker run <job-dir>
   worker backup  [--pre-stop] <stack>
-  worker restore [--no-safety-snapshot] [--no-start] [--pin-images] [--import] [--limit-download <KiB/s>] <stack> <snapshot-id>
+  worker restore [--no-start] [--pin-images] [--import] [--limit-download <KiB/s>] <stack> <snapshot-id>
   worker update  [--no-backup] [--only-if-new] [--no-pre-stop] <stack>
   worker stop|start|restart|up|down <stack>
   worker cleanup [--image-min-age <duration>]
@@ -224,16 +224,15 @@ func parseArgs(args []string) (jobs.Spec, string, error) {
 	case "restore":
 		fs := flag.NewFlagSet("restore", flag.ContinueOnError)
 		fs.SetOutput(io.Discard)
-		noSafety := fs.Bool("no-safety-snapshot", false, "skip the pre-restore safety snapshot")
 		noStart := fs.Bool("no-start", false, "do not start the stack after restoring")
 		pin := fs.Bool("pin-images", false, "start with the image versions recorded in the snapshot")
 		imp := fs.Bool("import", false, "first restore of a stack from another host: create its directory")
 		limit := fs.Int("limit-download", 0, "limit downloads from the repository (KiB/s)")
 		if err := fs.Parse(args[1:]); err != nil || fs.NArg() != 2 {
-			return jobs.Spec{}, "", fmt.Errorf("%w: restore expects [--no-safety-snapshot] [--no-start] [--pin-images] [--import] [--limit-download <KiB/s>] <stack> <snapshot-id>", errUsage)
+			return jobs.Spec{}, "", fmt.Errorf("%w: restore expects [--no-start] [--pin-images] [--import] [--limit-download <KiB/s>] <stack> <snapshot-id>", errUsage)
 		}
 		return jobs.Spec{Type: jobs.TypeRestore, Stack: fs.Arg(0), SnapshotID: fs.Arg(1),
-			SkipSafetySnapshot: *noSafety, NoStart: *noStart, PinImages: *pin,
+			NoStart: *noStart, PinImages: *pin,
 			Import: *imp, LimitDownloadKiB: *limit}, "", nil
 
 	case "update":
@@ -303,7 +302,7 @@ func execute(ctx context.Context, p *jobs.Pipeline, cfg config.Worker, spec jobs
 		return err
 	case jobs.TypeRestore:
 		res, err := p.Restore(ctx, stack, jobs.RestoreOptions{
-			SnapshotID: spec.SnapshotID, SkipSafetySnapshot: spec.SkipSafetySnapshot, NoStart: spec.NoStart,
+			SnapshotID: spec.SnapshotID, NoStart: spec.NoStart,
 			PinImages: spec.PinImages, CarryOver: spec.CarryOverJobs,
 		})
 		status.Snapshot, status.SafetySnapshot = res.Snapshot, res.SafetySnapshot

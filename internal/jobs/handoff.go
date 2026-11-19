@@ -119,10 +119,9 @@ type Spec struct {
 	PreStop bool `json:"pre_stop,omitempty"`
 
 	// Restore options.
-	SnapshotID         string `json:"snapshot_id,omitempty"`
-	SkipSafetySnapshot bool   `json:"skip_safety_snapshot,omitempty"`
-	NoStart            bool   `json:"no_start,omitempty"`
-	PinImages          bool   `json:"pin_images,omitempty"` // see RestoreOptions.PinImages
+	SnapshotID string `json:"snapshot_id,omitempty"`
+	NoStart    bool   `json:"no_start,omitempty"`
+	PinImages  bool   `json:"pin_images,omitempty"` // see RestoreOptions.PinImages
 	// Import: the first restore of a stack from another host; its
 	// directory does not exist yet, or is left by an incomplete import
 	// (Pipeline.Import).
@@ -180,8 +179,8 @@ func (s Spec) Validate() error {
 	if s.LimitDownloadKiB < 0 || s.LimitDownloadKiB > restic.MaxLimitKiB {
 		return fmt.Errorf("invalid download limit %d KiB/s", s.LimitDownloadKiB)
 	}
-	if s.Import && (s.SkipSafetySnapshot || s.CarryOverJobs != "") {
-		return errors.New("an import restores into a new directory: no safety snapshot or carry-over options")
+	if s.Import && s.CarryOverJobs != "" {
+		return errors.New("an import restores into a new directory: no carry-over option")
 	}
 	switch {
 	case s.Trigger != "" && s.Trigger != "manual" && s.Trigger != "schedule":
@@ -197,7 +196,7 @@ func (s Spec) Validate() error {
 	}
 	switch s.Type {
 	case TypeBackup:
-		if s.SnapshotID != "" || s.SkipSafetySnapshot || s.NoStart || s.PinImages || s.CarryOverJobs != "" {
+		if s.SnapshotID != "" || s.NoStart || s.PinImages || s.CarryOverJobs != "" {
 			return errors.New("restore options set on a backup job")
 		}
 		if s.NoBackup {
@@ -218,7 +217,7 @@ func (s Spec) Validate() error {
 		}
 	case TypeUpdate, TypeComposeApply:
 		// The pre-stop snapshot is always taken (with a repository).
-		if s.PreStop || s.SnapshotID != "" || s.SkipSafetySnapshot || s.NoStart || s.PinImages {
+		if s.PreStop || s.SnapshotID != "" || s.NoStart || s.PinImages {
 			return fmt.Errorf("backup or restore options set on a job of type %s", s.Type)
 		}
 		if s.CarryOverJobs != "" && !ValidCarryOver(s.CarryOverJobs) {
@@ -228,7 +227,7 @@ func (s Spec) Validate() error {
 			return errors.New("invalid compose checksums")
 		}
 	case TypeCleanup:
-		if s.PreStop || s.SnapshotID != "" || s.SkipSafetySnapshot || s.NoStart || s.PinImages ||
+		if s.PreStop || s.SnapshotID != "" || s.NoStart || s.PinImages ||
 			s.CarryOverJobs != "" || s.NoBackup {
 			return errors.New("stack options set on a cleanup job")
 		}
@@ -244,7 +243,7 @@ func (s Spec) Validate() error {
 			}
 		}
 	case TypeStop, TypeStart, TypeRestart, TypeUp, TypeDown:
-		if s.PreStop || s.SnapshotID != "" || s.SkipSafetySnapshot || s.NoStart || s.PinImages ||
+		if s.PreStop || s.SnapshotID != "" || s.NoStart || s.PinImages ||
 			s.CarryOverJobs != "" || s.NoBackup {
 			return fmt.Errorf("options set on a job of type %s", s.Type)
 		}

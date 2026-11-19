@@ -129,7 +129,7 @@ func TestReadSpecRejects(t *testing.T) {
 		{"stack job without stack", `{"version":1,"id":"` + testJobID + `","type":"backup"}`},
 		{"import on a backup", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"web","import":true}`},
 		{"removed option in_place (#33)", `{"version":1,"id":"` + testJobID + `","type":"restore","stack":"web","snapshot_id":"0123abcd","in_place":true}`},
-		{"import without safety snapshot", `{"version":1,"id":"` + testJobID + `","type":"restore","stack":"web","snapshot_id":"0123abcd","import":true,"skip_safety_snapshot":true}`},
+		{"removed option skip_safety_snapshot (#33)", `{"version":1,"id":"` + testJobID + `","type":"restore","stack":"web","snapshot_id":"0123abcd","skip_safety_snapshot":true}`},
 		{"negative download limit", `{"version":1,"id":"` + testJobID + `","type":"restore","stack":"web","snapshot_id":"0123abcd","limit_download_kib":-5}`},
 		{"download limit on an update", `{"version":1,"id":"` + testJobID + `","type":"update","stack":"web","limit_download_kib":5}`},
 		{"bad trigger", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"web","trigger":"cron"}`},

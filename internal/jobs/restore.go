@@ -20,8 +20,10 @@ import (
 // RestoreOptions control a restore job.
 type RestoreOptions struct {
 	SnapshotID string
-	// SkipSafetySnapshot disables the pre-restore snapshot (admin only).
-	SkipSafetySnapshot bool
+	// skipSafetySnapshot: no pre-restore snapshot. Only for the automatic
+	// rollback (its final snapshot was taken minutes before); every other
+	// restore takes one (issue #33).
+	skipSafetySnapshot bool
 	// NoStart leaves the stack stopped after a successful restore.
 	NoStart bool
 	// PinImages starts the stack with the image versions recorded in the
@@ -111,8 +113,8 @@ func (p *Pipeline) Restore(ctx context.Context, stack stacks.Stack, opts Restore
 		return res, fmt.Errorf("stopping stack: %w", err)
 	}
 	switch {
-	case opts.SkipSafetySnapshot:
-		log.Warn("safety snapshot disabled")
+	case opts.skipSafetySnapshot:
+		log.Info("no safety snapshot: rolling back to the snapshot taken just before")
 	case incomplete:
 		log.Warn("the last restore of this stack did not complete: continuing it, without a safety snapshot " +
 			"of the partly restored directory (the safety snapshot of that restore is the way back)")

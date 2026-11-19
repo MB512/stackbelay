@@ -157,7 +157,7 @@ func TestRestorePartialFailure(t *testing.T) {
 		{
 			name:       "without safety snapshot (rollback)",
 			setup:      func(e *env) { e.restic.failOn["Restore"] = errBoom },
-			opts:       RestoreOptions{SnapshotID: snapID[:8], SkipSafetySnapshot: true},
+			opts:       RestoreOptions{SnapshotID: snapID[:8], skipSafetySnapshot: true},
 			wantInErr:  []string{"partly restored", "run the restore again to continue it"},
 			lastCall:   restoreCall(),
 			wantMarker: true,

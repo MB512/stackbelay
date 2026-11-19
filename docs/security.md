@@ -42,7 +42,7 @@ attackers reaching the UI, a leaked database file.
    entrypoint or environment (see "Dispatcher" in architecture.md). Job
    requests carry only the stack (from the database), the job type and
    validated options; the snapshot id must be in the stack's snapshot cache.
-   Only admins may skip the pre-restore safety snapshot. Besides creating
+   Nobody can skip the pre-restore safety snapshot (issue #33). Besides creating
    workers, the manager may run only read-only compose commands for
    discovered stacks, with fixed argument lists: `ps` for the Status tab,
    `config --format json` and `ps` for the State column of the stack list
@@ -135,9 +135,10 @@ attackers reaching the UI, a leaked database file.
     plain HTTP is refused unless `STACKVAULT_ALLOW_INSECURE_HTTP=true`.
 11. **Restore safety.** Every restore runs in place (issue #33) and
     overwrites the stack directory; its way back is the `pre-restore`
-    safety snapshot taken before (only admins can skip it). A restore that
-    fails half-way leaves the stack stopped and marked as incomplete
-    (`.stackvault-restore-incomplete`) instead of starting a partly
+    safety snapshot taken before, which nobody can skip (only an automatic
+    rollback restores without one: its snapshot was taken just before). A
+    restore that fails half-way leaves the stack stopped and marked as
+    incomplete (`.stackvault-restore-incomplete`) instead of starting a partly
     restored one; until a restore completes, no backup, update, compose
     change or start runs on it, so partly restored data is neither started
     nor recorded as a valid snapshot.

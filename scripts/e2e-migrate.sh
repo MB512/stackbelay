@@ -100,7 +100,7 @@ pass "refused"
 step "host A backs up v2, host B syncs in place (no safety snapshot, not started)"
 SNAP2="$(backup_a v2)"
 static_inode="$(stat -c %i "$DIR_B/data/static.txt")"
-on_b restore --no-safety-snapshot --no-start "$STACK" "${SNAP2:0:8}" 2>"$WORK/sync.log" ||
+on_b restore --no-start "$STACK" "${SNAP2:0:8}" 2>"$WORK/sync.log" ||
 	{ cat "$WORK/sync.log"; fail "sync failed"; }
 [[ "$(cat "$DIR_B/data/value.txt")" == v2 ]] || fail "sync did not bring v2"
 [[ "$(stat -c %i "$DIR_B/data/static.txt")" == "$static_inode" ]] || fail "unchanged file was rewritten"
@@ -109,7 +109,7 @@ pass "v2 synced in place, unchanged file kept"
 
 step "final backup on A (stopped), final restore on B with start and pinned images"
 SNAP3="$(backup_a v3)"
-on_b restore --no-safety-snapshot --pin-images "$STACK" "${SNAP3:0:8}" 2>"$WORK/final.log" ||
+on_b restore --pin-images "$STACK" "${SNAP3:0:8}" 2>"$WORK/final.log" ||
 	{ cat "$WORK/final.log"; fail "final restore failed"; }
 SEEN="$(docker compose --project-directory "$DIR_B" exec -T app cat /data/value.txt)"
 [[ "$SEEN" == v3 ]] || fail "app on B sees '$SEEN'"

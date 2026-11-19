@@ -208,8 +208,6 @@ func (s *Server) startRestore(w http.ResponseWriter, r *http.Request) {
 		LimitDownloadKiB: limit,
 	}
 	if st.Present {
-		// The safety snapshot is the way back if the restore was a mistake.
-		opts.SkipSafetySnapshot = authFrom(r.Context()).User.IsAdmin && r.PostFormValue("safety_snapshot") != "on"
 		// A restore into a stopped stack stops nothing: it need not wait
 		// for (or block) other stacks' jobs.
 		opts.Background = !s.stackRunning(r.Context(), st)
@@ -224,7 +222,7 @@ func (s *Server) startRestore(w http.ResponseWriter, r *http.Request) {
 	}
 	s.submitJob(w, r, st, store.Job{Type: jobs.TypeRestore, Options: opts},
 		fmt.Sprintf("restore of snapshot %s (host %s), import: %t, safety snapshot: %t, start: %t, pinned images: %t, download limit: %d KiB/s, background: %t",
-			sn.ShortID, sn.Hostname, opts.Import, !opts.SkipSafetySnapshot && !opts.Import, !opts.NoStart, opts.PinImages,
+			sn.ShortID, sn.Hostname, opts.Import, !opts.Import, !opts.NoStart, opts.PinImages,
 			opts.LimitDownloadKiB, opts.Background), true)
 }
 

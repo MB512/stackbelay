@@ -217,7 +217,7 @@ func (d *Dispatcher) reconcileDir(ctx context.Context, id string, importing bool
 	j := store.Job{
 		ID: id, StackID: st.ID, StackName: st.Name, Type: spec.Type, Trigger: spec.Trigger, QueuedAt: queued,
 		Options: store.JobOptions{PreStop: spec.PreStop, SnapshotID: spec.SnapshotID,
-			SkipSafetySnapshot: spec.SkipSafetySnapshot, NoStart: spec.NoStart, PinImages: spec.PinImages,
+			NoStart: spec.NoStart, PinImages: spec.PinImages,
 			Import: spec.Import, LimitDownloadKiB: spec.LimitDownloadKiB, NoBackup: spec.NoBackup, OnlyIfNew: spec.OnlyIfNew,
 			NoPreStop: spec.NoPreStop},
 	}
@@ -328,7 +328,7 @@ func (d *Dispatcher) start(ctx context.Context, j store.Job) {
 	spec := jobs.Spec{
 		ID: j.ID, Type: j.Type, Stack: j.StackName,
 		PreStop: j.Options.PreStop, SnapshotID: j.Options.SnapshotID,
-		SkipSafetySnapshot: j.Options.SkipSafetySnapshot, NoStart: j.Options.NoStart, PinImages: j.Options.PinImages,
+		NoStart: j.Options.NoStart, PinImages: j.Options.PinImages,
 		Import: j.Options.Import, LimitDownloadKiB: j.Options.LimitDownloadKiB,
 		OnlyIfNew: j.Options.OnlyIfNew, NoPreStop: j.Options.NoPreStop, Trigger: j.Trigger, Requester: j.Requester, NoBackup: noBackup,
 	}

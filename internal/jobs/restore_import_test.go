@@ -141,7 +141,6 @@ func TestImportRefusesExistingDirectory(t *testing.T) {
 func TestImportRejectsStackOptions(t *testing.T) {
 	e, target := importEnv(t)
 	for _, opts := range []RestoreOptions{
-		{SnapshotID: snapID[:8], SkipSafetySnapshot: true},
 		{SnapshotID: snapID[:8], CarryOver: "data/jobs"},
 	} {
 		if _, err := e.p.Import(context.Background(), target, opts); err == nil {

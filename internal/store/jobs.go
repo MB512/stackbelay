@@ -20,11 +20,10 @@ const (
 
 // JobOptions are the options of a job, stored as JSON.
 type JobOptions struct {
-	PreStop            bool   `json:"pre_stop,omitempty"`             // backup
-	SnapshotID         string `json:"snapshot_id,omitempty"`          // restore: snapshot to restore
-	SkipSafetySnapshot bool   `json:"skip_safety_snapshot,omitempty"` // restore
-	NoStart            bool   `json:"no_start,omitempty"`             // restore
-	PinImages          bool   `json:"pin_images,omitempty"`           // restore: image versions from metadata.txt
+	PreStop    bool   `json:"pre_stop,omitempty"`    // backup
+	SnapshotID string `json:"snapshot_id,omitempty"` // restore: snapshot to restore
+	NoStart    bool   `json:"no_start,omitempty"`    // restore
+	PinImages  bool   `json:"pin_images,omitempty"`  // restore: image versions from metadata.txt
 	// Import (restore): the stack directory does not exist yet (a stack
 	// imported from another host), or only partly after an incomplete
 	// import; nothing to stop or to protect.

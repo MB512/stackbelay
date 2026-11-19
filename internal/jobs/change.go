@@ -222,7 +222,7 @@ func (p *Pipeline) runChange(ctx context.Context, stack stacks.Stack, c change) 
 	p.phase("rollback")
 	p.phasePrefix = "rollback: "
 	_, rerr := p.Restore(rctx, stack, RestoreOptions{
-		SnapshotID: res.Snapshot, SkipSafetySnapshot: true, PinImages: true, CarryOver: c.carryOver,
+		SnapshotID: res.Snapshot, skipSafetySnapshot: true, PinImages: true, CarryOver: c.carryOver,
 	})
 	p.phasePrefix = ""
 	if rerr != nil {

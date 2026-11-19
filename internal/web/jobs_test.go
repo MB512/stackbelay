@@ -178,8 +178,8 @@ func TestRestoreJob(t *testing.T) {
 
 	r = e.do(bob, http.MethodGet, "/stacks/web/restore?snapshot=aaaaaaaa11111111", nil, nil)
 	expect(t, r, http.StatusOK, "")
-	if strings.Contains(r.body, `name="safety_snapshot"`) {
-		t.Fatal("non-admin may not skip the safety snapshot")
+	if strings.Contains(r.body, `name="safety_snapshot"`) || !strings.Contains(r.body, "The current state is backed up first") {
+		t.Fatal("the safety snapshot is not optional (#33)")
 	}
 	if strings.Contains(r.body, `name="method"`) {
 		t.Fatal("restore method offered: every restore runs in place (#33)")
@@ -196,20 +196,22 @@ func TestRestoreJob(t *testing.T) {
 		t.Fatalf("restore: %d\n%s", r.status, r.body)
 	}
 	j, _ := e.st.JobByID(context.Background(), strings.TrimPrefix(r.location, jobLocation))
-	if j.Type != jobs.TypeRestore || j.Options.SnapshotID != "aaaaaaaa11111111" || j.Options.SkipSafetySnapshot || j.Options.NoStart ||
+	if j.Type != jobs.TypeRestore || j.Options.SnapshotID != "aaaaaaaa11111111" || j.Options.NoStart ||
 		!j.Options.PinImages {
 		t.Fatalf("restore job: %+v", j.Options)
 	}
 	expect(t, e.do(bob, http.MethodPost, "/stacks/web/restore",
 		url.Values{"csrf_token": {token}, "snapshot_id": {"bbbbbbbb22222222"}}, nil), http.StatusBadRequest, "")
 
-	// The admin may skip it and not start the stack.
+	// The admin may not start the stack; the safety snapshot cannot be
+	// skipped by anyone (a "safety_snapshot" field is ignored).
 	if err := e.st.FinishJob(context.Background(), j.ID, jobs.StateFailed, "", "x", store.JobResult{}, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	r = e.post("/stacks/web/restore", url.Values{"csrf_token": {e.csrf("/stacks/web")}, "snapshot_id": {"aaaaaaaa11111111"}})
+	r = e.post("/stacks/web/restore", url.Values{"csrf_token": {e.csrf("/stacks/web")}, "snapshot_id": {"aaaaaaaa11111111"},
+		"safety_snapshot": {""}})
 	j, _ = e.st.JobByID(context.Background(), strings.TrimPrefix(r.location, jobLocation))
-	if !j.Options.SkipSafetySnapshot || !j.Options.NoStart || j.Options.PinImages {
+	if !j.Options.NoStart || j.Options.PinImages {
 		t.Fatalf("admin restore options: %+v", j.Options)
 	}
 }

@@ -31,14 +31,11 @@
   <input type="hidden" name="snapshot_id" value="{{.Snapshot.ID}}">
   {{- if .Import}}
   <label class="check"><input type="checkbox" name="start"> Start the stack after restoring</label>
-  <p class="hint">Leave it stopped while you move a stack: restore again later (in place, only changed files) with newer
+  <p class="hint">Leave it stopped while you move a stack: restore again later (only changed files) with newer
     snapshots of the source host, and start it with the last one, after the final backup there.</p>
   {{- else}}
-  {{- if $.User.IsAdmin}}
-  <label class="check"><input type="checkbox" name="safety_snapshot" checked>
-    Back up the current state first (safety snapshot; recommended)</label>
-  {{- else}}
-  <p class="hint">The current state is backed up first (safety snapshot).</p>
+  {{- if not .Incomplete}}
+  <p class="hint">The current state is backed up first (safety snapshot): restoring it is the way back.</p>
   {{- end}}
   <label class="check"><input type="checkbox" name="start"{{if not .ForeignHost}} checked{{end}}> Start the stack after restoring</label>
   {{- end}}

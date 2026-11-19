@@ -301,9 +301,10 @@ where it stopped when it is run again.
 1. **Preflight**: permission re-checked by the manager, snapshot exists, lock.
 2. **Stop** the stack.
 3. **Safety snapshot**: back up the stopped (consistent) stack with tag
-   `pre-restore`; skipped only if explicitly disabled by an admin, for a
-   rollback (its final snapshot was taken minutes before) and when the
-   last restore did not complete (see below: it would only save a partly
+   `pre-restore`. It cannot be turned off (issue #33: it is the only way
+   back from an in-place restore). Skipped only for an automatic rollback
+   (its final snapshot was taken minutes before) and when the last
+   restore did not complete (see below: it would only save a partly
    restored directory).
 4. **Restore**: create the marker file `.stackvault-restore-incomplete`
    in the stack directory, then
@@ -800,7 +801,7 @@ with a light and a dark set; the job log is a dark panel in both modes.
 | `POST /stacks/{name}/update/check` | update right | check for newer images (registry query, no pull), see "Update check"; HTMX: returns the Status tab's fragment |
 | `POST /stacks/{name}/update` | update right | queue an update, see "Update pipeline" |
 | `GET /stacks/{name}/restore?snapshot=<id>` | restore right | confirmation page with options |
-| `POST /stacks/{name}/restore` | restore right | queue a restore of a cached, not removed snapshot; only admins may skip the safety snapshot |
+| `POST /stacks/{name}/restore` | restore right | queue a restore of a cached, not removed snapshot (always with safety snapshot) |
 | `GET /jobs/{id}` | view right on the job's stack | job details and log; followed live by `static/joblog.js` while not final |
 | `GET /jobs/{id}/events` | view right on the job's stack | live stream of the job (SSE), see "Live logs" |
 | `POST /jobs/{id}/cancel` | backup/restore/update/operate right (by job type; compose-apply: admin) | cancel a queued or running job |
@@ -1288,7 +1289,7 @@ to them. `restic restore <id>:<subpath>` requires restic >= 0.17.
 ```
 worker run <job-dir>
 worker backup  [--pre-stop] <stack>
-worker restore [--no-safety-snapshot] [--no-start] [--pin-images] [--import] [--limit-download <KiB/s>] <stack> <snapshot-id>
+worker restore [--no-start] [--pin-images] [--import] [--limit-download <KiB/s>] <stack> <snapshot-id>
 worker update  [--no-backup] [--only-if-new] [--no-pre-stop] <stack>
 worker stop|start|restart|up|down <stack>
 worker cleanup [--image-min-age <duration>]
@@ -1332,6 +1333,6 @@ backup (no rollback); and the compose-apply job: a valid change and one
 with a missing image (rollback to the previous compose file).
 `scripts/e2e-migrate.sh` moves a stack between two simulated hosts (two
 stacks roots and host names, one repository): import without start,
-refused second import, sync without safety snapshot, final
+refused second import, sync with safety snapshot, final
 restore with start and pinned images, and backups under the new host's
 name.

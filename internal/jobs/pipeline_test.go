@@ -311,7 +311,7 @@ func TestRestoreStartVariants(t *testing.T) {
 		{"invalid metadata: start all", RestoreOptions{}, ptr("garbage"), "docker.Up <all>"},
 		{"nothing was running", RestoreOptions{}, ptr("# stackvault-metadata v1\ncreated_at\t2026-11-01T00:00:00Z\nstack\tweb\napp\texited\t-\t-\t-\t-\n"), ""},
 		{"no start requested", RestoreOptions{NoStart: true}, ptr(""), ""},
-		{"skip safety snapshot", RestoreOptions{SkipSafetySnapshot: true}, ptr(""), "docker.Up app"},
+		{"rollback: no safety snapshot", RestoreOptions{skipSafetySnapshot: true}, ptr(""), "docker.Up app"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -335,7 +335,7 @@ func TestRestoreStartVariants(t *testing.T) {
 			if gotUp != tt.wantUp {
 				t.Fatalf("start call %q, want %q (all: %v)", gotUp, tt.wantUp, calls)
 			}
-			if tt.opts.SkipSafetySnapshot {
+			if tt.opts.skipSafetySnapshot {
 				for _, c := range calls {
 					if strings.Contains(c, TagPreRestore) {
 						t.Fatal("safety snapshot taken although disabled")
