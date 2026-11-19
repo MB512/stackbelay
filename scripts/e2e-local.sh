@@ -101,8 +101,18 @@ JOB="$WORK/job"
 mkdir -p "$JOB"
 printf '{"version":1,"id":"01JCZ8G3T4S5V6W7X8Y9Z0ABCD","type":"backup","stack":"%s"}\n' "$STACK" >"$JOB/spec.json"
 # Password via environment here, to check that it is redacted from the log.
-env -u RESTIC_PASSWORD_FILE RESTIC_PASSWORD="$(cat "$WORK/pw")" ./bin/worker run "$JOB" 2>/dev/null ||
-	{ cat "$JOB/log.txt"; fail "worker run failed"; }
+env -u RESTIC_PASSWORD_FILE RESTIC_PASSWORD="$(cat "$WORK/pw")" ./bin/worker run "$JOB" 2>/dev/null &
+WORKER=$!
+# Play the manager's part of the downtime slots (issue #36): the worker
+# asks after its pre-stop snapshot and must not stop the stack before the
+# grant.
+for _ in $(seq 1 300); do [[ -e "$JOB/downtime-request" ]] && break; sleep 0.1; done
+[[ -e "$JOB/downtime-request" ]] || { kill "$WORKER"; cat "$JOB/log.txt"; fail "no downtime request"; }
+sleep 1
+[[ "$(state app)" == running ]] || { kill "$WORKER"; fail "stack stopped before the downtime slot was granted"; }
+: >"$JOB/downtime-granted"
+wait "$WORKER" || { cat "$JOB/log.txt"; fail "worker run failed"; }
+pass "waited for the downtime slot with the stack running, stopped it only after the grant"
 python3 -I - "$JOB/status.json" <<'PY' || fail "unexpected status.json: $(cat "$JOB/status.json")"
 import json, sys
 s = json.load(open(sys.argv[1]))

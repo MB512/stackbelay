@@ -10,7 +10,8 @@ import (
 )
 
 func TestNewTemplate(t *testing.T) {
-	cfg := TemplateConfig{StacksRoot: "/home/docker", JobsDir: "/data/jobs", Hostname: "host-a", JobTimeout: 72 * time.Hour}
+	cfg := TemplateConfig{StacksRoot: "/home/docker", JobsDir: "/data/jobs", Hostname: "host-a", JobTimeout: 72 * time.Hour,
+		DowntimeTimeout: 90 * time.Minute}
 	stacksMount := docker.Mount{Type: "bind", Source: "/home/docker", Target: "/home/docker"}
 	socket := docker.Mount{Type: "bind", Source: "/run/user/1000/docker.sock", Target: "/var/run/docker.sock"}
 
@@ -45,8 +46,8 @@ func TestNewTemplate(t *testing.T) {
 	if cs.Mounts[2] != (docker.Mount{Type: "volume", Source: "stackvault_data", Target: "/job", SubPath: "jobs/01ABCDEFGHJKMNPQRSTVWXYZ01"}) {
 		t.Fatalf("job mount: %+v", cs.Mounts[2])
 	}
-	if cs.Env["STACKVAULT_JOB_TIMEOUT"] != "72h0m0s" {
-		t.Fatalf("job timeout env: %q", cs.Env["STACKVAULT_JOB_TIMEOUT"])
+	if cs.Env["STACKVAULT_JOB_TIMEOUT"] != "72h0m0s" || cs.Env["STACKVAULT_DOWNTIME_TIMEOUT"] != "1h30m0s" {
+		t.Fatalf("timeout env: %q %q", cs.Env["STACKVAULT_JOB_TIMEOUT"], cs.Env["STACKVAULT_DOWNTIME_TIMEOUT"])
 	}
 
 	// Errors: stacks root not at the same path, data not mounted, no image.

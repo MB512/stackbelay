@@ -6,6 +6,16 @@ All notable changes to StackVault. The format is based on
 
 ## [Unreleased]
 
+### Upgrading
+
+Nothing to change in the compose file. The database is migrated at
+startup (0014 and 0015 drop schedule options that no longer exist). If you
+set `STACKVAULT_MAX_JOBS=1`, consider removing it: the new default 3 lets
+the pre-stop snapshots and restores of several stacks run at the same
+time, while `STACKVAULT_MAX_DOWNTIMES` (default 1) still stops only one
+stack at a time. `<stack>.restore-tmp` and `<stack>.old-<time>`
+directories left by older versions can be deleted by hand.
+
 ### Changed
 
 - **Every restore runs in place** (#33): only files that differ from the
@@ -38,6 +48,16 @@ All notable changes to StackVault. The format is based on
   final snapshot together); the tooltip shows how long the stack was
   stopped. "Show pre-stop snapshots" lists them on their own. Restoring a
   pre-stop snapshot is admin-only and warns that it may not be consistent.
+- **Downtime slots** (#36): only the part of a backup, update or compose
+  apply that keeps a stack stopped is limited by the new
+  `STACKVAULT_MAX_DOWNTIMES` (default 1). The pre-stop snapshot before it
+  and restores need no slot, so a long backup or restore no longer holds up
+  the other stacks. `STACKVAULT_MAX_JOBS` now defaults to 3 and limits all
+  running jobs (disk and network load), restores included: the exception
+  for restores into a stopped stack is gone.
+- **Downtime timeout** (#36): `STACKVAULT_DOWNTIME_TIMEOUT` (default 1h)
+  bounds stop -> final snapshot; when it runs out, the final snapshot is
+  aborted, the stack started again and the job fails.
 - **Job timeout** raised from 6 h to 48 h and configurable on the manager
   with `STACKVAULT_JOB_TIMEOUT` (e.g. `72h`; #32). Before, the variable was
   only read by the worker and the manager did not pass it on, so large

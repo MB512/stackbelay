@@ -52,6 +52,13 @@ type Pipeline struct {
 	// RollbackTimeout bounds the rollback of a failed update; default
 	// DefaultRollbackTimeout.
 	RollbackTimeout time.Duration
+	// Downtime gives a job the right to stop its stack (a downtime slot,
+	// issue #36); nil: no limit (a worker run by hand).
+	Downtime DowntimeGate
+	// DowntimeTimeout bounds stop -> final snapshot of a backup, update or
+	// compose apply; 0: none. When it runs out, the final snapshot is
+	// aborted and the stack started again.
+	DowntimeTimeout time.Duration
 }
 
 func (p *Pipeline) logger() *slog.Logger {

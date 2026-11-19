@@ -18,7 +18,11 @@ type Worker struct {
 	StacksRoot string        // STACKS_ROOT, absolute
 	Hostname   string        // STACKVAULT_HOSTNAME, passed to restic --host
 	JobTimeout time.Duration // STACKVAULT_JOB_TIMEOUT, default DefaultJobTimeout
-	LogLevel   slog.Level    // STACKVAULT_LOG_LEVEL, default info
+	// DowntimeTimeout bounds stop -> final snapshot of a backup, update or
+	// compose apply (STACKVAULT_DOWNTIME_TIMEOUT, default
+	// DefaultDowntimeTimeout).
+	DowntimeTimeout time.Duration
+	LogLevel        slog.Level // STACKVAULT_LOG_LEVEL, default info
 
 	// RepoLocation is RESTIC_REPOSITORY.
 	RepoLocation string
@@ -67,6 +71,7 @@ func LoadWorker(getenv func(string) string) (Worker, error) {
 	}
 
 	c.JobTimeout, errs = jobTimeout(getenv, errs)
+	c.DowntimeTimeout, errs = downtimeTimeout(getenv, errs)
 
 	c.LogLevel, errs = logLevel(getenv, errs)
 
@@ -78,16 +83,31 @@ func LoadWorker(getenv func(string) string) (Worker, error) {
 // stack over the internet can take a day.
 const DefaultJobTimeout = 48 * time.Hour
 
+// DefaultDowntimeTimeout is the limit for the time a backup, update or
+// compose apply keeps a stack stopped until its final snapshot is done
+// (issue #36).
+const DefaultDowntimeTimeout = time.Hour
+
 // jobTimeout reads STACKVAULT_JOB_TIMEOUT (Go duration, at least 1m). The
 // manager reads it to pass it on to its workers, the worker to apply it.
 func jobTimeout(getenv func(string) string, errs []error) (time.Duration, []error) {
-	v := getenv("STACKVAULT_JOB_TIMEOUT")
+	return minuteDuration(getenv, "STACKVAULT_JOB_TIMEOUT", DefaultJobTimeout, "48h", errs)
+}
+
+// downtimeTimeout reads STACKVAULT_DOWNTIME_TIMEOUT like jobTimeout.
+func downtimeTimeout(getenv func(string) string, errs []error) (time.Duration, []error) {
+	return minuteDuration(getenv, "STACKVAULT_DOWNTIME_TIMEOUT", DefaultDowntimeTimeout, "1h", errs)
+}
+
+// minuteDuration reads a Go duration of at least one minute; def if unset.
+func minuteDuration(getenv func(string) string, name string, def time.Duration, example string, errs []error) (time.Duration, []error) {
+	v := getenv(name)
 	if v == "" {
-		return DefaultJobTimeout, errs
+		return def, errs
 	}
 	d, err := time.ParseDuration(v)
 	if err != nil || d < time.Minute {
-		return DefaultJobTimeout, append(errs, fmt.Errorf("STACKVAULT_JOB_TIMEOUT: invalid duration %q (minimum 1m, e.g. 48h)", v))
+		return def, append(errs, fmt.Errorf("%s: invalid duration %q (minimum 1m, e.g. %s)", name, v, example))
 	}
 	return d, errs
 }

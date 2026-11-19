@@ -226,23 +226,19 @@ func (s *Server) startRestore(w http.ResponseWriter, r *http.Request) {
 		PinImages:        r.PostFormValue("images") == "pinned",
 		LimitDownloadKiB: limit,
 	}
-	if st.Present {
-		// A restore into a stopped stack stops nothing: it need not wait
-		// for (or block) other stacks' jobs.
-		opts.Background = !s.stackRunning(r.Context(), st)
-	} else {
+	if !st.Present {
 		// No directory: the restore creates it (import from another host,
 		// or a stack whose directory vanished).
 		if _, err := stacks.ImportTarget(s.StacksRoot, st.Name); err != nil {
 			s.renderError(w, r, http.StatusConflict, "The stack directory cannot be created: "+truncate(err.Error(), 200))
 			return
 		}
-		opts.Import, opts.Background = true, true
+		opts.Import = true
 	}
 	s.submitJob(w, r, st, store.Job{Type: jobs.TypeRestore, Options: opts},
-		fmt.Sprintf("restore of snapshot %s (host %s), import: %t, safety snapshot: %t, start: %t, pinned images: %t, download limit: %d KiB/s, background: %t",
+		fmt.Sprintf("restore of snapshot %s (host %s), import: %t, safety snapshot: %t, start: %t, pinned images: %t, download limit: %d KiB/s",
 			sn.ShortID, sn.Hostname, opts.Import, !opts.Import, !opts.NoStart, opts.PinImages,
-			opts.LimitDownloadKiB, opts.Background), true)
+			opts.LimitDownloadKiB), true)
 }
 
 // loadJob resolves the job in the URL and checks that the user may view

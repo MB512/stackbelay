@@ -69,6 +69,16 @@ func (p *Pipeline) Backup(ctx context.Context, stack stacks.Stack) (res BackupRe
 	if err := ctx.Err(); err != nil {
 		return res, err // cancelled before anything was stopped
 	}
+	// Only stopping a running stack needs a downtime slot.
+	if len(running) > 0 {
+		if err := p.acquireDowntime(ctx, log); err != nil {
+			return res, err
+		}
+	}
+	// Stop and final snapshot are bounded by the downtime timeout; the
+	// start below uses its own (bringUp ignores dctx's cancellation).
+	dctx, cancel := p.downtimeContext(ctx)
+	defer cancel()
 
 	// 6. (registered before 4) Start again, always.
 	defer func() {
@@ -80,19 +90,19 @@ func (p *Pipeline) Backup(ctx context.Context, stack stacks.Stack) (res BackupRe
 	// 4. Stop.
 	log.Info("stopping stack")
 	p.phase("stopping stack")
-	if err := p.Docker.Stop(ctx, stack.Dir); err != nil {
-		return res, fmt.Errorf("stopping stack: %w", err)
+	if err := p.Docker.Stop(dctx, stack.Dir); err != nil {
+		return res, p.downtimeErr(ctx, dctx, fmt.Errorf("stopping stack: %w", err))
 	}
 
 	// 5. Final snapshot.
 	log.Info("taking final snapshot", "parent", res.PreStopSnapshot)
 	p.phase("final snapshot")
-	id, err := p.Restic.Backup(ctx, p.Repo, stack.Dir, restic.BackupOptions{
+	id, err := p.Restic.Backup(dctx, p.Repo, stack.Dir, restic.BackupOptions{
 		Host: p.Host, Tags: []string{TagFinal}, Parent: res.PreStopSnapshot,
 	})
 	res.Snapshot = id
 	if err != nil {
-		return res, fmt.Errorf("final snapshot: %w", err)
+		return res, p.downtimeErr(ctx, dctx, fmt.Errorf("final snapshot: %w", err))
 	}
 	log.Info("final snapshot done", "snapshot", id)
 	return res, nil

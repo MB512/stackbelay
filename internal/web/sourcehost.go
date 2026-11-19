@@ -7,7 +7,6 @@ import (
 	"slices"
 
 	"github.com/MB512/stackvault/internal/auth"
-	"github.com/MB512/stackvault/internal/docker"
 	"github.com/MB512/stackvault/internal/store"
 )
 
@@ -91,24 +90,4 @@ func (s *Server) setSourceHost(w http.ResponseWriter, r *http.Request) {
 	s.audit(r, store.AuditEntry{UserID: authFrom(ctx).User.ID, Action: "stack.source_host", StackID: st.ID,
 		Detail: fmt.Sprintf("source host %q", host)})
 	http.Redirect(w, r, settingsURL(st), http.StatusSeeOther) //nolint:gosec // G710: same-site path, see settingsURL
-}
-
-// stackRunning reports whether any container of st runs. Unknown (no
-// directory, no container lister, an error) counts as running, so a job
-// only runs in the background when the stack is known to be stopped.
-func (s *Server) stackRunning(ctx context.Context, st store.Stack) bool {
-	dir, found := s.stackDir(st)
-	if !found {
-		return false // nothing on disk, nothing runs
-	}
-	if s.Containers == nil {
-		return true
-	}
-	ctx, cancel := context.WithTimeout(ctx, containerListTimeout)
-	defer cancel()
-	list, err := s.Containers.StackContainers(ctx, dir)
-	if err != nil {
-		return true
-	}
-	return slices.ContainsFunc(list, func(c docker.Container) bool { return c.State == "running" || c.State == "restarting" })
 }

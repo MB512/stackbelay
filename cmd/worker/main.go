@@ -126,8 +126,13 @@ func run(args []string, getenv func(string) string, stderr io.Writer) int {
 		Repo:   restic.Repo{Location: cfg.RepoLocation, Env: cfg.RepoEnv},
 		Host:   cfg.Hostname,
 		Logger: log,
+		// Bounds stop -> final snapshot (issue #36).
+		DowntimeTimeout: cfg.DowntimeTimeout,
 	}
 	if jobDir != "" {
+		// Started by the manager: stopping the stack needs a downtime slot,
+		// which the manager grants through the job directory.
+		p.Downtime = &jobs.FileDowntimeGate{Dir: jobDir}
 		// progress.json for the job page: phases from the pipeline,
 		// transfer numbers straight from restic's status lines, pending
 		// services and pull progress from docker.

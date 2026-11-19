@@ -29,10 +29,6 @@ type JobOptions struct {
 	Import bool `json:"import,omitempty"`
 	// LimitDownloadKiB (restore): restic --limit-download, KiB/s; 0 = none.
 	LimitDownloadKiB int `json:"limit_download_kib,omitempty"`
-	// Background: the job does not count against STACKVAULT_MAX_JOBS (a
-	// restore into a stack that was not running when it was queued: it
-	// stops nothing). The per-stack lock still applies.
-	Background bool `json:"background,omitempty"`
 	// NoBackup (update): the user confirmed updating a stack without
 	// repository, i.e. without backup and without rollback. It only takes
 	// effect if the stack still has no repository when the job starts.
@@ -361,8 +357,8 @@ func (s *Store) queryJobs(ctx context.Context, query string, args ...any) ([]Job
 }
 
 // ClaimNextJob marks the oldest queued job that may start as running and
-// returns it. ok is false if there is nothing to start. Jobs with
-// Options.Background neither count against maxRunning nor wait for it.
+// returns it. ok is false if there is nothing to start: maxRunning jobs
+// (STACKVAULT_MAX_JOBS) run already, or no queued job may start.
 //
 // A stack job may start when its stack has no running job, no host job
 // runs and no host job was queued before it (so a host job is not starved
@@ -374,13 +370,13 @@ func (s *Store) ClaimNextJob(ctx context.Context, maxRunning int, now time.Time)
 	err = s.inTx(ctx, func(tx *sql.Tx) error {
 		var running int
 		if err := tx.QueryRowContext(ctx,
-			`SELECT COUNT(*) FROM jobs WHERE state = ? AND NOT COALESCE(json_extract(options, '$.background'), 0)`,
+			`SELECT COUNT(*) FROM jobs WHERE state = ?`,
 			jobs.StateRunning).Scan(&running); err != nil {
 			return err
 		}
 		err := tx.QueryRowContext(ctx,
 			`SELECT q.id FROM jobs q
-			 WHERE q.state = :queued AND (:free OR COALESCE(json_extract(q.options, '$.background'), 0)) AND (
+			 WHERE q.state = :queued AND :free AND (
 			   (q.stack_id IS NULL AND NOT EXISTS (SELECT 1 FROM jobs r WHERE r.state = :running))
 			   OR (q.stack_id IS NOT NULL
 			       AND NOT EXISTS (SELECT 1 FROM jobs r WHERE r.state = :running AND (r.stack_id = q.stack_id OR r.stack_id IS NULL))
@@ -451,8 +447,7 @@ type QueueState struct {
 	Blocking *Job
 	// Ahead counts the jobs of all stacks queued before this one.
 	Ahead int
-	// Running counts the jobs running now that count against the limit
-	// (all stacks, without background jobs).
+	// Running counts the jobs running now (all stacks).
 	Running int
 }
 
@@ -461,7 +456,7 @@ func (s *Store) QueueState(ctx context.Context, j Job) (QueueState, error) {
 	var qs QueueState
 	if err := s.db.QueryRowContext(ctx,
 		`SELECT (SELECT COUNT(*) FROM jobs WHERE state = ? AND id < ?),
-		        (SELECT COUNT(*) FROM jobs WHERE state = ? AND NOT COALESCE(json_extract(options, '$.background'), 0))`,
+		        (SELECT COUNT(*) FROM jobs WHERE state = ?)`,
 		jobs.StateQueued, j.ID, jobs.StateRunning).Scan(&qs.Ahead, &qs.Running); err != nil {
 		return qs, fmt.Errorf("queue state of job %s: %w", j.ID, err)
 	}

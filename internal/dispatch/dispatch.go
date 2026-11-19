@@ -8,6 +8,8 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -43,6 +45,9 @@ type Dispatcher struct {
 	Logger    *slog.Logger
 	// MaxRunning limits jobs running at the same time (across stacks).
 	MaxRunning int
+	// MaxDowntimes limits the jobs that keep a stack stopped at the same
+	// time (downtime slots, issue #36); at least 1.
+	MaxDowntimes int
 	// CleanupImageMinAge is the minimum age rule of host cleanups (see
 	// jobs.CleanupOptions); images replaced by updates within it are kept.
 	CleanupImageMinAge time.Duration
@@ -268,6 +273,7 @@ func (d *Dispatcher) Step(ctx context.Context) {
 	for _, j := range running {
 		d.check(ctx, j)
 	}
+	d.grantDowntimes(ctx)
 	maxRunning := max(d.MaxRunning, 1)
 	for ctx.Err() == nil {
 		j, ok, err := d.Store.ClaimNextJob(ctx, maxRunning, d.now())
@@ -283,6 +289,41 @@ func (d *Dispatcher) Step(ctx context.Context) {
 }
 
 func (d *Dispatcher) jobDir(id string) string { return filepath.Join(d.JobsDir, id) }
+
+// grantDowntimes gives waiting jobs their downtime slot (issue #36), in
+// queue order (job ids sort by creation), while fewer than MaxDowntimes
+// running jobs hold one. A slot is held until its job ends. The state is
+// only in the job directories (jobs.DowntimeState), so it survives a
+// restart of the manager.
+func (d *Dispatcher) grantDowntimes(ctx context.Context) {
+	running, err := d.Store.JobsInState(ctx, jobs.StateRunning)
+	if err != nil {
+		d.Logger.Error("listing running jobs", "error", err)
+		return
+	}
+	slices.SortFunc(running, func(a, b store.Job) int { return strings.Compare(a.ID, b.ID) })
+	held := 0
+	var waiting []store.Job
+	for _, j := range running {
+		switch requested, granted := jobs.DowntimeState(d.jobDir(j.ID)); {
+		case granted:
+			held++
+		case requested:
+			waiting = append(waiting, j)
+		}
+	}
+	for _, j := range waiting {
+		if held >= max(d.MaxDowntimes, 1) {
+			return
+		}
+		if err := jobs.GrantDowntime(d.jobDir(j.ID)); err != nil {
+			d.Logger.Error("granting a downtime slot", "job_id", j.ID, "error", err)
+			continue
+		}
+		held++
+		d.Logger.Info("downtime slot granted", "job_id", j.ID, "stack", j.StackName, "type", j.Type)
+	}
+}
 
 // start writes the job spec and starts the worker container. Failures
 // finish the job as failed.

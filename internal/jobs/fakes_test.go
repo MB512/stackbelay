@@ -173,6 +173,9 @@ type fakeRestic struct {
 	ids map[string]string
 	// restoreVisit, if set, is called by Restore with the target.
 	restoreVisit func(target string)
+	// blockFinal makes the final backup wait until its context ends (to
+	// test the downtime timeout).
+	blockFinal bool
 }
 
 func (f *fakeRestic) CheckRepo(ctx context.Context, repo restic.Repo) error {
@@ -183,6 +186,10 @@ func (f *fakeRestic) CheckRepo(ctx context.Context, repo restic.Repo) error {
 func (f *fakeRestic) Backup(ctx context.Context, repo restic.Repo, path string, opts restic.BackupOptions) (string, error) {
 	tag := strings.Join(opts.Tags, ",")
 	f.calls.add("restic.Backup tag=%s parent=%s host=%s", tag, opts.Parent, opts.Host)
+	if tag == TagFinal && f.blockFinal {
+		<-ctx.Done()
+		return "", ctx.Err()
+	}
 	if tag == TagFinal && f.cancelOnFinal != nil {
 		f.cancelOnFinal()
 		return "", context.Canceled

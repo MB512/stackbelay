@@ -70,9 +70,10 @@ func TestStackSnapshotHosts(t *testing.T) {
 	}
 }
 
-// Background jobs (restores into stacks that were not running) neither
-// count against the limit nor wait for it.
-func TestBackgroundJobs(t *testing.T) {
+// Every running job counts against the limit, restores and imports
+// included (issue #36: the "background" exception is gone; only the
+// downtime phase has its own, smaller limit).
+func TestRestoresCountAgainstLimit(t *testing.T) {
 	s := openTest(t)
 	ctx := context.Background()
 	web, db := stackID(t, s, "web"), stackID(t, s, "db")
@@ -83,14 +84,14 @@ func TestBackgroundJobs(t *testing.T) {
 	t0 := time.Date(2026, 11, 18, 10, 0, 0, 0, time.UTC)
 	a := newJob(t, s, "01AAAAAAAAAAAAAAAAAAAAAAA1", web, jobs.TypeBackup, t0)
 	imp := Job{ID: "01AAAAAAAAAAAAAAAAAAAAAAA2", StackID: cloud.ID, Type: jobs.TypeRestore, Trigger: TriggerManual, QueuedAt: t0,
-		Options: JobOptions{SnapshotID: "aaaaaaaa", Import: true, Background: true, LimitDownloadKiB: 2048}}
+		Options: JobOptions{SnapshotID: "aaaaaaaa", Import: true, LimitDownloadKiB: 2048}}
 	if err := s.CreateJob(ctx, imp); err != nil {
 		t.Fatal(err)
 	}
 	b := newJob(t, s, "01AAAAAAAAAAAAAAAAAAAAAAA3", db, jobs.TypeBackup, t0)
 	claim := func() string {
 		t.Helper()
-		j, ok, err := s.ClaimNextJob(ctx, 1, t0)
+		j, ok, err := s.ClaimNextJob(ctx, 2, t0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -102,25 +103,23 @@ func TestBackgroundJobs(t *testing.T) {
 	if got := claim(); got != a.ID {
 		t.Fatalf("first = %q", got)
 	}
-	// The limit (1) is reached, but the background restore starts anyway.
 	if got := claim(); got != imp.ID {
-		t.Fatalf("second = %q, want the background restore", got)
+		t.Fatalf("second = %q, want the import", got)
 	}
 	if got := claim(); got != "" {
-		t.Fatalf("third = %q, want nothing (limit)", got)
+		t.Fatalf("third = %q, want nothing (limit 2)", got)
 	}
-	if qs, _ := s.QueueState(ctx, b); qs.Running != 1 {
-		t.Fatalf("running counted for the limit = %d, want 1", qs.Running)
+	if qs, _ := s.QueueState(ctx, b); qs.Running != 2 {
+		t.Fatalf("running = %d, want 2", qs.Running)
 	}
-	// The background restore does not take the slot of b.
-	if err := s.FinishJob(ctx, a.ID, jobs.StateSucceeded, "", "", JobResult{}, t0); err != nil {
+	if err := s.FinishJob(ctx, imp.ID, jobs.StateSucceeded, "", "", JobResult{}, t0); err != nil {
 		t.Fatal(err)
 	}
 	if got := claim(); got != b.ID {
-		t.Fatalf("after a = %q, want b although the restore still runs", got)
+		t.Fatalf("after the import = %q, want b", got)
 	}
 	j, _ := s.JobByID(ctx, imp.ID)
-	if !j.Options.Import || !j.Options.Background || j.Options.LimitDownloadKiB != 2048 {
+	if !j.Options.Import || j.Options.LimitDownloadKiB != 2048 {
 		t.Fatalf("options %+v", j.Options)
 	}
 }

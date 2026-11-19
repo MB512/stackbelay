@@ -28,9 +28,16 @@ type Manager struct {
 	// (STACKVAULT_WORKER_IMAGE). Empty means: the manager's own image.
 	WorkerImage string
 	// MaxJobs is the number of jobs that may run at the same time across
-	// all stacks (STACKVAULT_MAX_JOBS, default 1). Each job stops a stack,
-	// so parallel jobs are opt-in.
+	// all stacks (STACKVAULT_MAX_JOBS, default 3): it limits the disk and
+	// network load of parallel jobs.
 	MaxJobs int
+	// MaxDowntimes is the number of jobs that may keep a stack stopped at
+	// the same time (STACKVAULT_MAX_DOWNTIMES, default 1, issue #36): the
+	// downtime slots of backups, updates and compose applies.
+	MaxDowntimes int
+	// DowntimeTimeout is passed to every worker (STACKVAULT_DOWNTIME_TIMEOUT,
+	// default DefaultDowntimeTimeout).
+	DowntimeTimeout time.Duration
 	// JobTimeout is the hard limit for one job, passed to every worker
 	// (STACKVAULT_JOB_TIMEOUT, default DefaultJobTimeout).
 	JobTimeout time.Duration
@@ -71,11 +78,12 @@ func (m Manager) JobsDir() string { return filepath.Join(m.DataDir, "jobs") }
 func LoadManager(getenv func(string) string, readFile func(string) ([]byte, error)) (Manager, error) {
 	var errs []error
 	c := Manager{
-		Hostname:    getenv("STACKVAULT_HOSTNAME"),
-		ListenAddr:  getenv("STACKVAULT_LISTEN"),
-		WorkerImage: getenv("STACKVAULT_WORKER_IMAGE"),
-		SessionTTL:  12 * time.Hour,
-		MaxJobs:     1,
+		Hostname:     getenv("STACKVAULT_HOSTNAME"),
+		ListenAddr:   getenv("STACKVAULT_LISTEN"),
+		WorkerImage:  getenv("STACKVAULT_WORKER_IMAGE"),
+		SessionTTL:   12 * time.Hour,
+		MaxJobs:      3,
+		MaxDowntimes: 1,
 
 		CleanupImageMinAge: 7 * 24 * time.Hour,
 	}
@@ -83,6 +91,7 @@ func LoadManager(getenv func(string) string, readFile func(string) ([]byte, erro
 	c.DataDir, errs = absPath(getenv, "STACKVAULT_DATA_DIR", "/data", errs)
 	c.LogLevel, errs = logLevel(getenv, errs)
 	c.JobTimeout, errs = jobTimeout(getenv, errs)
+	c.DowntimeTimeout, errs = downtimeTimeout(getenv, errs)
 
 	if c.Hostname == "" {
 		errs = append(errs, errors.New("STACKVAULT_HOSTNAME is required (name of the Docker host, used as restic --host)"))
@@ -98,14 +107,8 @@ func LoadManager(getenv func(string) string, readFile func(string) ([]byte, erro
 			c.SessionTTL = d
 		}
 	}
-	if v := getenv("STACKVAULT_MAX_JOBS"); v != "" {
-		n, err := strconv.Atoi(v)
-		if err != nil || n < 1 || n > 32 {
-			errs = append(errs, fmt.Errorf("STACKVAULT_MAX_JOBS: invalid value %q (1 to 32)", v))
-		} else {
-			c.MaxJobs = n
-		}
-	}
+	c.MaxJobs, errs = smallCount(getenv, "STACKVAULT_MAX_JOBS", c.MaxJobs, errs)
+	c.MaxDowntimes, errs = smallCount(getenv, "STACKVAULT_MAX_DOWNTIMES", c.MaxDowntimes, errs)
 	if v := getenv("STACKVAULT_CLEANUP_IMAGE_MIN_AGE"); v != "" {
 		d, err := time.ParseDuration(v)
 		if err != nil || d < 0 || d > 3650*24*time.Hour || d%time.Hour != 0 {
@@ -164,4 +167,17 @@ func LoadManager(getenv func(string) string, readFile func(string) ([]byte, erro
 	}
 
 	return c, errors.Join(errs...)
+}
+
+// smallCount reads a whole number from 1 to 32; def if unset.
+func smallCount(getenv func(string) string, name string, def int, errs []error) (int, []error) {
+	v := getenv(name)
+	if v == "" {
+		return def, errs
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n < 1 || n > 32 {
+		return def, append(errs, fmt.Errorf("%s: invalid value %q (1 to 32)", name, v))
+	}
+	return n, errs
 }

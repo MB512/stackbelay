@@ -174,10 +174,11 @@ CREATE TABLE audit_log (
   comes from a repository's snapshot paths (validated, no directory yet):
   `present = 0`, `enabled = 0`, `source_host` = the host it is imported
   from. Its first restore creates the directory and sets `present = 1`.
-- Background jobs: `options.background` (a restore into a stack that was
-  not running when it was queued) do not count against the limit of running
-  jobs and start even when it is reached; the per-stack lock and host jobs'
-  exclusivity still apply.
+- Every running job counts against the limit of running jobs
+  (`STACKVAULT_MAX_JOBS`); the `options.background` exception of
+  StackVault 0.4 is gone (issue #36; old values are ignored). Downtime
+  slots are not in the database but in the job directories (see
+  "Downtime slots" in architecture.md).
 - Host jobs (issue #19, only `cleanup`) have `stack_id` NULL and run alone:
   one starts only when no job runs, and no stack job starts while one runs
   or while one is queued before it (no starving). The partial unique index

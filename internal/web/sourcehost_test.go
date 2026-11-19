@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/MB512/stackvault/internal/docker"
 	"github.com/MB512/stackvault/internal/jobs"
 	"github.com/MB512/stackvault/internal/restic"
 	"github.com/MB512/stackvault/internal/store"
@@ -51,7 +50,7 @@ func (e *testEnv) setupMigration(webID int64) (cloud store.Stack, fc *fakeContai
 func TestSourceHostAndImportRestore(t *testing.T) {
 	e := newEnv(t, true, true)
 	webID, _ := e.setupStacks()
-	cloud, fc := e.setupMigration(webID)
+	cloud, _ := e.setupMigration(webID)
 	ctx := context.Background()
 	e.loginAdmin()
 	alice, aliceID := e.createUser("alice")
@@ -85,14 +84,13 @@ func TestSourceHostAndImportRestore(t *testing.T) {
 	if r := e.do(alice, http.MethodGet, "/stacks/web/backups", nil, nil); strings.Contains(r.body, "/restore?snapshot=") {
 		t.Error("restore links for another host's snapshots shown to a non-admin")
 	}
-	// A sync of a running stack: not in the background.
 	r = e.post("/stacks/web/restore", url.Values{"csrf_token": {token}, "snapshot_id": {"bbbbbbbb11111111"},
 		"images": {"pinned"}})
 	if r.status != http.StatusSeeOther {
 		t.Fatalf("sync restore: %d\n%s", r.status, r.body)
 	}
 	j, _ := e.st.JobByID(ctx, strings.TrimPrefix(r.location, "/jobs/"))
-	if j.Options.Import || !j.Options.NoStart || j.Options.Background || !j.Options.PinImages {
+	if j.Options.Import || !j.Options.NoStart || !j.Options.PinImages {
 		t.Errorf("sync options %+v", j.Options)
 	}
 	if err := e.st.FinishJob(ctx, j.ID, jobs.StateSucceeded, "", "", store.JobResult{}, time.Now()); err != nil {
@@ -125,21 +123,12 @@ func TestSourceHostAndImportRestore(t *testing.T) {
 		t.Fatalf("import restore: %d\n%s", r.status, r.body)
 	}
 	j, _ = e.st.JobByID(ctx, strings.TrimPrefix(r.location, "/jobs/"))
-	want := store.JobOptions{SnapshotID: "cccccccc11111111", Import: true, Background: true, NoStart: true, PinImages: true,
+	want := store.JobOptions{SnapshotID: "cccccccc11111111", Import: true, NoStart: true, PinImages: true,
 		LimitDownloadKiB: 5 * 1024}
 	if j.Type != jobs.TypeRestore || j.Options != want {
 		t.Errorf("import job %+v, options want %+v", j, want)
 	}
 
-	// A restore into a stopped stack runs in the background.
-	fc.mu.Lock()
-	fc.list = []docker.Container{{ID: "0000000000a1", Name: "app-1", Service: "app", State: "exited"}}
-	fc.mu.Unlock()
-	r = e.post("/stacks/web/restore", url.Values{"csrf_token": {token}, "snapshot_id": {"aaaaaaaa11111111"}, "safety_snapshot": {"on"}})
-	j, _ = e.st.JobByID(ctx, strings.TrimPrefix(r.location, "/jobs/"))
-	if !j.Options.Background || j.Options.Import {
-		t.Errorf("restore of a stopped stack: %+v", j.Options)
-	}
 	if n := auditActions(t, e.st)["stack.source_host"]; n != 2 {
 		t.Errorf("stack.source_host audited %d times, want 2", n)
 	}

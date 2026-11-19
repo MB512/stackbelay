@@ -66,7 +66,9 @@ compose, so they are never affected by stopping a stack.
 | `STACKVAULT_SESSION_TTL` | session lifetime, default `12h` |
 | `STACKVAULT_ALLOW_INSECURE_HTTP` | accept logins over plain HTTP (testing without TLS proxy), default `false` |
 | `STACKVAULT_WORKER_IMAGE` | image for worker containers, default: the manager's own image |
-| `STACKVAULT_MAX_JOBS` | jobs running at the same time across all stacks, default `1` |
+| `STACKVAULT_MAX_JOBS` | jobs running at the same time across all stacks (disk and network load), default `3`; restores count too (issue #36) |
+| `STACKVAULT_MAX_DOWNTIMES` | jobs that may keep a stack stopped at the same time (downtime slots, see "Downtime slots"), default `1` |
+| `STACKVAULT_DOWNTIME_TIMEOUT` | limit for stop -> final snapshot of a backup, update or compose apply (Go duration, at least `1m`), default `1h`; passed to every worker |
 | `STACKVAULT_JOB_TIMEOUT` | hard limit for one job (Go duration, at least `1m`), default `48h`; passed to every worker (issue #32) |
 | `STACKVAULT_CLEANUP_IMAGE_MIN_AGE` | host cleanup: keep dangling images pulled, tagged or replaced by an update less than this long ago, whole hours, default `168h`; see "Host cleanup" |
 | `STACKVAULT_ENABLE_SHELL` | admin-only container shells ("Shell" per container on the Status tab), default `false`; see "Container shell" |
@@ -170,12 +172,40 @@ A loop in the manager (every 2 s, and immediately when a job is queued):
    the DB, audit entry `job.finish`, container removed, snapshot cache
    refreshed if snapshots were created). A worker container that stopped or
    vanished without a final status fails the job ("exit code N").
-2. Claim queued jobs (oldest first, stack not locked, at most
+2. Grant downtime slots (see "Downtime slots").
+3. Claim queued jobs (oldest first, stack not locked, at most
    `STACKVAULT_MAX_JOBS` running in total), write `spec.json`, start the
    worker container. Start errors (no repository, `docker run` failed) fail
    the job and release the lock. Stop, start, restart and host cleanup
    jobs get no repository credentials at all. For a cleanup the spec gets
    the minimum image age and the images to keep (see "Host cleanup").
+
+### Downtime slots
+
+Decided in issue #36: only the part of a job that keeps a stack stopped
+holds up other stacks. A backup, update or compose apply of a running stack
+first takes its pre-stop snapshot (stack still running, no slot needed),
+then asks for a **downtime slot** before it stops the stack: the worker
+writes `downtime-request` into its job directory, the job page shows
+"waiting for a downtime slot", and the dispatcher writes `downtime-granted`
+for the oldest waiting jobs (job ids sort by creation) while fewer than
+`STACKVAULT_MAX_DOWNTIMES` running jobs hold one (`grantDowntimes`). A slot
+is held until the job ends. The state lives only in the job directories
+(`jobs.DowntimeState`), so it survives a restart of the manager, also when
+the slot was granted to the backup of the manager's own stack. Cancelling a
+job that waits for its slot is a normal cancel: nothing was stopped, so
+nothing is started again. Restores, imports, stop, start, restart, up,
+down and cleanups need no slot; a worker run by hand (`worker backup ...`)
+has no gate at all.
+
+`STACKVAULT_DOWNTIME_TIMEOUT` (default `1h`) bounds stop -> final snapshot:
+when it runs out, the final snapshot is aborted, the stack is started
+again (as after any failure) and the job fails ("downtime timeout ...
+exceeded"); the pre-stop snapshot is kept. Waiting for the slot does not
+count. The start after a backup, the change and health wait of an update
+or compose apply and their rollback keep their own limits.
+`STACKVAULT_MAX_JOBS` (default `3`) still limits all running jobs,
+restores included, for the disk and network load.
 
 All state is in the DB and the job directories, so a manager that was
 stopped by its own backup continues where it left off: running jobs are
@@ -208,7 +238,7 @@ docker run --detach --name stackvault-job-<id>
   --mount <host jobs dir>/<ID> -> /job   (bind, or volume with volume-subpath)
   --mount type=volume,source=stackvault-restic-cache,target=/cache
   --env STACKS_ROOT --env STACKVAULT_HOSTNAME --env RESTIC_CACHE_DIR
-  --env STACKVAULT_JOB_TIMEOUT [--env STACKVAULT_LOG_LEVEL]
+  --env STACKVAULT_JOB_TIMEOUT --env STACKVAULT_DOWNTIME_TIMEOUT [--env STACKVAULT_LOG_LEVEL]
   --env RESTIC_REPOSITORY --env RESTIC_PASSWORD --env <backend variables>
   <image> /app/worker run /job
 ```
@@ -425,11 +455,9 @@ rest of the path may differ (`/home/docker/web` on A restores into
   caveats (numeric UID/GID restored as is; ports, external networks and
   absolute paths outside the stack directory may not fit; only bind mounts
   inside the stack directory are in the snapshot).
-- **Background**: a restore into a stack without directory, or one with
-  no running container when it is queued (`stackRunning`; unknown counts
-  as running), gets `options.background` and does not count against
-  `STACKVAULT_MAX_JOBS` (see data-model.md), so a long first restore does
-  not hold up scheduled backups.
+- **No downtime slot**: a restore needs none (see "Downtime slots"), so a
+  long first restore does not hold up the scheduled backups of other
+  stacks; it counts against `STACKVAULT_MAX_JOBS` like every job.
 - **Download limit**: restore option `limit_download_kib` (worker flag
   `--limit-download`), passed to every restic command of the job as
   `--limit-download` (KiB/s, at most `restic.MaxLimitKiB`).
@@ -972,7 +1000,8 @@ waits until services are healthy, the services still pending are shown
 ("waiting for: app, db"; issue #8). A queued job says what it waits for:
 the running (or earlier queued) job of its stack, or a free slot when
 `STACKVAULT_MAX_JOBS` jobs run, and how many jobs are queued before it
-(`store.QueueState`, the same rules as `ClaimNextJob`).
+(`store.QueueState`, the same rules as `ClaimNextJob`). A running job that
+waits for its downtime slot shows the phase "waiting for a downtime slot".
 
 - The pipeline reports phases to `Pipeline.Progress` (`jobs.ProgressReporter`;
   nil reports nothing). `restic.CLI.Progress` receives restic's `--json`
@@ -1324,6 +1353,7 @@ The repository always comes from the environment:
 | `RESTIC_PASSWORD_FILE` / `RESTIC_PASSWORD` | one is required |
 | backend variables (`AWS_*`, `B2_*`, `AZURE_*`, `GOOGLE_*`, `RESTIC_REST_*`) | passed to restic; values are redacted from output |
 | `STACKVAULT_JOB_TIMEOUT` | hard job timeout, Go duration (at least `1m`), default `48h` |
+| `STACKVAULT_DOWNTIME_TIMEOUT` | limit for stop -> final snapshot, Go duration (at least `1m`), default `1h` |
 | `STACKVAULT_LOG_LEVEL` | `debug`, `info`, `warn`, `error` |
 
 restic never inherits the full process environment: it gets an allow-list

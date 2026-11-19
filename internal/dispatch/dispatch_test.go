@@ -776,7 +776,7 @@ func TestImportRestore(t *testing.T) {
 		t.Fatal(err)
 	}
 	j, err := e.d.Submit(ctx, store.Job{StackID: st.ID, Type: jobs.TypeRestore, Trigger: store.TriggerManual,
-		Options: store.JobOptions{SnapshotID: "0123abcd", Import: true, NoStart: true, Background: true, LimitDownloadKiB: 1024}})
+		Options: store.JobOptions{SnapshotID: "0123abcd", Import: true, NoStart: true, LimitDownloadKiB: 1024}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -799,5 +799,44 @@ func TestImportRestore(t *testing.T) {
 	e.d.Step(ctx)
 	if got, _ := e.st.StackByName(ctx, "cloud"); !got.Present {
 		t.Fatalf("imported stack not marked present: %+v", got)
+	}
+}
+
+// Downtime slots (issue #36): the dispatcher grants waiting jobs in queue
+// order, at most MaxDowntimes at a time; a slot is free again when its job
+// ends.
+func TestDowntimeSlots(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	e.d.MaxDowntimes = 1
+	web := e.submit("web", jobs.TypeBackup, store.JobOptions{})
+	db := e.submit("db", jobs.TypeBackup, store.JobOptions{})
+	e.d.Step(ctx) // both start (MaxRunning 2), neither asked yet
+	state := func(id string) (bool, bool) { return jobs.DowntimeState(filepath.Join(e.jobsDir, id)) }
+	if _, granted := state(web.ID); granted {
+		t.Fatal("granted without a request")
+	}
+	request := func(id string) {
+		if err := os.WriteFile(filepath.Join(e.jobsDir, id, jobs.DowntimeRequestFile), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	request(db.ID) // db asks first, but web is older in the queue
+	request(web.ID)
+	e.d.Step(ctx)
+	if _, g := state(web.ID); !g {
+		t.Fatal("oldest waiting job not granted")
+	}
+	if _, g := state(db.ID); g {
+		t.Fatal("second slot granted with MaxDowntimes 1")
+	}
+	e.d.Step(ctx)
+	if _, g := state(db.ID); g {
+		t.Fatal("slot granted while web still holds it")
+	}
+	e.workerDone(web.ID, jobs.Status{State: jobs.StateSucceeded, Snapshot: "aaaaaaaa11111111"})
+	e.d.Step(ctx)
+	if _, g := state(db.ID); !g {
+		t.Fatal("slot not passed on after web ended")
 	}
 }

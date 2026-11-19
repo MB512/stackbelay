@@ -317,14 +317,16 @@ func newDispatcher(ctx context.Context, cfg config.Manager, st *store.Store, sna
 	tpl, err := dispatch.NewTemplate(dispatch.TemplateConfig{
 		WorkerImage: cfg.WorkerImage, StacksRoot: cfg.StacksRoot, JobsDir: cfg.JobsDir(),
 		Hostname: cfg.Hostname, LogLevel: cfg.LogLevel.String(), JobTimeout: cfg.JobTimeout,
+		DowntimeTimeout: cfg.DowntimeTimeout,
 	}, self)
 	if err != nil {
 		return nil, err
 	}
 	log.Info("worker template", "image", tpl.Image, "jobs_mount", tpl.Jobs.Type+":"+tpl.Jobs.Source+"/"+tpl.Jobs.SubPath,
-		"docker_socket", tpl.Socket, "max_jobs", cfg.MaxJobs, "job_timeout", cfg.JobTimeout.String())
+		"docker_socket", tpl.Socket, "max_jobs", cfg.MaxJobs, "max_downtimes", cfg.MaxDowntimes, "job_timeout", cfg.JobTimeout.String(),
+		"downtime_timeout", cfg.DowntimeTimeout.String())
 	return &dispatch.Dispatcher{
 		Store: st, Docker: cli, Template: tpl, JobsDir: cfg.JobsDir(), Snapshots: snaps,
-		Logger: log, MaxRunning: cfg.MaxJobs, CleanupImageMinAge: cfg.CleanupImageMinAge,
+		Logger: log, MaxRunning: cfg.MaxJobs, MaxDowntimes: cfg.MaxDowntimes, CleanupImageMinAge: cfg.CleanupImageMinAge,
 	}, nil
 }

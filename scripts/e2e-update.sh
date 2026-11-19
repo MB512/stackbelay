@@ -145,6 +145,8 @@ spec = {"version": 1, "id": "01JCZ8G3T4S5V6W7X8Y9Z0ABCD", "type": "compose-apply
         "compose_sha256": sha(job + "/compose.new"), "compose_base_sha256": sha(current)}
 json.dump(spec, open(job + "/spec.json", "w"))
 PY
+	# No manager here: grant the downtime slot in advance (issue #36).
+	: >"$1/downtime-granted"
 }
 job_state() { python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["state"])' "$1/status.json"; }
 
