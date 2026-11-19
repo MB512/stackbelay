@@ -903,8 +903,12 @@ tooltip; job states are dots with a symbol, not color alone (✓ succeeded,
 - **Backup**: *Scheduling* (next run of the stack's enabled backup
   schedules, cron expression in the tooltip; `–` without schedule, `off`
   when all are disabled), *Repository* (✓ or `–`), *Last* (the newest
-  backup job with its dot and a link; if it did not succeed, also the
-  time since the last successful backup, or "never succeeded").
+  consistent snapshot, with a link to the job that made it: a final
+  snapshot of a backup, an update or a compose change, taken with the
+  stack stopped; jobs that failed count only if they were rolled back to
+  it, so the incomplete snapshot of a failed backup does not. If a newer
+  backup job failed or still runs, the cell shows that job and "(ok X
+  ago)" for the last consistent snapshot, or "never succeeded").
 - **Update**: *Scheduling* (like backups), *Last check* (the newest update
   job in any outcome, or the last manual registry check of the update
   page if that is newer; it lives in memory and is lost on a restart;

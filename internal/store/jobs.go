@@ -275,13 +275,52 @@ func (s *Store) latestJobs(ctx context.Context, typ jobs.Type) (map[int64]JobBri
 	return out, rows.Err()
 }
 
-// lastSucceeded returns, per stack id, when the newest succeeded job of
-// one of the types finished. With imagesChanged only jobs that changed the
-// image of a running service count (result.images_changed, recorded by
-// updates and compose applies, see "Update pipeline" in
-// docs/architecture.md). Stacks without such a job are missing from the
-// map.
-func (s *Store) lastSucceeded(ctx context.Context, imagesChanged bool, types ...jobs.Type) (map[int64]time.Time, error) {
+// FinalBackup is a job that took a good final snapshot (see
+// StackSummary.LastFinal).
+type FinalBackup struct {
+	JobBrief
+	Type jobs.Type // backup, update or compose-apply
+}
+
+// lastFinalSnapshots returns, per stack id, the newest job with a good
+// final snapshot: a backup, update or compose apply that succeeded, or an
+// update or compose apply that failed and was rolled back to it (the
+// rollback restored it, so it is usable). A failed backup may still have a
+// snapshot (restic reported an incomplete one), which does not count.
+func (s *Store) lastFinalSnapshots(ctx context.Context) (map[int64]FinalBackup, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT stack_id, id, type, state, finished_at FROM jobs WHERE id IN (
+		   SELECT MAX(id) FROM jobs
+		   WHERE type IN (?, ?, ?) AND snapshot_id IS NOT NULL AND finished_at IS NOT NULL
+		     AND (state = ? OR COALESCE(json_extract(result, '$.rolled_back'), 0))
+		   GROUP BY stack_id)`,
+		jobs.TypeBackup, jobs.TypeUpdate, jobs.TypeComposeApply, jobs.StateSucceeded)
+	if err != nil {
+		return nil, fmt.Errorf("listing final snapshots: %w", err)
+	}
+	defer rows.Close()
+	out := make(map[int64]FinalBackup)
+	for rows.Next() {
+		var stackID int64
+		var f FinalBackup
+		var at string
+		if err := rows.Scan(&stackID, &f.ID, &f.Type, &f.State, &at); err != nil {
+			return nil, fmt.Errorf("listing final snapshots: %w", err)
+		}
+		if f.Time, err = parseTime(at); err != nil {
+			return nil, err
+		}
+		out[stackID] = f
+	}
+	return out, rows.Err()
+}
+
+// lastImageChanges returns, per stack id, when the newest succeeded job of
+// one of the types finished that changed the image of a running service
+// (result.images_changed, recorded by updates and compose applies, see
+// "Update pipeline" in docs/architecture.md). Stacks without such a job
+// are missing from the map.
+func (s *Store) lastImageChanges(ctx context.Context, types ...jobs.Type) (map[int64]time.Time, error) {
 	typeList, err := json.Marshal(types)
 	if err != nil {
 		return nil, err
@@ -289,9 +328,9 @@ func (s *Store) lastSucceeded(ctx context.Context, imagesChanged bool, types ...
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT stack_id, MAX(finished_at) FROM jobs
 		 WHERE type IN (SELECT value FROM json_each(?)) AND state = ? AND finished_at IS NOT NULL
-		   AND (NOT ? OR json_array_length(result, '$.images_changed') > 0)
+		   AND json_array_length(result, '$.images_changed') > 0
 		 GROUP BY stack_id`,
-		string(typeList), jobs.StateSucceeded, imagesChanged)
+		string(typeList), jobs.StateSucceeded)
 	if err != nil {
 		return nil, fmt.Errorf("listing last succeeded %v jobs: %w", types, err)
 	}

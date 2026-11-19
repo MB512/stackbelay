@@ -70,10 +70,14 @@ func (s *Store) ListStacks(ctx context.Context) ([]Stack, error) {
 // StackSummary is a stack with overview data for the stack list.
 type StackSummary struct {
 	Stack
-	HasRepository        bool
-	LastBackup           JobBrief  // newest backup job in any state; zero if there is none
-	LastSuccessfulBackup time.Time // finish of the newest succeeded backup; zero if there is none
-	LastUpdate           JobBrief  // newest update job in any state; zero if there is none
+	HasRepository bool
+	LastBackup    JobBrief // newest backup job in any state; zero if there is none
+	// LastFinal is the newest job that took a final snapshot (stack
+	// stopped, consistent) that is known to be good: a succeeded backup,
+	// update or compose apply, or one rolled back to that snapshot. Zero if
+	// there is none.
+	LastFinal  FinalBackup
+	LastUpdate JobBrief // newest update job in any state; zero if there is none
 	// LastImageUpdate is the finish of the newest succeeded update or
 	// compose apply that changed the image of a running service; zero if
 	// there is none.
@@ -87,7 +91,7 @@ func (s *Store) StackSummaries(ctx context.Context) ([]StackSummary, error) {
 	if err != nil {
 		return nil, err
 	}
-	lastSuccess, err := s.lastSucceeded(ctx, false, jobs.TypeBackup)
+	lastFinal, err := s.lastFinalSnapshots(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +99,7 @@ func (s *Store) StackSummaries(ctx context.Context) ([]StackSummary, error) {
 	if err != nil {
 		return nil, err
 	}
-	lastImageUpdate, err := s.lastSucceeded(ctx, true, jobs.TypeUpdate, jobs.TypeComposeApply)
+	lastImageUpdate, err := s.lastImageChanges(ctx, jobs.TypeUpdate, jobs.TypeComposeApply)
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +120,7 @@ func (s *Store) StackSummaries(ctx context.Context) ([]StackSummary, error) {
 			return nil, fmt.Errorf("listing stacks: %w", err)
 		}
 		ss.LastBackup = lastBackup[ss.ID]
-		ss.LastSuccessfulBackup = lastSuccess[ss.ID]
+		ss.LastFinal = lastFinal[ss.ID]
 		ss.LastUpdate, ss.LastImageUpdate = lastUpdate[ss.ID], lastImageUpdate[ss.ID]
 		out = append(out, ss)
 	}

@@ -231,7 +231,7 @@ func TestStackDetailShowsRepositoryAndSnapshots(t *testing.T) {
 	// The test clock is 2026-11-14 10:00 UTC.
 	base := time.Date(2026, 11, 10, 3, 0, 0, 0, time.UTC)
 	for _, j := range []store.Job{
-		{ID: "01AAAAAAAAAAAAAAAAAAAAAAA1", State: jobs.StateSucceeded, FinishedAt: base},
+		{ID: "01AAAAAAAAAAAAAAAAAAAAAAA1", State: jobs.StateSucceeded, FinishedAt: base, Snapshot: "aaaaaaaa22222222"},
 		{ID: "01AAAAAAAAAAAAAAAAAAAAAAA2", State: jobs.StateFailed, FinishedAt: base.Add(24 * time.Hour)},
 	} {
 		j.StackID, j.Type, j.Trigger, j.QueuedAt, j.StartedAt = web, jobs.TypeBackup, store.TriggerSchedule, base, base
@@ -252,7 +252,7 @@ func TestStackDetailShowsRepositoryAndSnapshots(t *testing.T) {
 	for _, want := range []string{
 		// Last backup failed 3 days ago; the last success 4 days ago.
 		`<a href="/jobs/01AAAAAAAAAAAAAAAAAAAAAAA2" title="2026-11-11 03:00 UTC: failed">3 d</a> <span class="dot err" role="img" aria-label="failed"`,
-		`title="Last successful backup: 2026-11-10 03:00 UTC">(ok 4 d ago)</span>`,
+		`title="Last consistent snapshot (backup, update or compose change): 2026-11-10 03:00 UTC">(ok 4 d ago)</span>`,
 		// Backup scheduling: one schedule, disabled.
 		`title="1 schedule, all disabled">off</span>`,
 		// Update scheduling: next run tomorrow 03:00.

@@ -25,11 +25,13 @@
       <td class="group-start">{{template "schedule-cell" .BackupSchedule}}</td>
       <td>{{if .HasRepository}}<span class="dot ok" role="img" aria-label="configured" title="Repository configured">✓</span>
         {{- else}}<span class="muted" title="No repository: backups are not possible">–</span>{{end}}</td>
-      <td>{{template "job-age" .LastBackup}}
-        {{- if and .LastBackup.ID (ne (print .LastBackup.State) "succeeded")}}
-        <span class="hint" title="Last successful backup: {{when .LastSuccessfulBackup}}">
-          {{- if .LastSuccessfulBackup.IsZero}}(never succeeded){{else}}(ok {{ago .LastSuccessfulBackup}} ago){{end}}</span>
-        {{- end}}</td>
+      <td>{{with .Backup}}
+        {{- if not .Job.ID}}<span class="muted">never</span>
+        {{- else if .Final}}<a href="/jobs/{{.Job.ID}}" title="Final snapshot of the {{.Kind}}: {{when .Job.Time}}">{{ago .Job.Time}}</a> {{template "dot" .Job.State}}
+        {{- else}}{{template "job-age" .Job}}
+        <span class="hint" title="Last consistent snapshot (backup, update or compose change): {{when .LastGood}}">
+          {{- if .LastGood.IsZero}}(never succeeded){{else}}(ok {{ago .LastGood}} ago){{end}}</span>
+        {{- end}}{{end}}</td>
       <td class="group-start">{{template "schedule-cell" .UpdateSchedule}}</td>
       <td>
         {{- with .Check.Registry}}

@@ -31,7 +31,36 @@ func vanished(st store.Stack) bool { return !st.Present && st.SeenPresent }
 type stackRow struct {
 	store.StackSummary
 	BackupSchedule, UpdateSchedule scheduleInfo
+	Backup                         backupCell
 	Check                          lastCheck
+}
+
+// backupCell is the "Last" cell of the backup group: the newest good final
+// snapshot (made by a backup, update or compose apply), or, if a newer
+// backup job failed or still runs, that job with the time of the last
+// good one.
+type backupCell struct {
+	Job   store.JobBrief // the job shown, with its dot and link; zero: never backed up
+	Kind  string         // what made the final snapshot: "backup", "update", "compose change"
+	Final bool           // Job is the good final snapshot (dot ✓)
+	// LastGood is the last good final snapshot when Job is a newer backup
+	// that failed or runs; zero if there was none.
+	LastGood time.Time
+}
+
+// newBackupCell decides what the backup cell shows.
+func newBackupCell(lastBackup store.JobBrief, final store.FinalBackup) backupCell {
+	if final.ID != "" && (lastBackup.ID == "" || !final.Time.Before(lastBackup.Time) || lastBackup.State == jobs.StateSucceeded) {
+		kind := map[jobs.Type]string{jobs.TypeUpdate: "update", jobs.TypeComposeApply: "compose change"}[final.Type]
+		if kind == "" {
+			kind = "backup"
+		}
+		// A rolled-back update failed, but its final snapshot is good.
+		job := final.JobBrief
+		job.State = jobs.StateSucceeded
+		return backupCell{Job: job, Kind: kind, Final: true}
+	}
+	return backupCell{Job: lastBackup, Kind: "backup", LastGood: final.Time}
 }
 
 // scheduleInfo summarizes the schedules of one job type of a stack.
@@ -87,6 +116,7 @@ func (s *Server) stackRows(sums []store.StackSummary, schedules []store.Schedule
 			StackSummary:   sum,
 			BackupSchedule: infos[key{sum.ID, jobs.TypeBackup}],
 			UpdateSchedule: infos[key{sum.ID, jobs.TypeUpdate}],
+			Backup:         newBackupCell(sum.LastBackup, sum.LastFinal),
 			Check:          lastCheck{Time: sum.LastUpdate.Time, Job: sum.LastUpdate},
 		}
 		if res := s.updateResults.get(sum.ID); res != nil && res.At.After(row.Check.Time) {

@@ -77,7 +77,8 @@ directories left by older versions can be deleted by hand.
   dots (✓ / ✗ / running). A failed last backup also shows when the last
   successful one was; "update available" appears when the last check found
   newer images. "Last update" counts updates and compose changes that
-  replaced an image.
+  replaced an image; the backup group's "Last" is the newest consistent
+  snapshot, also when an update or compose change made it.
 - **Stacks without directory are hidden** in the stack list (#27); "Show
   stacks without directory (N)" lists them again. A stack imported from
   another host that is not restored yet stays visible, marked "not

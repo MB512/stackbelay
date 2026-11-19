@@ -263,3 +263,44 @@ func TestFormatAge(t *testing.T) {
 		}
 	}
 }
+
+// The backup cell shows the newest good final snapshot, whatever made it,
+// unless a newer backup failed or runs (issue #37 follow-up).
+func TestNewBackupCell(t *testing.T) {
+	t0 := time.Date(2026, 11, 19, 3, 0, 0, 0, time.UTC)
+	brief := func(id string, state jobs.State, h int) store.JobBrief {
+		return store.JobBrief{ID: id, State: state, Time: t0.Add(time.Duration(h) * time.Hour)}
+	}
+	final := func(id string, typ jobs.Type, state jobs.State, h int) store.FinalBackup {
+		return store.FinalBackup{JobBrief: brief(id, state, h), Type: typ}
+	}
+	tests := []struct {
+		name       string
+		last       store.JobBrief
+		final      store.FinalBackup
+		wantID     string
+		wantKind   string
+		wantFinal  bool
+		wantGoodAt time.Time
+	}{
+		{"never", store.JobBrief{}, store.FinalBackup{}, "", "backup", false, time.Time{}},
+		{"compose change newer than the last backup", brief("B1", jobs.StateSucceeded, 0),
+			final("C1", jobs.TypeComposeApply, jobs.StateSucceeded, 8), "C1", "compose change", true, time.Time{}},
+		{"rolled-back update counts, shown as good", brief("B1", jobs.StateSucceeded, 0),
+			final("U1", jobs.TypeUpdate, jobs.StateFailed, 8), "U1", "update", true, time.Time{}},
+		{"newer failed backup", brief("B2", jobs.StateFailed, 10),
+			final("C1", jobs.TypeComposeApply, jobs.StateSucceeded, 8), "B2", "backup", false, t0.Add(8 * time.Hour)},
+		{"failed, never good", brief("B2", jobs.StateFailed, 10), store.FinalBackup{}, "B2", "backup", false, time.Time{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := newBackupCell(tt.last, tt.final)
+			if c.Job.ID != tt.wantID || c.Kind != tt.wantKind || c.Final != tt.wantFinal || !c.LastGood.Equal(tt.wantGoodAt) {
+				t.Errorf("got %+v", c)
+			}
+			if c.Final && c.Job.State != jobs.StateSucceeded {
+				t.Errorf("good final snapshot shown as %s", c.Job.State)
+			}
+		})
+	}
+}
