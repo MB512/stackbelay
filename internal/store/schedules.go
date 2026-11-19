@@ -117,6 +117,19 @@ func (s *Store) SetScheduleEnabled(ctx context.Context, stackID, id int64, enabl
 	return expectOneRow(res, fmt.Sprintf("schedule %d of stack %d", id, stackID))
 }
 
+// SetAllSchedulesEnabled enables or disables every schedule of a stack
+// (issue #37: replaces the stack-level enabled flag) and returns how many
+// changed.
+func (s *Store) SetAllSchedulesEnabled(ctx context.Context, stackID int64, enabled bool) (int, error) {
+	res, err := s.db.ExecContext(ctx, `UPDATE schedules SET enabled = ? WHERE stack_id = ? AND enabled <> ?`,
+		enabled, stackID, enabled)
+	if err != nil {
+		return 0, fmt.Errorf("updating schedules of stack %d: %w", stackID, err)
+	}
+	n, err := res.RowsAffected()
+	return int(n), err
+}
+
 // DeleteSchedule deletes a schedule of a stack (stackID 0: of the host).
 // It returns ErrNotFound if the schedule does not belong to the stack
 // (host).

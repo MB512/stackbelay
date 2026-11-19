@@ -2,8 +2,7 @@
 
 {{- /* Whether scheduled jobs run. Dot is a store.StackSummary. */}}
 {{define "stack-scheduling"}}
-{{- if not .Enabled}}<span class="badge" title="The stack is disabled: its schedules do not run">disabled</span>
-{{- else if .ActiveSchedules}}<span class="badge ok" title="{{.ActiveSchedules}} enabled backup or update schedule(s)">active</span>
+{{- if .ActiveSchedules}}<span class="badge ok" title="{{.ActiveSchedules}} enabled backup or update schedule(s)">active</span>
 {{- else}}<span class="muted" title="No enabled backup or update schedule">none</span>{{end}}
 {{- end}}
 
@@ -12,7 +11,6 @@
 {{define "stack-header"}}
 <h1>{{.Stack.Name}}
   {{- if not .Stack.Present}} <span class="badge warn" title="The stack directory is missing">missing</span>{{end}}
-  {{- if not .Stack.Enabled}} <span class="badge" title="The stack is disabled: its schedules do not run">disabled</span>{{end}}
   {{- if .RestoreIncomplete}} <span class="badge warn" title="The last restore did not complete">restore incomplete</span>{{end}}</h1>
 {{- if .RestoreIncomplete}}
 <p class="warning" role="alert">The last restore of this stack did not complete, so its directory may be partly restored.

@@ -114,7 +114,7 @@ func TestImportStack(t *testing.T) {
 		http.StatusSeeOther, "/stacks/cloud/backups")
 
 	st, err := e.st.StackByName(ctx, "cloud")
-	if err != nil || st.Present || st.Enabled || st.SourceHost != "old-host" {
+	if err != nil || st.Present || st.SourceHost != "old-host" {
 		t.Fatalf("imported stack %+v, %v", st, err)
 	}
 	repo, err := e.st.RepositoryForStack(ctx, st.ID)

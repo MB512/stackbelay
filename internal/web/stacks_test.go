@@ -152,7 +152,7 @@ func TestStackAccessControl(t *testing.T) {
 
 	// Admin-only endpoints are refused for alice, even with a valid token.
 	aliceToken := csrfOf(e, alice, "/stacks/web")
-	for _, p := range []string{"/stacks/web/permissions", "/stacks/web/enabled", "/admin/users", "/admin/users/1"} {
+	for _, p := range []string{"/stacks/web/permissions", "/stacks/web/schedules/enabled", "/admin/users", "/admin/users/1"} {
 		expect(t, e.do(alice, http.MethodPost, p, url.Values{"csrf_token": {aliceToken}, "user_id": {itoa(aliceID)},
 			"can_backup": {"on"}, "can_restore": {"on"}, "username": {"mallory"}, "is_admin": {"on"}}, nil), http.StatusForbidden, "")
 	}
@@ -214,8 +214,7 @@ func TestStackDetailShowsRepositoryAndSnapshots(t *testing.T) {
 		!strings.Contains(r.body, `<span class="muted">never</span>`) {
 		t.Errorf("stack list:\n%s", r.body)
 	}
-	// Scheduling: none without schedule, active with one, disabled with
-	// the stack disabled.
+	// Scheduling: none without schedule, active with one.
 	if !strings.Contains(r.body, `title="No enabled backup or update schedule">none</span>`) {
 		t.Errorf("scheduling none:\n%s", r.body)
 	}
@@ -224,15 +223,6 @@ func TestStackDetailShowsRepositoryAndSnapshots(t *testing.T) {
 	}
 	if r = e.get("/"); !strings.Contains(r.body, `<span class="badge ok" title="1 enabled backup or update schedule(s)">active</span>`) {
 		t.Errorf("scheduling active:\n%s", r.body)
-	}
-	if err := e.st.SetStackEnabled(ctx, web, false); err != nil {
-		t.Fatal(err)
-	}
-	if r = e.get("/"); !strings.Contains(r.body, `title="The stack is disabled: its schedules do not run">disabled</span>`) {
-		t.Errorf("scheduling disabled:\n%s", r.body)
-	}
-	if err := e.st.SetStackEnabled(ctx, web, true); err != nil {
-		t.Fatal(err)
 	}
 	// Last backup: the newest backup job with its state, the last success
 	// as tooltip.
@@ -266,20 +256,37 @@ func TestStackDetailShowsRepositoryAndSnapshots(t *testing.T) {
 		}
 	}
 
-	// Disable and enable the stack on the Settings tab.
+	// Disable and enable all schedules on the Settings tab (issue #37).
+	webID, _ := e.st.StackByName(ctx, "web")
+	for _, expr := range []string{"0 3 * * *", "0 4 * * *"} {
+		if _, err := e.st.CreateSchedule(ctx, store.Schedule{StackID: webID.ID, CronExpr: expr, Type: jobs.TypeBackup}); err != nil {
+			t.Fatal(err)
+		}
+	}
 	r = e.get("/stacks/web/settings")
 	expect(t, r, http.StatusOK, "")
-	if !strings.Contains(r.body, `action="/stacks/web/enabled"`) || !strings.Contains(r.body, `aria-current="page">Settings`) {
+	if !strings.Contains(r.body, `action="/stacks/web/schedules/enabled"`) || !strings.Contains(r.body, `aria-current="page">Settings`) {
 		t.Fatalf("settings tab:\n%s", r.body)
 	}
 	token := e.csrf("/stacks/web/settings")
-	expect(t, e.post("/stacks/web/enabled", url.Values{"csrf_token": {token}, "enabled": {"false"}}), http.StatusSeeOther, "/stacks/web/settings")
-	if st, _ := e.st.StackByName(ctx, "web"); st.Enabled {
-		t.Fatal("stack still enabled")
+	allEnabled := func(want bool) {
+		t.Helper()
+		list, _ := e.st.ListSchedules(ctx, webID.ID)
+		for _, sc := range list {
+			if sc.Enabled != want {
+				t.Fatalf("schedules %+v, want enabled=%v", list, want)
+			}
+		}
 	}
-	expect(t, e.post("/stacks/web/enabled", url.Values{"csrf_token": {token}, "enabled": {"true"}}), http.StatusSeeOther, "/stacks/web/settings")
-	if st, _ := e.st.StackByName(ctx, "web"); !st.Enabled {
-		t.Fatal("stack still disabled")
+	expect(t, e.post("/stacks/web/schedules/enabled", url.Values{"csrf_token": {token}, "enabled": {"false"}}), http.StatusSeeOther, "/stacks/web/settings")
+	allEnabled(false)
+	if r := e.get("/stacks/web/settings"); !strings.Contains(r.body, `class="secondary" disabled>Disable all`) {
+		t.Error("Disable all not disabled when all are off")
+	}
+	expect(t, e.post("/stacks/web/schedules/enabled", url.Values{"csrf_token": {token}, "enabled": {"true"}}), http.StatusSeeOther, "/stacks/web/settings")
+	allEnabled(true)
+	if n := auditActions(t, e.st); n["schedule.disable_all"] != 1 || n["schedule.enable_all"] != 1 {
+		t.Errorf("audit %v", n)
 	}
 }
 

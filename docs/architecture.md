@@ -411,7 +411,7 @@ host) through the shared repository.
   second step (`pendingImports`: 15 minutes, bound to the admin, used
   once); the page only carries a random token and the index of the choice.
   The import creates the stack record (`CreateImportedStack`: not present,
-  disabled, source host = the chosen host), saves the repository, audits
+  no schedules, source host = the chosen host), saves the repository, audits
   `stack.import` and fills the snapshot cache. Only admins see the new
   stack until permissions are granted. The stack keeps its name: the
 snapshot path's last component must equal it (`snapshotStackPath`), the
@@ -856,7 +856,7 @@ with a light and a dark set; the job log is a dark panel in both modes.
 | `POST /stacks/{name}/repository/init` | admin | `restic init` at the stored location (offered only when no repository exists there) |
 | `POST /stacks/{name}/permissions` | admin | set one user's backup/restore right (HTMX: returns the table row) |
 | `POST /stacks/{name}/source-host` | admin | set the host whose snapshots the stack lists and restores, see "Restore from another host" |
-| `POST /stacks/{name}/enabled` | admin | enable/disable the stack for scheduled backups |
+| `POST /stacks/{name}/schedules/enabled` | admin | enable/disable all schedules of the stack |
 | `POST /stacks/{name}/schedules` | admin | add a schedule (cron expression, job type); at most 20 per stack |
 | `POST /stacks/{name}/schedules/{id}/enabled` | admin | enable/disable one schedule |
 | `POST /stacks/{name}/schedules/{id}/delete` | admin | delete one schedule |
@@ -896,8 +896,7 @@ The start page (`GET /`, decided in issue #23) lists the stacks the user
 may view with these columns:
 
 - **State** (see below).
-- **Scheduling**: `disabled` (the stack's `enabled` flag is off: none of
-  its schedules run), `active` (at least one enabled backup or update
+- **Scheduling**: `active` (at least one enabled backup or update
   schedule) or `none`.
 - **Repository**: configured or none.
 - **Last backup** and **Last update check**: the newest backup or update
@@ -924,7 +923,8 @@ The manager reads it with `docker.CLI.StackOverview` (`compose config
 cached per stack for 5 seconds; concurrent requests for the same stack
 share one load, and at most 4 loads run at a time (`stateCache`).
 
-The page header of a stack shows `missing` and `disabled` badges.
+The page header of a stack shows the `missing` and `restore incomplete`
+badges.
 
 Stack pages share a header with tabs (`stack-header` in `partials.html`).
 The tab list is built per user in `newStackHeader`; a tab is only shown if
@@ -1222,11 +1222,14 @@ counted per image, so the space freed on disk may be smaller).
 `internal/scheduler`, using `robfig/cron/v3` in the manager. A schedule only
 creates a `queued` job (trigger `schedule`, no requesting user); execution
 always goes through the same queue, per-stack lock and worker path as manual
-runs. A schedule has a job type (Settings tab, admins):
+runs. Each schedule is enabled or disabled on its own; "Enable all" and
+"Disable all" on the Settings tab switch all schedules of a stack (issue
+#37: there is no stack-level enabled flag). A schedule has a job type
+(Settings tab, admins):
 
 - **backup** (with pre-stop snapshot, like every backup);
 - **update**, always with "only if new" (a scheduled update never stops or
-  backs up a stack when no running service gets a new image or is pinned),
+  backs up a stack when no running service gets a new image or is pinned).
   It fails if the stack is not running. On a
   stack without repository, creating an update schedule requires the same
   confirmation as a manual update ("no backup and no rollback": a checkbox
@@ -1238,8 +1241,7 @@ runs. A schedule has a job type (Settings tab, admins):
   "Update pipeline"). An update schedule without that confirmation (e.g.
   created while the stack had a repository that was removed later) fails.
 - **cleanup**, a host schedule (no stack, admin "Host" tab, no options):
-  queues a host cleanup (see "Host cleanup"); disabled stacks do not
-  matter.
+  queues a host cleanup (see "Host cleanup").
 
 - Expressions: the standard 5 fields (minute hour day-of-month month
   day-of-week) or descriptors (`@daily`, `@weekly`, `@every 6h`, ...).
@@ -1275,8 +1277,7 @@ the first one that exists as a regular file (not a symlink) is the stack's
 main file (`stacks.MainFileNames()`). The directory name is the stack ID. Names ending
 in `.restore-tmp` or containing `.old-` are reserved (the staging and
 previous-version directories of restores up to StackVault 0.4) and are
-never discovered. Stacks can be
-disabled per stack. Discovery is the source of stack names and paths; the
+never discovered. Discovery is the source of stack names and paths; the
 only other source is an admin's "Import stack" from a repository's snapshot
 paths (see "Restore from another host").
 

@@ -22,7 +22,7 @@ func TestImportedStack(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if st.Name != "cloud" || st.Present || st.Enabled || st.SourceHost != "host-a" {
+	if st.Name != "cloud" || st.Present || st.SourceHost != "host-a" {
 		t.Fatalf("imported stack %+v", st)
 	}
 	// Discovery does not know it yet (no directory): it stays not present.

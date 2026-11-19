@@ -75,18 +75,20 @@
 
 <section>
   <h2>Schedules</h2>
-  <form method="post" action="/stacks/{{.Stack.Name}}/enabled" class="inline">
-    <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
-    {{- if .Stack.Enabled}}
-    <input type="hidden" name="enabled" value="false">
-    <button type="submit" class="secondary">Disable stack</button>
-    <span class="hint">Disabled stacks are skipped by scheduled backups and updates.</span>
-    {{- else}}
-    <input type="hidden" name="enabled" value="true">
-    <button type="submit">Enable stack</button>
-    <span class="hint">The stack is disabled and skipped by scheduled backups and updates.</span>
-    {{- end}}
-  </form>
+  {{- if .Schedules}}
+  <div class="actions-row">
+    <form method="post" action="/stacks/{{.Stack.Name}}/schedules/enabled" class="inline">
+      <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+      <input type="hidden" name="enabled" value="true">
+      <button type="submit" class="secondary"{{if .AllSchedulesEnabled}} disabled{{end}}>Enable all</button>
+    </form>
+    <form method="post" action="/stacks/{{.Stack.Name}}/schedules/enabled" class="inline">
+      <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+      <input type="hidden" name="enabled" value="false">
+      <button type="submit" class="secondary"{{if .AllSchedulesDisabled}} disabled{{end}}>Disable all</button>
+    </form>
+  </div>
+  {{- end}}
 
   {{- if and .Schedules (not .Repo.Exists)}}
   <p class="warning">This stack has no repository: scheduled backups fail until one is added. Scheduled updates run

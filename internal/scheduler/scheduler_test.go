@@ -177,13 +177,8 @@ func TestFire(t *testing.T) {
 		}
 	})
 
-	t.Run("queues a host cleanup, even with every stack disabled", func(t *testing.T) {
+	t.Run("queues a host cleanup", func(t *testing.T) {
 		e := newEnv(t)
-		for _, st := range []store.Stack{e.web, e.db} {
-			if err := e.st.SetStackEnabled(ctx, st.ID, false); err != nil {
-				t.Fatal(err)
-			}
-		}
 		e.s.Fire(ctx, e.scheduleOf(t, store.Schedule{CronExpr: "@weekly", Type: jobs.TypeCleanup}))
 		got := e.queue.submitted()
 		if len(got) != 1 || got[0].StackID != 0 || got[0].Type != jobs.TypeCleanup || got[0].Trigger != store.TriggerSchedule {
@@ -219,11 +214,12 @@ func TestFire(t *testing.T) {
 			}
 			return id
 		}},
-		{"disabled stack", func(t *testing.T, e *env) int64 {
-			if err := e.st.SetStackEnabled(ctx, e.web.ID, false); err != nil {
+		{"all schedules of the stack disabled", func(t *testing.T, e *env) int64 {
+			id := e.schedule(t, e.web, "@daily")
+			if _, err := e.st.SetAllSchedulesEnabled(ctx, e.web.ID, false); err != nil {
 				t.Fatal(err)
 			}
-			return e.schedule(t, e.web, "@daily")
+			return id
 		}},
 		{"deleted schedule", func(t *testing.T, e *env) int64 {
 			id := e.schedule(t, e.web, "@daily")

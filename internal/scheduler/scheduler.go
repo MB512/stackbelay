@@ -173,10 +173,6 @@ func (s *Scheduler) Fire(ctx context.Context, scheduleID int64) {
 			log.Error(what+": loading stack", "error", err)
 			return
 		}
-		if !st.Enabled {
-			log.Info(what + " skipped: the stack is disabled")
-			return
-		}
 	}
 	job := store.Job{StackID: st.ID, Type: sc.Type, Trigger: store.TriggerSchedule}
 	var detail string

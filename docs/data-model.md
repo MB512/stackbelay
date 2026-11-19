@@ -24,7 +24,7 @@ CREATE TABLE sessions (
 CREATE TABLE stacks (
   id          INTEGER PRIMARY KEY,
   name        TEXT NOT NULL UNIQUE,         -- directory name under STACKS_ROOT
-  enabled     INTEGER NOT NULL DEFAULT 1,
+  -- enabled (0001) was dropped by migration 0016 (issue #37: only schedules are enabled or disabled)
   present     INTEGER NOT NULL DEFAULT 1,   -- 0 = directory missing (vanished, or imported stack not restored yet)
   source_host TEXT NOT NULL DEFAULT ''      -- migration 0012: whose snapshots it lists/restores; '' = this host
 );
@@ -172,7 +172,7 @@ CREATE TABLE audit_log (
   global limit of running jobs. A stack has at most one queued job per type.
 - Imported stacks (issue #1): `CreateImportedStack` adds a stack whose name
   comes from a repository's snapshot paths (validated, no directory yet):
-  `present = 0`, `enabled = 0`, `source_host` = the host it is imported
+  `present = 0`, `source_host` = the host it is imported
   from. Its first restore creates the directory and sets `present = 1`.
 - Every running job counts against the limit of running jobs
   (`STACKVAULT_MAX_JOBS`); the `options.background` exception of

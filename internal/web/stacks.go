@@ -166,6 +166,9 @@ type settingsTab struct {
 	Repo        repoForm
 	Permissions []permRow
 	Schedules   []scheduleRow
+	// AllSchedulesEnabled / AllSchedulesDisabled disable the "Enable all"
+	// and "Disable all" buttons when there is nothing to change.
+	AllSchedulesEnabled, AllSchedulesDisabled bool
 	// NewSchedule holds the input of the "add schedule" form after an error.
 	NewSchedule newSchedule
 	TimeZone    string // the manager's time zone, in which schedules run
@@ -388,6 +391,11 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, st store
 		TimeZone:    s.zoneName() + s.now().In(s.loc()).Format(" (MST, -07:00)"),
 	}
 	page.NewSchedule = v.NewSchedule
+	page.AllSchedulesEnabled, page.AllSchedulesDisabled = true, true
+	for _, sc := range scheds {
+		page.AllSchedulesEnabled = page.AllSchedulesEnabled && sc.Enabled
+		page.AllSchedulesDisabled = page.AllSchedulesDisabled && !sc.Enabled
+	}
 	if page.SourceHosts, err = s.sourceHostOptions(r.Context(), st); err != nil {
 		s.internalError(w, r, "listing snapshot hosts", err)
 		return
@@ -467,26 +475,6 @@ func (s *Server) setPermission(w http.ResponseWriter, r *http.Request) {
 			permRow{StackName: st.Name, CSRF: a.Session.CSRFToken, User: user, Perm: p})
 		return
 	}
-	http.Redirect(w, r, settingsURL(st), http.StatusSeeOther) //nolint:gosec // G710: same-site path, see settingsURL
-}
-
-// setStackEnabled enables or disables a stack (admin only). Disabled
-// stacks are skipped by the scheduler; manual jobs stay possible.
-func (s *Server) setStackEnabled(w http.ResponseWriter, r *http.Request) {
-	st, _, ok := s.loadStack(w, r, auth.ActionView)
-	if !ok {
-		return
-	}
-	enabled := r.PostFormValue("enabled") == "true"
-	if err := s.Store.SetStackEnabled(r.Context(), st.ID, enabled); err != nil {
-		s.internalError(w, r, "updating stack", err)
-		return
-	}
-	action := "stack.disable"
-	if enabled {
-		action = "stack.enable"
-	}
-	s.audit(r, store.AuditEntry{UserID: authFrom(r.Context()).User.ID, Action: action, StackID: st.ID})
 	http.Redirect(w, r, settingsURL(st), http.StatusSeeOther) //nolint:gosec // G710: same-site path, see settingsURL
 }
 

@@ -71,7 +71,7 @@ func (s *Server) renderHost(w http.ResponseWriter, r *http.Request, status int, 
 		s.internalError(w, r, "listing host schedules", err)
 		return
 	}
-	page.Schedules = s.withNextRun(list, true)
+	page.Schedules = s.withNextRun(list)
 	if page.Jobs, err = s.Store.ListHostJobs(ctx, recentHostJobs); err != nil {
 		s.internalError(w, r, "listing host jobs", err)
 		return

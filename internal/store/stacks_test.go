@@ -2,7 +2,9 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"errors"
+	"path/filepath"
 	"reflect"
 	"testing"
 )
@@ -32,9 +34,6 @@ func TestSyncStacks(t *testing.T) {
 		got := map[string]bool{}
 		for _, st := range list {
 			got[st.Name] = st.Present
-			if !st.Enabled {
-				t.Errorf("step %d: %s not enabled by default", i, st.Name)
-			}
 			if id, ok := ids[st.Name]; ok && id != st.ID {
 				t.Errorf("step %d: id of %s changed from %d to %d", i, st.Name, id, st.ID)
 			}
@@ -46,35 +45,61 @@ func TestSyncStacks(t *testing.T) {
 	}
 }
 
-func TestStackByNameAndEnabled(t *testing.T) {
+func TestStackByName(t *testing.T) {
 	s := openTest(t)
 	ctx := context.Background()
 	if err := s.SyncStacks(ctx, []string{"web"}); err != nil {
 		t.Fatal(err)
 	}
-	st, err := s.StackByName(ctx, "web")
-	if err != nil {
-		t.Fatal(err)
+	if st, err := s.StackByName(ctx, "web"); err != nil || st.Name != "web" || !st.Present {
+		t.Fatalf("StackByName = %+v, %v", st, err)
 	}
-	if err := s.SetStackEnabled(ctx, st.ID, false); err != nil {
-		t.Fatal(err)
-	}
-	st, _ = s.StackByName(ctx, "web")
-	if st.Enabled {
-		t.Fatal("stack still enabled")
-	}
-	// Disabled state survives a sync.
-	if err := s.SyncStacks(ctx, []string{"web"}); err != nil {
-		t.Fatal(err)
-	}
-	if st, _ = s.StackByName(ctx, "web"); st.Enabled {
-		t.Fatal("sync re-enabled the stack")
-	}
-
 	if _, err := s.StackByName(ctx, "missing"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("want ErrNotFound, got %v", err)
 	}
-	if err := s.SetStackEnabled(ctx, 999, true); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("want ErrNotFound, got %v", err)
+}
+
+// Migration 0016 (issue #37) drops the stack-level enabled flag: the
+// schedules of a disabled stack are disabled, the others are unchanged.
+func TestScheduleEnabledMigration(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	raw, err := sql.Open("sqlite", dbPath+"?_pragma=foreign_keys(1)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ms, err := loadMigrations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	exec := func(q string, args ...any) {
+		t.Helper()
+		if _, err := raw.ExecContext(ctx, q, args...); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	exec(`CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL) STRICT`)
+	for _, m := range ms {
+		if m.version > 15 {
+			break
+		}
+		exec(m.sql)
+		exec(`INSERT INTO schema_migrations VALUES (?, ?, '2026-11-01T00:00:00Z')`, m.version, m.name)
+	}
+	exec(`INSERT INTO stacks (id, name, enabled) VALUES (1, 'on', 1), (2, 'off', 0)`)
+	exec(`INSERT INTO schedules (id, stack_id, cron_expr, job_type, enabled) VALUES
+	      (1, 1, '@daily', 'backup', 1), (2, 1, '@weekly', 'update', 0), (3, 2, '@daily', 'backup', 1)`)
+	if err := raw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(ctx, dbPath, testBox(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	for id, want := range map[int64]bool{1: true, 2: false, 3: false} {
+		if sc, err := s.ScheduleByID(ctx, id); err != nil || sc.Enabled != want {
+			t.Errorf("schedule %d: %+v, %v; want enabled=%v", id, sc, err, want)
+		}
 	}
 }

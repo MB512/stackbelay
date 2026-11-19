@@ -9,7 +9,9 @@ All notable changes to StackVault. The format is based on
 ### Upgrading
 
 Nothing to change in the compose file. The database is migrated at
-startup (0014 and 0015 drop schedule options that no longer exist). If you
+startup (0014 and 0015 drop schedule options that no longer exist, 0016
+the stack-level enabled flag: the schedules of a disabled stack are
+disabled instead). If you
 set `STACKVAULT_MAX_JOBS=1`, consider removing it: the new default 3 lets
 the pre-stop snapshots and restores of several stacks run at the same
 time, while `STACKVAULT_MAX_DOWNTIMES` (default 1) still stops only one
@@ -58,6 +60,10 @@ directories left by older versions can be deleted by hand.
 - **Downtime timeout** (#36): `STACKVAULT_DOWNTIME_TIMEOUT` (default 1h)
   bounds stop -> final snapshot; when it runs out, the final snapshot is
   aborted, the stack started again and the job fails.
+- **No more "Disable stack"** (#37): schedules are enabled or disabled on
+  their own; the Settings tab has "Enable all" and "Disable all" for a
+  stack's schedules. Migration 0016 disables the schedules of stacks that
+  were disabled and drops `stacks.enabled`.
 - **Job timeout** raised from 6 h to 48 h and configurable on the manager
   with `STACKVAULT_JOB_TIMEOUT` (e.g. `72h`; #32). Before, the variable was
   only read by the worker and the manager did not pass it on, so large

@@ -28,7 +28,7 @@ const maxSchedulesPerStack = 20
 // scheduleRow is one schedule as shown in the UI.
 type scheduleRow struct {
 	store.Schedule
-	Next time.Time // next run; zero if the schedule or stack is disabled
+	Next time.Time // next run; zero if the schedule is disabled
 }
 
 // scheduleRows lists the schedules of st with their next run.
@@ -37,19 +37,18 @@ func (s *Server) scheduleRows(ctx context.Context, st store.Stack) ([]scheduleRo
 	if err != nil {
 		return nil, err
 	}
-	return s.withNextRun(list, st.Enabled), nil
+	return s.withNextRun(list), nil
 }
 
-// withNextRun adds the next run to schedules; none if active is false
-// (the stack is disabled).
-func (s *Server) withNextRun(list []store.Schedule, active bool) []scheduleRow {
+// withNextRun adds the next run to the enabled schedules.
+func (s *Server) withNextRun(list []store.Schedule) []scheduleRow {
 	// Cron expressions are evaluated in the manager's time zone, like the
 	// scheduler does it.
 	now := s.now().In(s.loc())
 	rows := make([]scheduleRow, 0, len(list))
 	for _, sc := range list {
 		row := scheduleRow{Schedule: sc}
-		if sc.Enabled && active {
+		if sc.Enabled {
 			if sched, err := scheduler.Parse(sc.CronExpr); err == nil {
 				row.Next = sched.Next(now)
 			}
@@ -150,6 +149,29 @@ func (s *Server) setScheduleEnabled(w http.ResponseWriter, r *http.Request) {
 	}
 	s.audit(r, store.AuditEntry{UserID: authFrom(r.Context()).User.ID, Action: action, StackID: st.ID,
 		Detail: fmt.Sprintf("schedule %d", id)})
+	s.reloadSchedules(r.Context())
+	http.Redirect(w, r, settingsURL(st), http.StatusSeeOther) //nolint:gosec // G710: same-site path, see settingsURL
+}
+
+// setAllSchedulesEnabled enables or disables all schedules of a stack
+// (admin only; issue #37: replaces the stack-level enabled flag).
+func (s *Server) setAllSchedulesEnabled(w http.ResponseWriter, r *http.Request) {
+	st, _, ok := s.loadStack(w, r, auth.ActionView)
+	if !ok {
+		return
+	}
+	enabled := r.PostFormValue("enabled") == "true"
+	n, err := s.Store.SetAllSchedulesEnabled(r.Context(), st.ID, enabled)
+	if err != nil {
+		s.internalError(w, r, "updating schedules", err)
+		return
+	}
+	action := "schedule.disable_all"
+	if enabled {
+		action = "schedule.enable_all"
+	}
+	s.audit(r, store.AuditEntry{UserID: authFrom(r.Context()).User.ID, Action: action, StackID: st.ID,
+		Detail: fmt.Sprintf("%d schedule(s) changed", n)})
 	s.reloadSchedules(r.Context())
 	http.Redirect(w, r, settingsURL(st), http.StatusSeeOther) //nolint:gosec // G710: same-site path, see settingsURL
 }
