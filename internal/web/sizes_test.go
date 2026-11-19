@@ -195,3 +195,56 @@ func TestCalculateStackSize(t *testing.T) {
 		t.Errorf("missing directory:\n%s", r.body)
 	}
 }
+
+// Pre-stop snapshots are hidden and added to the snapshot after them;
+// listed on request, and only admins may restore them (issue #35).
+func TestPreStopSnapshotsFolded(t *testing.T) {
+	e, _, bob := setupJobsEnv(t) // bob has the restore right on web
+	ctx := context.Background()
+	repo, err := e.st.RepositoryInfoForStack(ctx, func() int64 { st, _ := e.st.StackByName(ctx, "web"); return st.ID }())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t0 := time.Date(2026, 11, 13, 4, 0, 0, 0, time.UTC) // after the cached snapshot of setupJobsEnv
+	sum := func(start time.Time, d time.Duration, added uint64) *restic.SnapshotSummary {
+		return &restic.SnapshotSummary{BackupStart: start, BackupEnd: start.Add(d), DataAddedPacked: added,
+			TotalBytesProcessed: 100 << 20, TotalFilesProcessed: 10}
+	}
+	if err := e.st.ReplaceSnapshots(ctx, repo.ID, []restic.Snapshot{
+		{ID: "cccccccc11111111", ShortID: "cccccccc", Time: t0, Hostname: "h", Paths: []string{"/s/web"},
+			Tags: []string{jobs.TagPreStop}, Summary: sum(t0, 2*time.Minute, 3<<20)},
+		{ID: "dddddddd11111111", ShortID: "dddddddd", Time: t0.Add(3 * time.Minute), Hostname: "h", Paths: []string{"/s/web"},
+			Tags: []string{jobs.TagFinal}, Summary: sum(t0.Add(3*time.Minute), 10*time.Second, 1<<20)},
+	}, t0.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+
+	r := e.do(bob, http.MethodGet, "/stacks/web/backups", nil, nil)
+	for _, want := range []string{"4.0 MiB", "2 min 10 s", "Stack stopped for 10 s", "Show pre-stop snapshots"} {
+		if !strings.Contains(r.body, want) {
+			t.Errorf("Backups tab lacks %q", want)
+		}
+	}
+	if strings.Contains(r.body, "cccccccc") {
+		t.Error("pre-stop snapshot listed by default")
+	}
+
+	r = e.do(bob, http.MethodGet, "/stacks/web/backups?prestop=1", nil, nil)
+	if !strings.Contains(r.body, "<code>cccccccc</code>") || !strings.Contains(r.body, "not consistent") ||
+		strings.Contains(r.body, "restore?snapshot=cccccccc11111111") {
+		t.Errorf("pre-stop list for a non-admin:\n%s", r.body)
+	}
+	expect(t, e.do(bob, http.MethodGet, "/stacks/web/restore?snapshot=cccccccc11111111", nil, nil), http.StatusForbidden, "")
+	token := csrfOf(e, bob, "/stacks/web")
+	expect(t, e.do(bob, http.MethodPost, "/stacks/web/restore",
+		url.Values{"csrf_token": {token}, "snapshot_id": {"cccccccc11111111"}}, nil), http.StatusForbidden, "")
+
+	// Admins may, with a warning.
+	if r := e.get("/stacks/web/backups?prestop=1"); !strings.Contains(r.body, "restore?snapshot=cccccccc11111111") {
+		t.Error("no restore link for the admin")
+	}
+	if r := e.get("/stacks/web/restore?snapshot=cccccccc11111111"); r.status != http.StatusOK ||
+		!strings.Contains(r.body, "This is a pre-stop snapshot") {
+		t.Errorf("admin restore page: %d", r.status)
+	}
+}

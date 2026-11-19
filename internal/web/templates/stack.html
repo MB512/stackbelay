@@ -30,6 +30,7 @@
           hx-post="/stacks/{{.Stack.Name}}/snapshots/refresh" hx-target="#snapshots" hx-swap="outerHTML"
           hx-disabled-elt="find button">
       <input type="hidden" name="csrf_token" value="{{.CSRF}}">
+      {{- if .ShowPreStop}}<input type="hidden" name="prestop" value="1">{{end}}
       <button type="submit" class="secondary"{{if not .Repo}} disabled{{end}}>Refresh</button>
       <span class="hint busy-text">reading the repository…</span>
     </form>
@@ -47,33 +48,43 @@
   {{- if .RefreshInfo}}<p class="info" role="status">{{.RefreshInfo}}</p>{{end}}
   {{template "stack-size" .}}
   {{- if .Snapshots}}
+  {{- if .ShowPreStop}}
+  <p class="warning">Pre-stop snapshots are listed (<a href="/stacks/{{.Stack.Name}}/backups">hide them</a>). They are
+    taken while the stack runs and are not consistent: restoring one is not safe (admins only).</p>
+  {{- end}}
   <table>
     <thead><tr><th>Time</th><th>ID</th><th>Tags</th><th>Host</th>
-      <th title="What the snapshot added to the repository, after deduplication and compression">Added</th>
+      <th title="What the backup added to the repository, after deduplication and compression">Added</th>
       <th title="How long the backup took">Duration</th>{{if .CanRestore}}<th></th>{{end}}</tr></thead>
     <tbody>
-      {{- range .Snapshots}}
+      {{- range .Rows}}
       <tr{{if .Missing}} class="missing"{{end}}>
         <td>{{when .Time}}</td>
         <td><code>{{.ShortID}}</code></td>
         <td>{{range .Tags}}<span class="badge">{{.}}</span> {{end}}</td>
         <td>{{.Hostname}}{{if .Missing}} <span class="badge warn" title="No longer in the repository">removed</span>{{end}}</td>
-        {{- with .Summary}}
-        <td title="{{bytes .TotalBytesProcessed}} in {{.TotalFilesProcessed}} files backed up">{{bytes .DataAddedPacked}}</td>
-        <td>{{duration .Duration}}</td>
+        {{- if .HasSize}}
+        <td title="{{bytes .Summary.TotalBytesProcessed}} in {{.Summary.TotalFilesProcessed}} files backed up
+          {{- if .PreStops}}; including the pre-stop snapshot{{if gt .PreStops 1}}s ({{.PreStops}}){{end}}{{end}}">{{bytes .Added}}</td>
+        <td{{if .PreStops}} title="Stack stopped for {{duration .Downtime}} (final snapshot); the rest while it ran"{{end}}>{{duration .Duration}}</td>
         {{- else}}
         <td><span class="muted" title="Made before restic 0.17: no size recorded">–</span></td><td><span class="muted">–</span></td>
         {{- end}}
         {{- if $.CanRestore}}
         <td>{{if .Missing}}<span class="muted" title="No longer in the repository">Restore…</span>
+          {{- else if and .PreStop (not $.CanRestorePreStop)}}<span class="muted" title="Pre-stop snapshots are not consistent: only admins may restore them">Restore…</span>
           {{- else}}<a href="/stacks/{{$.Stack.Name}}/restore?snapshot={{.ID}}">Restore…</a>{{end}}</td>
         {{- end}}
       </tr>
       {{- end}}
     </tbody>
   </table>
-  <p class="hint">Added is what a snapshot added to the repository after deduplication and compression, not the size of
-    the stack: a final snapshot right after a pre-stop snapshot adds little. Hover it for the size backed up.</p>
+  <p class="hint">Added is what a backup added to the repository after deduplication and compression, not the size of
+    the stack. Hover it for the size backed up, and the duration for the time the stack was stopped.
+    {{- if not .ShowPreStop}} Each backup first takes a snapshot while the stack runs (pre-stop), which is not listed: its
+    size and time are part of the backup's row.
+    {{- with .HiddenPreStop}} {{.}} pre-stop snapshot{{if ne . 1}}s{{end}} without a final snapshot after {{if ne . 1}}them{{else}}it{{end}} (a backup that failed or is still running) {{if ne . 1}}are{{else}}is{{end}} not shown.{{end}}
+    <a href="/stacks/{{.Stack.Name}}/backups?prestop=1">Show pre-stop snapshots</a> (advanced).{{end}}</p>
   {{- else}}
   <p class="hint">{{if not .Repo}}No snapshots: the stack has no repository.
     {{- else}}No snapshots{{if .Repo.SnapshotsRefreshedAt.IsZero}} cached yet. Use Refresh to load the list{{end}}.{{end}}</p>

@@ -6,6 +6,11 @@
 <div class="card wide">
   <p>Snapshot <code>{{.Snapshot.ShortID}}</code> from <strong>{{when .Snapshot.Time}}</strong>
     (host {{.Snapshot.Hostname}}{{range .Snapshot.Tags}}, <span class="badge">{{.}}</span>{{end}}).</p>
+  {{- if .PreStop}}
+  <p class="warning">This is a pre-stop snapshot: it was taken while the stack was running, so its files may not be
+    consistent (e.g. a database in the middle of a write). Restore the final snapshot of the same backup instead, unless
+    you know what you are doing.</p>
+  {{- end}}
   {{- if .Incomplete}}
   <p class="warning">The last restore of this stack did not complete. This restore continues it: only missing and
     changed files are downloaded{{if not .Import}}, and no safety snapshot of the partly restored directory is

@@ -33,6 +33,11 @@ All notable changes to StackVault. The format is based on
   options "Snapshot before stopping" (backup, update, schedules) and the
   worker flags `--pre-stop` / `--no-pre-stop` are gone; migration 0015
   drops `schedules.pre_stop`.
+- **Snapshot list without pre-stop snapshots** (#35): each backup's row
+  shows what the backup added and how long it took in total (pre-stop and
+  final snapshot together); the tooltip shows how long the stack was
+  stopped. "Show pre-stop snapshots" lists them on their own. Restoring a
+  pre-stop snapshot is admin-only and warns that it may not be consistent.
 - **Job timeout** raised from 6 h to 48 h and configurable on the manager
   with `STACKVAULT_JOB_TIMEOUT` (e.g. `72h`; #32). Before, the variable was
   only read by the worker and the manager did not pass it on, so large

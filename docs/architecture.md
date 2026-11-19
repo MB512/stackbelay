@@ -735,6 +735,18 @@ the backup summary restic >= 0.17 records in every snapshot).
   (`total_bytes_processed`, files) is the tooltip. Above the list:
   "Stack size at the last backup" from the newest snapshot with a
   summary. Snapshots without summary (restic < 0.17) show "–".
+- **Pre-stop snapshots** (issue #35) are not listed by default
+  (`snapshotRows`): every backup takes one (issue #34), and they are not
+  consistent. Each listed snapshot shows its own size added and duration
+  plus those of the pre-stop snapshots directly before it (usually the
+  one of the same backup; more if earlier backups failed after theirs),
+  so a row says what the backup cost; the duration's tooltip shows the
+  final snapshot's own duration as the time the stack was stopped.
+  Pre-stop snapshots newer than the newest other snapshot (a backup that
+  failed or still runs) are counted in a hint. "Show pre-stop snapshots"
+  (`?prestop=1`, advanced) lists every snapshot with its own values and a
+  warning. Restoring a pre-stop snapshot is admin-only (link, form and
+  action); its restore page warns that it may not be consistent.
 - **Size on disk** ("Calculate" next to it, view right; also before the
   first backup, to estimate it): the manager walks the stack directory
   read-only (`measureDir`: regular files, apparent size, symlinks not

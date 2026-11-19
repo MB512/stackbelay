@@ -101,6 +101,8 @@ type restorePage struct {
 	// Incomplete: the last restore into the stack directory did not
 	// complete; this one continues it.
 	Incomplete bool
+	// PreStop: the snapshot was taken while the stack ran (admins only).
+	PreStop bool
 	// ForeignHost: the snapshot is from another host (the stack's source
 	// host); host-specific settings may not fit this host.
 	ForeignHost bool
@@ -149,10 +151,25 @@ func (s *Server) restoreForm(w http.ResponseWriter, r *http.Request) {
 		s.renderError(w, r, http.StatusNotFound, "Snapshot not found. Refresh the snapshot list and try again.")
 		return
 	}
+	if !s.mayRestoreSnapshot(w, r, sn) {
+		return
+	}
 	s.render(w, r, http.StatusOK, "restore.html", pageData{Title: "Restore " + st.Name,
 		Error: s.jobsUnavailable(), Data: restorePage{Stack: st, Snapshot: sn, Import: !st.Present,
 			Incomplete:  stacks.RestoreIncomplete(filepath.Join(s.StacksRoot, st.Name)),
+			PreStop:     isPreStop(sn),
 			ForeignHost: s.foreignSource(st), ThisHost: s.Hostname}})
+}
+
+// mayRestoreSnapshot refuses a pre-stop snapshot to non-admins (issue
+// #35): it was taken while the stack ran and is not consistent. On
+// refusal the response has been written.
+func (s *Server) mayRestoreSnapshot(w http.ResponseWriter, r *http.Request, sn store.CachedSnapshot) bool {
+	if isPreStop(sn) && !authFrom(r.Context()).User.IsAdmin {
+		s.renderError(w, r, http.StatusForbidden, "Pre-stop snapshots are not consistent: only admins may restore them.")
+		return false
+	}
+	return true
 }
 
 // loadRestoreStack is loadStack for the restore right; another host's
@@ -193,6 +210,9 @@ func (s *Server) startRestore(w http.ResponseWriter, r *http.Request) {
 	}
 	if !found {
 		s.renderError(w, r, http.StatusBadRequest, "Snapshot not found. Refresh the snapshot list and try again.")
+		return
+	}
+	if !s.mayRestoreSnapshot(w, r, sn) {
 		return
 	}
 	limit, err := parseDownloadLimit(r.PostFormValue("limit_download"))

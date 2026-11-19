@@ -118,6 +118,16 @@ type backupsTab struct {
 	CanRestore  bool
 	Repo        *store.RepositoryInfo // nil = no repository configured
 	Snapshots   []store.CachedSnapshot
+	// Rows is the snapshot list as shown (issue #35): without pre-stop
+	// snapshots, whose sizes and durations are added to the snapshot after
+	// them, unless ShowPreStop. HiddenPreStop counts the pre-stop
+	// snapshots without a following snapshot (not in any row).
+	Rows          []snapshotRow
+	ShowPreStop   bool
+	HiddenPreStop int
+	// CanRestorePreStop: pre-stop snapshots are not consistent; only
+	// admins may restore them.
+	CanRestorePreStop bool
 	// CSRF and the refresh result, for the "snapshots" partial, which is
 	// also rendered on its own as the answer to an HTMX refresh.
 	CSRF                      string
@@ -233,7 +243,9 @@ func (s *Server) loadBackupsTab(r *http.Request, st store.Stack, perm store.Perm
 		stackHeader: s.newStackHeader(a.User, perm, st, tabBackups),
 		CanRestore:  s.mayRestore(a.User, perm, st),
 		CSRF:        a.Session.CSRFToken,
+		ShowPreStop: r.FormValue("prestop") == "1",
 	}
+	page.CanRestorePreStop = page.CanRestore && a.User.IsAdmin
 	scheds, err := s.scheduleRows(r.Context(), st)
 	if err != nil {
 		return page, err
@@ -252,6 +264,7 @@ func (s *Server) loadBackupsTab(r *http.Request, st store.Stack, perm store.Perm
 	if page.Snapshots, err = s.Store.StackSnapshots(r.Context(), repo.ID, st.Name, s.snapshotHost(st)); err != nil {
 		return page, err
 	}
+	page.Rows, page.HiddenPreStop = snapshotRows(page.Snapshots, page.ShowPreStop)
 	all, err := s.Store.ListSnapshots(r.Context(), repo.ID)
 	page.Host, page.OtherSnapshots = s.snapshotHost(st), len(all)-len(page.Snapshots)
 	page.ForeignHost = s.foreignSource(st)
@@ -295,7 +308,11 @@ func (s *Server) refreshStackSnapshots(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !isHTMX(r) {
-		http.Redirect(w, r, "/stacks/"+url.PathEscape(st.Name)+"/"+tabBackups, http.StatusSeeOther)
+		target := "/stacks/" + url.PathEscape(st.Name) + "/" + tabBackups
+		if r.FormValue("prestop") == "1" {
+			target += "?prestop=1"
+		}
+		http.Redirect(w, r, target, http.StatusSeeOther)
 		return
 	}
 	page, err := s.loadBackupsTab(r, st, perm)
