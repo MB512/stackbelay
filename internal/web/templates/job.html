@@ -11,7 +11,7 @@
   {{- if .LogCut}}<p class="hint">Only the end of the log is shown.</p>{{end}}
   <div class="log" id="job-log" role="log">{{range .Log}}{{template "log-line" .}}{{end}}</div>
   {{- if not .Log}}
-  <p class="hint" id="job-log-empty">{{if .Job.State.Final}}No log.{{else}}The log appears when the worker starts.{{end}}</p>
+  <p class="hint" id="job-log-empty">{{if .LogDeleted}}The log was deleted: jobs keep their log for {{.RetentionDays}} days (<code>STACKVAULT_JOB_LOG_RETENTION</code>).{{else if .Job.State.Final}}No log.{{else}}The log appears when the worker starts.{{end}}</p>
   {{- end}}
 </div>
 <script src="{{asset "joblog.js"}}" defer></script>

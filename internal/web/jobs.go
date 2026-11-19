@@ -313,6 +313,11 @@ type jobPage struct {
 	LogOffset int64 // byte offset in log.txt after the shown lines; the live stream continues there
 	CanCancel bool
 	CSRF      string
+	// LogDeleted: the job finished before the log retention period, so its
+	// directory (and log) was deleted (issue #16); RetentionDays is the
+	// period in days.
+	LogDeleted    bool
+	RetentionDays int
 }
 
 // jobDetail shows a job with its log. While the job is not final,
@@ -329,6 +334,9 @@ func (s *Server) jobDetail(w http.ResponseWriter, r *http.Request) {
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			s.Logger.Warn("reading job log", "job_id", j.ID, "error", err)
 		}
+		page.LogDeleted = errors.Is(err, os.ErrNotExist) && s.JobLogRetention > 0 && j.State.Final() &&
+			!j.FinishedAt.IsZero() && s.now().Sub(j.FinishedAt) > s.JobLogRetention
+		page.RetentionDays = int(s.JobLogRetention.Hours() / 24)
 	}
 	title := fmt.Sprintf("%s of %s", capitalize(string(j.Type)), j.StackName)
 	if j.Type.Host() {

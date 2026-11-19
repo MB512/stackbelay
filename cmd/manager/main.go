@@ -94,6 +94,8 @@ func run(ctx context.Context, getenv func(string) string, readFile func(string) 
 		// entered by an admin, before it is saved.
 		RepoSnapshots: resticCLI,
 		JobsDir:       cfg.JobsDir(),
+		// Job directories are deleted by the dispatcher after this.
+		JobLogRetention: cfg.JobLogRetention,
 		// Container logs: read-only "docker compose logs/ps" for
 		// discovered stacks (see docs/security.md, rule 3).
 		StacksRoot: cfg.StacksRoot,
@@ -328,5 +330,6 @@ func newDispatcher(ctx context.Context, cfg config.Manager, st *store.Store, sna
 	return &dispatch.Dispatcher{
 		Store: st, Docker: cli, Template: tpl, JobsDir: cfg.JobsDir(), Snapshots: snaps,
 		Logger: log, MaxRunning: cfg.MaxJobs, MaxDowntimes: cfg.MaxDowntimes, CleanupImageMinAge: cfg.CleanupImageMinAge,
+		LogRetention: cfg.JobLogRetention,
 	}, nil
 }

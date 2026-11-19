@@ -47,6 +47,9 @@ type Server struct {
 	Schedules ScheduleReloader
 	// JobsDir is the jobs directory (for job logs).
 	JobsDir string
+	// JobLogRetention: job directories of jobs finished longer ago are
+	// deleted by the dispatcher (issue #16); the job page says so. 0 = kept.
+	JobLogRetention time.Duration
 	// StacksRoot is STACKS_ROOT; stack directories are looked up there by
 	// discovery (stacks.Lookup), never taken from the URL.
 	StacksRoot string

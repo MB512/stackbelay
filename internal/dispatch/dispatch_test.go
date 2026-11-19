@@ -840,3 +840,52 @@ func TestDowntimeSlots(t *testing.T) {
 		t.Fatal("slot not passed on after web ended")
 	}
 }
+
+// Job directories of jobs that finished before the retention period are
+// deleted; newer, running and queued ones stay, and so do all job rows
+// (issue #16).
+func TestCleanupJobDirs(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	e.d.LogRetention = 90 * 24 * time.Hour
+	now := e.now()
+	web, _ := e.st.StackByName(ctx, "web")
+	mk := func(id string, state jobs.State, finished time.Time) {
+		t.Helper()
+		j := store.Job{ID: id, StackID: web.ID, Type: jobs.TypeBackup, Trigger: store.TriggerSchedule, State: state,
+			QueuedAt: now.Add(-100 * 24 * time.Hour), StartedAt: now.Add(-100 * 24 * time.Hour), FinishedAt: finished}
+		if err := e.st.ImportJob(ctx, j, ""); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(filepath.Join(e.jobsDir, id), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(e.jobsDir, id, jobs.LogFile), []byte("{}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mk("01AAAAAAAAAAAAAAAAAAAAAAA1", jobs.StateSucceeded, now.Add(-91*24*time.Hour)) // old: deleted
+	mk("01AAAAAAAAAAAAAAAAAAAAAAA2", jobs.StateFailed, now.Add(-95*24*time.Hour))    // old, failed: deleted too
+	mk("01AAAAAAAAAAAAAAAAAAAAAAA3", jobs.StateSucceeded, now.Add(-89*24*time.Hour)) // within the period
+	mk("01AAAAAAAAAAAAAAAAAAAAAAA4", jobs.StateRunning, time.Time{})                 // running: never
+	e.d.CleanupJobDirs(ctx)
+	for id, want := range map[string]bool{
+		"01AAAAAAAAAAAAAAAAAAAAAAA1": false, "01AAAAAAAAAAAAAAAAAAAAAAA2": false,
+		"01AAAAAAAAAAAAAAAAAAAAAAA3": true, "01AAAAAAAAAAAAAAAAAAAAAAA4": true,
+	} {
+		_, err := os.Stat(filepath.Join(e.jobsDir, id))
+		if exists := err == nil; exists != want {
+			t.Errorf("%s: directory exists = %v, want %v", id, exists, want)
+		}
+		if _, err := e.st.JobByID(ctx, id); err != nil {
+			t.Errorf("%s: job row gone: %v", id, err)
+		}
+	}
+	// Off: nothing is deleted.
+	e.d.LogRetention = 0
+	mk("01AAAAAAAAAAAAAAAAAAAAAAA5", jobs.StateSucceeded, now.Add(-400*24*time.Hour))
+	e.d.CleanupJobDirs(ctx)
+	if _, err := os.Stat(filepath.Join(e.jobsDir, "01AAAAAAAAAAAAAAAAAAAAAAA5")); err != nil {
+		t.Errorf("deleted although retention is off: %v", err)
+	}
+}

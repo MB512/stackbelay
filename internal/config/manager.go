@@ -35,6 +35,11 @@ type Manager struct {
 	// the same time (STACKVAULT_MAX_DOWNTIMES, default 1, issue #36): the
 	// downtime slots of backups, updates and compose applies.
 	MaxDowntimes int
+	// JobLogRetention: job directories (log, status, spec) of jobs that
+	// finished longer ago are deleted; the job rows stay
+	// (STACKVAULT_JOB_LOG_RETENTION, default 2160h = 90 days, 0 = keep
+	// forever; issue #16).
+	JobLogRetention time.Duration
 	// DowntimeTimeout is passed to every worker (STACKVAULT_DOWNTIME_TIMEOUT,
 	// default DefaultDowntimeTimeout).
 	DowntimeTimeout time.Duration
@@ -85,6 +90,8 @@ func LoadManager(getenv func(string) string, readFile func(string) ([]byte, erro
 		MaxJobs:      3,
 		MaxDowntimes: 1,
 
+		JobLogRetention: 90 * 24 * time.Hour,
+
 		CleanupImageMinAge: 7 * 24 * time.Hour,
 	}
 	c.StacksRoot, errs = absPath(getenv, "STACKS_ROOT", "", errs)
@@ -115,6 +122,14 @@ func LoadManager(getenv func(string) string, readFile func(string) ([]byte, erro
 			errs = append(errs, fmt.Errorf("STACKVAULT_CLEANUP_IMAGE_MIN_AGE: invalid duration %q (whole hours, e.g. 168h; 0 to 87600h)", v))
 		} else {
 			c.CleanupImageMinAge = d
+		}
+	}
+	if v := getenv("STACKVAULT_JOB_LOG_RETENTION"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d < 0 || (d > 0 && d < 24*time.Hour) {
+			errs = append(errs, fmt.Errorf("STACKVAULT_JOB_LOG_RETENTION: invalid duration %q (at least 24h, e.g. 2160h for 90 days; 0 keeps the logs forever)", v))
+		} else {
+			c.JobLogRetention = d
 		}
 	}
 	if v := getenv("STACKVAULT_ENABLE_SHELL"); v != "" {

@@ -16,7 +16,9 @@ set `STACKVAULT_MAX_JOBS=1`, consider removing it: the new default 3 lets
 the pre-stop snapshots and restores of several stacks run at the same
 time, while `STACKVAULT_MAX_DOWNTIMES` (default 1) still stops only one
 stack at a time. `<stack>.restore-tmp` and `<stack>.old-<time>`
-directories left by older versions can be deleted by hand.
+directories left by older versions can be deleted by hand. Logs of jobs
+older than 90 days are deleted on the first start; set
+`STACKVAULT_JOB_LOG_RETENTION=0` beforehand to keep them.
 
 ### Added
 
@@ -28,6 +30,10 @@ directories left by older versions can be deleted by hand.
   into the manager at `/root/.docker` (or just its `config.json`) is
   passed read-only to every worker, so updates and pinned restores can pull
   private images; see "Private registries" in the README.
+- **Old job logs are deleted** (#16): the job directories (log, status)
+  of jobs that finished more than 90 days ago are removed
+  (`STACKVAULT_JOB_LOG_RETENTION`, `0` keeps them); the jobs stay in the
+  lists.
 
 ### Changed
 

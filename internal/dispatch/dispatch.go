@@ -51,6 +51,9 @@ type Dispatcher struct {
 	// CleanupImageMinAge is the minimum age rule of host cleanups (see
 	// jobs.CleanupOptions); images replaced by updates within it are kept.
 	CleanupImageMinAge time.Duration
+	// LogRetention: the job directories of jobs that finished longer ago
+	// are deleted (issue #16); 0 keeps them forever.
+	LogRetention time.Duration
 	// PollInterval is how often running jobs are checked; default 2s.
 	PollInterval time.Duration
 	// Now returns the current time; defaults to time.Now.
@@ -134,14 +137,56 @@ func (d *Dispatcher) Run(ctx context.Context) {
 	d.Reconcile(ctx)
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
+	var lastCleanup time.Time
 	for {
 		d.Step(ctx)
+		if now := d.now(); now.Sub(lastCleanup) >= jobDirCleanupInterval {
+			d.CleanupJobDirs(ctx)
+			lastCleanup = now
+		}
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
 		case <-d.wakeChan():
 		}
+	}
+}
+
+// jobDirCleanupInterval is how often old job directories are deleted.
+const jobDirCleanupInterval = 6 * time.Hour
+
+// CleanupJobDirs deletes the job directories (log, status, spec, progress)
+// of jobs that finished more than LogRetention ago (issue #16). The job
+// rows stay, so job lists and the stack list keep their history; the job
+// page says that the log was deleted. Queued and running jobs are never
+// touched.
+func (d *Dispatcher) CleanupJobDirs(ctx context.Context) {
+	if d.LogRetention <= 0 {
+		return
+	}
+	ids, err := d.Store.JobsFinishedBefore(ctx, d.now().Add(-d.LogRetention))
+	if err != nil {
+		d.Logger.Error("cleaning up job directories", "error", err)
+		return
+	}
+	removed := 0
+	for _, id := range ids {
+		if !jobs.ValidJobID(id) {
+			continue
+		}
+		dir := d.jobDir(id)
+		if _, err := os.Lstat(dir); errors.Is(err, fs.ErrNotExist) {
+			continue // deleted before
+		}
+		if err := os.RemoveAll(dir); err != nil {
+			d.Logger.Warn("deleting old job directory", "job_id", id, "error", err)
+			continue
+		}
+		removed++
+	}
+	if removed > 0 {
+		d.Logger.Info("deleted old job directories", "count", removed, "older_than", d.LogRetention.String())
 	}
 }
 

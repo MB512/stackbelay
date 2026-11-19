@@ -70,6 +70,7 @@ compose, so they are never affected by stopping a stack.
 | `STACKVAULT_MAX_DOWNTIMES` | jobs that may keep a stack stopped at the same time (downtime slots, see "Downtime slots"), default `1` |
 | `STACKVAULT_DOWNTIME_TIMEOUT` | limit for stop -> final snapshot of a backup, update or compose apply (Go duration, at least `1m`), default `1h`; passed to every worker |
 | `STACKVAULT_JOB_TIMEOUT` | hard limit for one job (Go duration, at least `1m`), default `48h`; passed to every worker (issue #32) |
+| `STACKVAULT_JOB_LOG_RETENTION` | job directories (logs) of jobs finished longer ago are deleted, the job rows stay; Go duration, at least `24h`, default `2160h` (90 days), `0` keeps them (issue #16) |
 | `STACKVAULT_CLEANUP_IMAGE_MIN_AGE` | host cleanup: keep dangling images pulled, tagged or replaced by an update less than this long ago, whole hours, default `168h`; see "Host cleanup" |
 | `STACKVAULT_ENABLE_SHELL` | admin-only container shells ("Shell" per container on the Status tab), default `false`; see "Container shell" |
 | `STACKVAULT_LOG_LEVEL` | `debug`, `info`, `warn`, `error` |
@@ -1076,6 +1077,14 @@ waits for its downtime slot shows the phase "waiting for a downtime slot".
 
 The worker appends to `/job/log.txt` as JSON lines (`log/slog`; secrets
 redacted before writing).
+
+Job directories (log, status, spec, progress) of jobs that finished more
+than `STACKVAULT_JOB_LOG_RETENTION` ago (default `2160h` = 90 days; `0`
+keeps them) are deleted by the dispatcher, at start and every 6 hours
+(`CleanupJobDirs`, issue #16). One rule for every final state; queued and
+running jobs are never touched. The job rows stay, so job lists, the stack
+list and results keep their history; the job page says that the log was
+deleted.
 
 - `GET /jobs/{id}/events?offset=N` streams a job as Server-Sent Events
   (`text/event-stream`): `line` (one log line as server-rendered HTML; event

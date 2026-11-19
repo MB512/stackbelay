@@ -23,7 +23,7 @@ func TestLoadManagerDefaults(t *testing.T) {
 	if c.DataDir != "/data" || c.ListenAddr != ":8080" || c.SessionTTL != 12*time.Hour ||
 		c.AllowInsecureHTTP || c.WorkerImage != "" || len(c.SecretKey) != 32 || c.MaxJobs != 3 || c.EnableShell ||
 		c.CleanupImageMinAge != 168*time.Hour || c.JobTimeout != 48*time.Hour || c.MaxDowntimes != 1 ||
-		c.DowntimeTimeout != time.Hour {
+		c.DowntimeTimeout != time.Hour || c.JobLogRetention != 90*24*time.Hour {
 		t.Fatalf("unexpected config %+v", c)
 	}
 	if c.DBPath() != "/data/stackvault.db" || c.JobsDir() != "/data/jobs" {
@@ -93,6 +93,7 @@ func TestLoadManagerErrors(t *testing.T) {
 		{"bad bool", map[string]string{"STACKVAULT_ALLOW_INSECURE_HTTP": "maybe"}, []string{"STACKVAULT_ALLOW_INSECURE_HTTP"}},
 		{"bad ttl", map[string]string{"STACKVAULT_SESSION_TTL": "5s"}, []string{"STACKVAULT_SESSION_TTL"}},
 		{"bad max jobs", map[string]string{"STACKVAULT_MAX_JOBS": "0"}, []string{"STACKVAULT_MAX_JOBS"}},
+		{"short log retention", map[string]string{"STACKVAULT_JOB_LOG_RETENTION": "1h"}, []string{"STACKVAULT_JOB_LOG_RETENTION"}},
 		{"bad max downtimes", map[string]string{"STACKVAULT_MAX_DOWNTIMES": "33"}, []string{"STACKVAULT_MAX_DOWNTIMES"}},
 		{"bad downtime timeout", map[string]string{"STACKVAULT_DOWNTIME_TIMEOUT": "10s"}, []string{"STACKVAULT_DOWNTIME_TIMEOUT"}},
 		{"bad cleanup age", map[string]string{"STACKVAULT_CLEANUP_IMAGE_MIN_AGE": "90m"}, []string{"STACKVAULT_CLEANUP_IMAGE_MIN_AGE"}},

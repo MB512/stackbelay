@@ -198,6 +198,7 @@ Environment variables only:
 | `STACKVAULT_MAX_JOBS` | jobs running at the same time across all stacks (disk and network load), default `3` |
 | `STACKVAULT_MAX_DOWNTIMES` | jobs that may keep a stack stopped at the same time, default `1`: a backup or update takes its snapshot while the stack runs and only then waits for this slot, so a long backup or restore does not hold up the other stacks |
 | `STACKVAULT_DOWNTIME_TIMEOUT` | limit for the time a backup or update keeps a stack stopped until its final snapshot, e.g. `2h`, default `1h`; when it runs out, the final snapshot is aborted and the stack started again (the job fails) |
+| `STACKVAULT_JOB_LOG_RETENTION` | logs of jobs that finished longer ago are deleted (the job list keeps them, without log), e.g. `720h` for 30 days, default `2160h` (90 days), `0` keeps them forever |
 | `STACKVAULT_CLEANUP_IMAGE_MIN_AGE` | host cleanup: keep unused untagged images pulled or replaced by an update less than this long ago, whole hours, default `168h` |
 | `STACKVAULT_ENABLE_SHELL` | `true` gives admins a shell in stack containers ("Shell" per container on the Status tab), default `false` |
 | `STACKVAULT_LOG_LEVEL` | `debug`, `info`, `warn`, `error` |

@@ -304,3 +304,30 @@ func TestNewBackupCell(t *testing.T) {
 		})
 	}
 }
+
+// A job whose directory was deleted after the log retention says so on its
+// page instead of "No log." (issue #16).
+func TestJobLogDeleted(t *testing.T) {
+	e := newEnv(t, true, true)
+	webID, _ := e.setupStacks()
+	ctx := context.Background()
+	e.server.JobsDir = t.TempDir()
+	e.server.JobLogRetention = 90 * 24 * time.Hour
+	now := e.clock()
+	for id, finished := range map[string]time.Time{
+		"01AAAAAAAAAAAAAAAAAAAAAAA1": now.Add(-100 * 24 * time.Hour),
+		"01AAAAAAAAAAAAAAAAAAAAAAA2": now.Add(-time.Hour),
+	} {
+		if err := e.st.ImportJob(ctx, store.Job{ID: id, StackID: webID, Type: jobs.TypeBackup, Trigger: store.TriggerSchedule,
+			State: jobs.StateSucceeded, QueuedAt: finished, StartedAt: finished, FinishedAt: finished}, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	e.loginAdmin()
+	if r := e.get("/jobs/01AAAAAAAAAAAAAAAAAAAAAAA1"); !strings.Contains(r.body, "The log was deleted: jobs keep their log for 90 days") {
+		t.Errorf("old job:\n%s", r.body)
+	}
+	if r := e.get("/jobs/01AAAAAAAAAAAAAAAAAAAAAAA2"); !strings.Contains(r.body, "No log.") || strings.Contains(r.body, "was deleted") {
+		t.Errorf("recent job without log:\n%s", r.body)
+	}
+}

@@ -349,6 +349,28 @@ func (s *Store) lastImageChanges(ctx context.Context, types ...jobs.Type) (map[i
 	return out, rows.Err()
 }
 
+// JobsFinishedBefore returns the ids of the jobs that finished (any final
+// state) before t, oldest first. Used to delete old job directories (issue
+// #16); the rows themselves stay.
+func (s *Store) JobsFinishedBefore(ctx context.Context, t time.Time) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id FROM jobs WHERE state IN (?, ?, ?) AND finished_at IS NOT NULL AND finished_at < ? ORDER BY id`,
+		jobs.StateSucceeded, jobs.StateFailed, jobs.StateCancelled, formatTime(t))
+	if err != nil {
+		return nil, fmt.Errorf("listing old jobs: %w", err)
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("listing old jobs: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
 // ActiveJobs returns the running jobs of all stacks, then the queued ones,
 // each oldest first.
 func (s *Store) ActiveJobs(ctx context.Context) ([]Job, error) {
