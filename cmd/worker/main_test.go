@@ -180,16 +180,19 @@ func TestParseRestoreArgs(t *testing.T) {
 }
 
 func TestParseUpdateArgs(t *testing.T) {
-	spec, _, err := parseArgs([]string{"update", "--only-if-new", "--no-pre-stop", "web"})
+	spec, _, err := parseArgs([]string{"update", "--only-if-new", "web"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := jobs.Spec{Type: jobs.TypeUpdate, Stack: "web", OnlyIfNew: true, NoPreStop: true}
+	want := jobs.Spec{Type: jobs.TypeUpdate, Stack: "web", OnlyIfNew: true}
 	if !reflect.DeepEqual(spec, want) {
 		t.Fatalf("got %+v, want %+v", spec, want)
 	}
-	if _, _, err := parseArgs([]string{"update", "--rollback-in-place", "web"}); !errors.Is(err, errUsage) {
-		t.Fatalf("removed flag --rollback-in-place accepted: %v", err)
+	for _, removed := range [][]string{{"update", "--rollback-in-place", "web"}, {"update", "--no-pre-stop", "web"},
+		{"backup", "--pre-stop", "web"}} {
+		if _, _, err := parseArgs(removed); !errors.Is(err, errUsage) {
+			t.Fatalf("removed flag accepted: %v: %v", removed, err)
+		}
 	}
 }
 

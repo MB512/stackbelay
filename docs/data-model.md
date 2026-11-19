@@ -66,7 +66,7 @@ CREATE TABLE schedules (
   id          INTEGER PRIMARY KEY,
   stack_id    INTEGER REFERENCES stacks(id) ON DELETE CASCADE, -- NULL = host schedule (migration 0011)
   cron_expr   TEXT NOT NULL,
-  pre_stop    INTEGER NOT NULL DEFAULT 0,   -- take pre-stop snapshot first
+  -- pre_stop was dropped by migration 0015 (issue #34: every backup takes a pre-stop snapshot)
   enabled     INTEGER NOT NULL DEFAULT 1,
   -- migration 0008:
   job_type    TEXT NOT NULL DEFAULT 'backup' CHECK (job_type IN ('backup', 'update', 'cleanup')),
@@ -83,7 +83,7 @@ CREATE TABLE jobs (
   trigger       TEXT NOT NULL,              -- manual | schedule
   requested_by  INTEGER REFERENCES users(id), -- NULL for schedule
   state         TEXT NOT NULL,              -- queued | running | succeeded | failed | cancelled
-  options       TEXT NOT NULL DEFAULT '{}', -- JSON (pre_stop, snapshot id, ...)
+  options       TEXT NOT NULL DEFAULT '{}', -- JSON (snapshot id, only_if_new, ...)
   snapshot_id   TEXT,
   error         TEXT,
   queued_at     TEXT NOT NULL,

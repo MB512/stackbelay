@@ -179,7 +179,7 @@ func TestDispatchLifecycle(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
 
-	b1 := e.submit("web", jobs.TypeBackup, store.JobOptions{PreStop: true})
+	b1 := e.submit("web", jobs.TypeBackup, store.JobOptions{})
 	r1 := e.submit("web", jobs.TypeRestore, store.JobOptions{SnapshotID: "aaaaaaaa11111111"})
 	b2 := e.submit("db", jobs.TypeBackup, store.JobOptions{})
 	e.d.Step(ctx)
@@ -210,7 +210,7 @@ func TestDispatchLifecycle(t *testing.T) {
 		t.Fatalf("job mount: %+v", cs.Mounts[2])
 	}
 	spec, err := jobs.ReadSpec(filepath.Join(e.jobsDir, b1.ID))
-	if err != nil || spec.Stack != "web" || spec.Type != jobs.TypeBackup || !spec.PreStop {
+	if err != nil || spec.Stack != "web" || spec.Type != jobs.TypeBackup {
 		t.Fatalf("spec.json: %+v %v", spec, err)
 	}
 	raw, _ := os.ReadFile(filepath.Join(e.jobsDir, b1.ID, jobs.SpecFile))

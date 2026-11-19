@@ -5,9 +5,9 @@
 // Usage:
 //
 //	worker run <job-dir>
-//	worker backup  [--pre-stop] <stack>
+//	worker backup  <stack>
 //	worker restore [--no-start] [--pin-images] [--import] [--limit-download <KiB/s>] <stack> <snapshot-id>
-//	worker update  [--no-backup] [--only-if-new] [--no-pre-stop] <stack>
+//	worker update  [--no-backup] [--only-if-new] <stack>
 //	worker stop|start|restart|up|down <stack>
 //	worker cleanup [--image-min-age <duration>]
 //
@@ -47,9 +47,9 @@ import (
 
 const usage = `usage:
   worker run <job-dir>
-  worker backup  [--pre-stop] <stack>
+  worker backup  <stack>
   worker restore [--no-start] [--pin-images] [--import] [--limit-download <KiB/s>] <stack> <snapshot-id>
-  worker update  [--no-backup] [--only-if-new] [--no-pre-stop] <stack>
+  worker update  [--no-backup] [--only-if-new] <stack>
   worker stop|start|restart|up|down <stack>
   worker cleanup [--image-min-age <duration>]
 `
@@ -215,11 +215,10 @@ func parseArgs(args []string) (jobs.Spec, string, error) {
 	case "backup":
 		fs := flag.NewFlagSet("backup", flag.ContinueOnError)
 		fs.SetOutput(io.Discard)
-		preStop := fs.Bool("pre-stop", false, "take a snapshot before stopping the stack")
 		if err := fs.Parse(args[1:]); err != nil || fs.NArg() != 1 {
-			return jobs.Spec{}, "", fmt.Errorf("%w: backup expects [--pre-stop] <stack>", errUsage)
+			return jobs.Spec{}, "", fmt.Errorf("%w: backup expects <stack>", errUsage)
 		}
-		return jobs.Spec{Type: jobs.TypeBackup, Stack: fs.Arg(0), PreStop: *preStop}, "", nil
+		return jobs.Spec{Type: jobs.TypeBackup, Stack: fs.Arg(0)}, "", nil
 
 	case "restore":
 		fs := flag.NewFlagSet("restore", flag.ContinueOnError)
@@ -240,12 +239,10 @@ func parseArgs(args []string) (jobs.Spec, string, error) {
 		fs.SetOutput(io.Discard)
 		noBackup := fs.Bool("no-backup", false, "update without snapshots and without rollback (no repository)")
 		onlyIfNew := fs.Bool("only-if-new", false, "stop after the pull if no running service gets a new image")
-		noPreStop := fs.Bool("no-pre-stop", false, "no snapshot while the stack still runs")
 		if err := fs.Parse(args[1:]); err != nil || fs.NArg() != 1 {
-			return jobs.Spec{}, "", fmt.Errorf("%w: update expects [--no-backup] [--only-if-new] [--no-pre-stop] <stack>", errUsage)
+			return jobs.Spec{}, "", fmt.Errorf("%w: update expects [--no-backup] [--only-if-new] <stack>", errUsage)
 		}
-		return jobs.Spec{Type: jobs.TypeUpdate, Stack: fs.Arg(0), NoBackup: *noBackup, OnlyIfNew: *onlyIfNew,
-			NoPreStop: *noPreStop}, "", nil
+		return jobs.Spec{Type: jobs.TypeUpdate, Stack: fs.Arg(0), NoBackup: *noBackup, OnlyIfNew: *onlyIfNew}, "", nil
 
 	case "cleanup":
 		fs := flag.NewFlagSet("cleanup", flag.ContinueOnError)
@@ -297,7 +294,7 @@ func execute(ctx context.Context, p *jobs.Pipeline, cfg config.Worker, spec jobs
 	}
 	switch spec.Type {
 	case jobs.TypeBackup:
-		res, err := p.Backup(ctx, stack, jobs.BackupOptions{PreStop: spec.PreStop})
+		res, err := p.Backup(ctx, stack)
 		status.Snapshot, status.PreStopSnapshot = res.Snapshot, res.PreStopSnapshot
 		return err
 	case jobs.TypeRestore:
@@ -309,7 +306,7 @@ func execute(ctx context.Context, p *jobs.Pipeline, cfg config.Worker, spec jobs
 		return err
 	case jobs.TypeUpdate:
 		res, err := p.Update(ctx, stack, jobs.UpdateOptions{Backup: !spec.NoBackup, CarryOver: spec.CarryOverJobs,
-			OnlyIfNew: spec.OnlyIfNew, NoPreStop: spec.NoPreStop})
+			OnlyIfNew: spec.OnlyIfNew})
 		recordChange(status, res)
 		return err
 	case jobs.TypeComposeApply:

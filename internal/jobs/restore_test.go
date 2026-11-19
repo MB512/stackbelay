@@ -317,7 +317,7 @@ func TestRestoreRejectsInvalidCarryOver(t *testing.T) {
 func TestIncompleteRestoreBlocksJobs(t *testing.T) {
 	ctx := context.Background()
 	for name, run := range map[string]func(e *env) error{
-		"backup":  func(e *env) error { _, err := e.p.Backup(ctx, e.stack, BackupOptions{}); return err },
+		"backup":  func(e *env) error { _, err := e.p.Backup(ctx, e.stack); return err },
 		"update":  func(e *env) error { _, err := e.p.Update(ctx, e.stack, UpdateOptions{Backup: true}); return err },
 		"start":   func(e *env) error { return e.p.Start(ctx, e.stack) },
 		"restart": func(e *env) error { return e.p.Restart(ctx, e.stack) },

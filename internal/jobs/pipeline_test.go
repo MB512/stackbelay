@@ -76,32 +76,25 @@ func TestBackup(t *testing.T) {
 		check    = "restic.CheckRepo"
 		services = "docker.Services"
 		prestop  = "restic.Backup tag=pre-stop parent= host=host-a"
+		final    = "restic.Backup tag=final parent=snap-pre-stop host=host-a"
 		stop     = "docker.Stop"
 		start    = "docker.Start app,db"
 		healthy  = "docker.WaitHealthy"
 	)
 	tests := []struct {
 		name      string
-		opts      BackupOptions
 		setup     func(e *env)
 		wantCalls []string
 		wantErr   bool
 		wantRes   BackupResult
 	}{
 		{
-			name:      "with pre-stop snapshot",
-			opts:      BackupOptions{PreStop: true},
-			wantCalls: []string{check, services, prestop, stop, "restic.Backup tag=final parent=snap-pre-stop host=host-a", start, healthy},
+			name:      "pre-stop snapshot, then final snapshot",
+			wantCalls: []string{check, services, prestop, stop, final, start, healthy},
 			wantRes:   BackupResult{PreStopSnapshot: "snap-pre-stop", Snapshot: "snap-final"},
 		},
 		{
-			name:      "without pre-stop snapshot",
-			wantCalls: []string{check, services, stop, "restic.Backup tag=final parent= host=host-a", start, healthy},
-			wantRes:   BackupResult{Snapshot: "snap-final"},
-		},
-		{
 			name:      "pre-stop snapshot fails: continue without parent",
-			opts:      BackupOptions{PreStop: true},
 			setup:     func(e *env) { e.restic.failOn["Backup:pre-stop"] = errBoom },
 			wantCalls: []string{check, services, prestop, stop, "restic.Backup tag=final parent= host=host-a", start, healthy},
 			wantRes:   BackupResult{Snapshot: "snap-final"},
@@ -109,27 +102,29 @@ func TestBackup(t *testing.T) {
 		{
 			name:      "final snapshot fails after stop: stack still restarts",
 			setup:     func(e *env) { e.restic.failOn["Backup:final"] = errBoom },
-			wantCalls: []string{check, services, stop, "restic.Backup tag=final parent= host=host-a", start, healthy},
+			wantCalls: []string{check, services, prestop, stop, final, start, healthy},
 			wantErr:   true,
+			wantRes:   BackupResult{PreStopSnapshot: "snap-pre-stop"},
 		},
 		{
 			name:      "stop fails: stack still restarts",
 			setup:     func(e *env) { e.docker.failOn["Stop"] = errBoom },
-			wantCalls: []string{check, services, stop, start, healthy},
+			wantCalls: []string{check, services, prestop, stop, start, healthy},
 			wantErr:   true,
+			wantRes:   BackupResult{PreStopSnapshot: "snap-pre-stop"},
 		},
 		{
 			name:      "start fails: job fails",
 			setup:     func(e *env) { e.docker.failOn["Start"] = errBoom },
-			wantCalls: []string{check, services, stop, "restic.Backup tag=final parent= host=host-a", start},
+			wantCalls: []string{check, services, prestop, stop, final, start},
 			wantErr:   true,
-			wantRes:   BackupResult{Snapshot: "snap-final"},
+			wantRes:   BackupResult{PreStopSnapshot: "snap-pre-stop", Snapshot: "snap-final"},
 		},
 		{
 			name:      "unhealthy after start: job still succeeds",
 			setup:     func(e *env) { e.docker.failOn["WaitHealthy"] = errBoom },
-			wantCalls: []string{check, services, stop, "restic.Backup tag=final parent= host=host-a", start, healthy},
-			wantRes:   BackupResult{Snapshot: "snap-final"},
+			wantCalls: []string{check, services, prestop, stop, final, start, healthy},
+			wantRes:   BackupResult{PreStopSnapshot: "snap-pre-stop", Snapshot: "snap-final"},
 		},
 		{
 			name:      "repository unreachable: nothing is stopped",
@@ -138,7 +133,7 @@ func TestBackup(t *testing.T) {
 			wantErr:   true,
 		},
 		{
-			name:      "nothing running: stays stopped",
+			name:      "nothing running: no pre-stop snapshot, stays stopped",
 			setup:     func(e *env) { e.docker.services = []docker.ServiceState{{Name: "app", State: "exited"}} },
 			wantCalls: []string{check, services, stop, "restic.Backup tag=final parent= host=host-a"},
 			wantRes:   BackupResult{Snapshot: "snap-final"},
@@ -150,7 +145,7 @@ func TestBackup(t *testing.T) {
 			if tt.setup != nil {
 				tt.setup(e)
 			}
-			res, err := e.p.Backup(context.Background(), e.stack, tt.opts)
+			res, err := e.p.Backup(context.Background(), e.stack)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("err = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -171,7 +166,7 @@ func TestBackupCancelledStillRestarts(t *testing.T) {
 	defer cancel()
 	e.restic.cancelOnFinal = cancel
 
-	_, err := e.p.Backup(ctx, e.stack, BackupOptions{})
+	_, err := e.p.Backup(ctx, e.stack)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected context.Canceled, got %v", err)
 	}
@@ -186,7 +181,7 @@ func TestBackupCancelledStillRestarts(t *testing.T) {
 
 func TestBackupWritesMetadata(t *testing.T) {
 	e := newEnv(t)
-	if _, err := e.p.Backup(context.Background(), e.stack, BackupOptions{}); err != nil {
+	if _, err := e.p.Backup(context.Background(), e.stack); err != nil {
 		t.Fatal(err)
 	}
 	f, err := os.Open(filepath.Join(e.stack.Dir, MetadataFile))

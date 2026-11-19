@@ -80,7 +80,7 @@ sleep 2
 pass "app running, oneshot exited"
 
 step "backup with pre-stop snapshot"
-./bin/worker backup --pre-stop "$STACK" 2>"$WORK/backup.log" || { cat "$WORK/backup.log"; fail "backup failed"; }
+./bin/worker backup "$STACK" 2>"$WORK/backup.log" || { cat "$WORK/backup.log"; fail "backup failed"; }
 SNAP="$(log_field "$WORK/backup.log" "job succeeded" snapshot)"
 PRESTOP="$(log_field "$WORK/backup.log" "job succeeded" pre_stop_snapshot)"
 [[ -n "$SNAP" && -n "$PRESTOP" ]] || fail "no snapshot ids in log"

@@ -122,7 +122,7 @@ pass "repository initialized"
 
 step "backup with pre-stop snapshot, a second one queued behind it"
 submit_backup() { c -o /dev/null -w '%{http_code} %{redirect_url}' --data-urlencode "csrf_token=$T" "$@" "$B/stacks/$STACK/backup"; }
-read -r CODE JOB <<<"$(submit_backup -d pre_stop=on)"
+read -r CODE JOB <<<"$(submit_backup)"
 JOB="${JOB#"$B"}"
 [[ "$CODE" == 303 && "$JOB" == /jobs/* ]] || fail "first backup: HTTP $CODE"
 read -r CODE JOB2 <<<"$(submit_backup)"

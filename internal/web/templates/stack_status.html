@@ -44,8 +44,6 @@
   <form method="post" action="/stacks/{{.Stack.Name}}/backup" class="inline">
     <input type="hidden" name="csrf_token" value="{{.CSRF}}">
     <button type="submit"{{if or .JobsUnavailable (not .HasRepo)}} disabled{{end}}>Back up now</button>
-    <label class="check"><input type="checkbox" name="pre_stop">
-      Snapshot before stopping (shorter downtime for large stacks)</label>
   </form>
   {{- end}}
   {{- if .CanUpdate}}

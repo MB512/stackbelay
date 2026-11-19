@@ -47,8 +47,7 @@ func (s *Server) startBackup(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	opts := store.JobOptions{PreStop: r.PostFormValue("pre_stop") == "on"}
-	s.submitJob(w, r, st, store.Job{Type: jobs.TypeBackup, Options: opts}, fmt.Sprintf("backup, pre-stop snapshot: %t", opts.PreStop), true)
+	s.submitJob(w, r, st, store.Job{Type: jobs.TypeBackup}, "backup", true)
 }
 
 // submitJob checks the preconditions shared by all job types, queues the

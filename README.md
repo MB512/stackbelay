@@ -18,8 +18,8 @@ already trust until it has proven itself on your hosts. Upgrading from 0.3
 
 - **Backups per stack** into one restic repository per stack (several
   stacks and hosts may share a repository).
-  Pipeline: `metadata.txt` (image digests, service states) -> optional
-  snapshot while running (shorter downtime) -> `compose stop` -> final
+  Pipeline: `metadata.txt` (image digests, service states) -> snapshot
+  while running (shorter downtime) -> `compose stop` -> final
   snapshot -> `compose start`. The stack is started again in every case,
   also when the backup fails or is cancelled.
 - **Restores** in place, after a safety snapshot of the current state: only

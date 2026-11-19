@@ -101,8 +101,7 @@
         <td><code>{{.CronExpr}}</code>{{if not .Enabled}} <span class="badge">disabled</span>{{end}}</td>
         <td>{{if eq .Type "update"}}Update{{else}}Backup{{end}}</td>
         <td>{{if eq .Type "update"}}only if new{{if .NoBackup}}, <strong>without backup and rollback</strong> while the stack has no repository{{end}}
-          {{- if .PreStop}}, pre-stop snapshot{{end}}
-          {{- else}}{{if .PreStop}}pre-stop snapshot{{else}}<span class="muted">–</span>{{end}}{{end}}</td>
+          {{- else}}<span class="muted">–</span>{{end}}</td>
         <td>{{if .Next.IsZero}}<span class="muted">—</span>{{else}}{{when .Next}}{{end}}</td>
         <td class="actions">
           <form method="post" action="/stacks/{{$.Data.Stack.Name}}/schedules/{{.ID}}/enabled" class="inline">
@@ -150,8 +149,6 @@
         if they do not come up. It needs a running stack; without repository it runs without backup and without
         rollback, which you have to confirm below.</p>
     </fieldset>
-    <label class="check"><input type="checkbox" name="pre_stop"{{if .NewSchedule.PreStop}} checked{{end}}>
-      Snapshot before stopping (shorter downtime for large stacks)</label>
     {{- if not .Repo.Exists}}
     <p class="warning">This stack has no repository. A scheduled update then runs <strong>without backup and without
       rollback</strong>: a failed update leaves the stack as it is, not even the old images are started. Snapshot and

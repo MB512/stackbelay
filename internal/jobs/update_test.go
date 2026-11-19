@@ -56,12 +56,6 @@ func TestUpdate(t *testing.T) {
 			wantErr:   "repository not reachable",
 		},
 		{
-			name:      "without pre-stop snapshot",
-			opts:      UpdateOptions{Backup: true, NoPreStop: true},
-			wantCalls: []string{check, svcs, pull, stop, "restic.Backup tag=final parent= host=host-a", up, healthy, after},
-			wantRes:   ChangeResult{Snapshot: "snap-final"},
-		},
-		{
 			name:      "pre-stop snapshot fails: continue without parent",
 			opts:      UpdateOptions{Backup: true},
 			setup:     func(e *env) { e.restic.failOn["Backup:pre-stop"] = errBoom },

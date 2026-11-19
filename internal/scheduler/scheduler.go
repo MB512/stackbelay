@@ -184,8 +184,7 @@ func (s *Scheduler) Fire(ctx context.Context, scheduleID int64) {
 	case jobs.TypeCleanup:
 		detail = "host cleanup"
 	case jobs.TypeBackup:
-		job.Options = store.JobOptions{PreStop: sc.PreStop}
-		detail = fmt.Sprintf("pre-stop snapshot: %t", sc.PreStop)
+		detail = "pre-stop snapshot"
 	case jobs.TypeUpdate:
 		if sc.NoBackup {
 			// Confirmed when the schedule was created: while the stack has
@@ -195,8 +194,8 @@ func (s *Scheduler) Fire(ctx context.Context, scheduleID int64) {
 			detail = "only if new, without backup if the stack has no repository"
 			break
 		}
-		job.Options = store.JobOptions{OnlyIfNew: true, NoPreStop: !sc.PreStop}
-		detail = fmt.Sprintf("only if new, pre-stop snapshot: %t", sc.PreStop)
+		job.Options = store.JobOptions{OnlyIfNew: true}
+		detail = "only if new"
 	default:
 		log.Error("skipping schedule with unknown job type")
 		return

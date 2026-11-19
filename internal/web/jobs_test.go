@@ -99,13 +99,13 @@ func TestBackupJob(t *testing.T) {
 		t.Fatal("backup button for bob")
 	}
 
-	r := e.do(alice, http.MethodPost, "/stacks/web/backup", url.Values{"csrf_token": {aliceToken}, "pre_stop": {"on"}}, nil)
+	r := e.do(alice, http.MethodPost, "/stacks/web/backup", url.Values{"csrf_token": {aliceToken}}, nil)
 	if r.status != http.StatusSeeOther || !strings.HasPrefix(r.location, jobLocation) {
 		t.Fatalf("backup: %d %q", r.status, r.location)
 	}
 	id := strings.TrimPrefix(r.location, jobLocation)
 	j, err := e.st.JobByID(context.Background(), id)
-	if err != nil || j.Type != jobs.TypeBackup || !j.Options.PreStop || j.Requester != "alice" || j.Trigger != store.TriggerManual {
+	if err != nil || j.Type != jobs.TypeBackup || j.Options != (store.JobOptions{}) || j.Requester != "alice" || j.Trigger != store.TriggerManual {
 		t.Fatalf("job: %+v %v", j, err)
 	}
 

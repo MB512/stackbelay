@@ -30,7 +30,7 @@ Two roles, one image, two binaries:
   independent of the manager, it can stop, back up, restore and restart the
   manager's own stack.
 
-Backup pipeline (per stack): metadata.txt -> optional pre-stop snapshot ->
+Backup pipeline (per stack): metadata.txt -> pre-stop snapshot ->
 `compose stop` -> final snapshot (parent = pre-stop snapshot) -> `compose start`.
 Restart must ALWAYS happen (defer), even on failure. See `docs/architecture.md`.
 

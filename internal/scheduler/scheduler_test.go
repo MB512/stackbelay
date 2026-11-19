@@ -113,9 +113,9 @@ func newEnv(t *testing.T) *env {
 	return e
 }
 
-func (e *env) schedule(t *testing.T, st store.Stack, expr string, preStop bool) int64 {
+func (e *env) schedule(t *testing.T, st store.Stack, expr string) int64 {
 	t.Helper()
-	return e.scheduleOf(t, store.Schedule{StackID: st.ID, CronExpr: expr, Type: jobs.TypeBackup, PreStop: preStop})
+	return e.scheduleOf(t, store.Schedule{StackID: st.ID, CronExpr: expr, Type: jobs.TypeBackup})
 }
 
 func (e *env) scheduleOf(t *testing.T, sc store.Schedule) int64 {
@@ -132,7 +132,7 @@ func TestFire(t *testing.T) {
 
 	t.Run("queues a scheduled backup and audits it", func(t *testing.T) {
 		e := newEnv(t)
-		id := e.schedule(t, e.web, "0 3 * * *", true)
+		id := e.schedule(t, e.web, "0 3 * * *")
 		e.s.Fire(ctx, id)
 		got := e.queue.submitted()
 		if len(got) != 1 {
@@ -140,7 +140,7 @@ func TestFire(t *testing.T) {
 		}
 		j := got[0]
 		if j.StackID != e.web.ID || j.Type != jobs.TypeBackup || j.Trigger != store.TriggerSchedule ||
-			j.RequestedBy != 0 || !j.Options.PreStop {
+			j.RequestedBy != 0 {
 			t.Errorf("job = %+v", j)
 		}
 		audit, err := e.st.ListAudit(ctx, 10)
@@ -156,8 +156,8 @@ func TestFire(t *testing.T) {
 	t.Run("queues a scheduled update: only if new, with its options", func(t *testing.T) {
 		e := newEnv(t)
 		for _, sc := range []store.Schedule{
-			{StackID: e.web.ID, CronExpr: "@daily", Type: jobs.TypeUpdate, PreStop: false},
-			{StackID: e.db.ID, CronExpr: "@daily", Type: jobs.TypeUpdate, PreStop: true},
+			{StackID: e.web.ID, CronExpr: "@daily", Type: jobs.TypeUpdate},
+			{StackID: e.db.ID, CronExpr: "@daily", Type: jobs.TypeUpdate},
 		} {
 			e.s.Fire(ctx, e.scheduleOf(t, sc))
 		}
@@ -165,7 +165,7 @@ func TestFire(t *testing.T) {
 		if len(got) != 2 {
 			t.Fatalf("submitted %d jobs, want 2", len(got))
 		}
-		want := []store.JobOptions{{OnlyIfNew: true, NoPreStop: true}, {OnlyIfNew: true}}
+		want := []store.JobOptions{{OnlyIfNew: true}, {OnlyIfNew: true}}
 		for i, j := range got {
 			if j.Type != jobs.TypeUpdate || j.Trigger != store.TriggerSchedule || j.Options != want[i] {
 				t.Errorf("job %d = %+v, options want %+v", i, j, want[i])
@@ -213,7 +213,7 @@ func TestFire(t *testing.T) {
 		setup func(t *testing.T, e *env) int64
 	}{
 		{"disabled schedule", func(t *testing.T, e *env) int64 {
-			id := e.schedule(t, e.web, "@daily", false)
+			id := e.schedule(t, e.web, "@daily")
 			if err := e.st.SetScheduleEnabled(ctx, e.web.ID, id, false); err != nil {
 				t.Fatal(err)
 			}
@@ -223,10 +223,10 @@ func TestFire(t *testing.T) {
 			if err := e.st.SetStackEnabled(ctx, e.web.ID, false); err != nil {
 				t.Fatal(err)
 			}
-			return e.schedule(t, e.web, "@daily", false)
+			return e.schedule(t, e.web, "@daily")
 		}},
 		{"deleted schedule", func(t *testing.T, e *env) int64 {
-			id := e.schedule(t, e.web, "@daily", false)
+			id := e.schedule(t, e.web, "@daily")
 			if err := e.st.DeleteSchedule(ctx, e.web.ID, id); err != nil {
 				t.Fatal(err)
 			}
@@ -234,7 +234,7 @@ func TestFire(t *testing.T) {
 		}},
 		{"backup already queued", func(t *testing.T, e *env) int64 {
 			e.queue.err = store.ErrJobQueued
-			return e.schedule(t, e.web, "@daily", false)
+			return e.schedule(t, e.web, "@daily")
 		}},
 	}
 	for _, tt := range skips {
@@ -253,8 +253,8 @@ func TestFire(t *testing.T) {
 
 func TestRunAndReload(t *testing.T) {
 	e := newEnv(t)
-	e.schedule(t, e.web, "0 3 * * *", false)
-	off := e.schedule(t, e.db, "@hourly", false)
+	e.schedule(t, e.web, "0 3 * * *")
+	off := e.schedule(t, e.db, "@hourly")
 	if err := e.st.SetScheduleEnabled(context.Background(), e.db.ID, off, false); err != nil {
 		t.Fatal(err)
 	}
@@ -275,7 +275,7 @@ func TestRunAndReload(t *testing.T) {
 	if err := e.st.SetScheduleEnabled(context.Background(), e.db.ID, off, true); err != nil {
 		t.Fatal(err)
 	}
-	e.schedule(t, e.db, "@every 2h", true)
+	e.schedule(t, e.db, "@every 2h")
 	if err := e.s.Reload(context.Background()); err != nil {
 		t.Fatal(err)
 	}

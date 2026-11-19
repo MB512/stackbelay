@@ -22,9 +22,6 @@ type UpdateOptions struct {
 	// stopping anything, if no running service would get another image or
 	// configuration (see Pipeline.newImages).
 	OnlyIfNew bool
-	// NoPreStop skips the snapshot taken while the stack still runs; the
-	// final snapshot then copies everything with the stack stopped.
-	NoPreStop bool
 }
 
 // Update runs the update pipeline for a running stack (see "Update
@@ -35,7 +32,6 @@ func (p *Pipeline) Update(ctx context.Context, stack stacks.Stack, opts UpdateOp
 	log := p.logger().With("stack", stack.Name, "job", "update")
 	return p.runChange(ctx, stack, change{
 		name: "update", backup: opts.Backup, carryOver: opts.CarryOver, requireRunning: true,
-		noPreStop: opts.NoPreStop,
 		prepare: func(ctx context.Context, services []docker.ServiceState, running []string) error {
 			log.Info("pulling images", "services", running)
 			p.phase("pulling images")

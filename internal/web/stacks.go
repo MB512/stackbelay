@@ -336,7 +336,6 @@ type settingsView struct {
 type newSchedule struct {
 	CronExpr        string
 	Update          bool // job type update (default: backup)
-	PreStop         bool
 	ConfirmNoBackup bool // update on a stack without repository: "no backup, no rollback" confirmed
 }
 

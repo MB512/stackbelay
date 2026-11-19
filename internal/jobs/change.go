@@ -57,9 +57,6 @@ type change struct {
 	// migrated).
 	backup    bool
 	carryOver string // see RestoreOptions.CarryOver (for the rollback)
-	// noPreStop skips the pre-stop snapshot (the final snapshot then has no
-	// parent and takes longer, during which the stack is stopped).
-	noPreStop bool
 	// requireRunning refuses a stack without running services.
 	requireRunning bool
 	// prepare (optional) runs while the stack still runs, before any
@@ -134,19 +131,8 @@ func (p *Pipeline) runChange(ctx context.Context, stack stacks.Stack, c change) 
 	}
 
 	// 3. Pre-stop snapshot (parent of the final one). Failure is not fatal.
-	if c.backup && len(running) > 0 && c.noPreStop {
-		log.Info("pre-stop snapshot disabled")
-	}
-	if c.backup && len(running) > 0 && !c.noPreStop {
-		log.Info("taking pre-stop snapshot")
-		p.phase("pre-stop snapshot")
-		id, err := p.Restic.Backup(ctx, p.Repo, stack.Dir, restic.BackupOptions{Host: p.Host, Tags: []string{TagPreStop}})
-		if err != nil {
-			log.Warn("pre-stop snapshot failed; continuing without parent", "error", err)
-		} else {
-			res.PreStopSnapshot = id
-			log.Info("pre-stop snapshot done", "snapshot", id)
-		}
+	if c.backup && len(running) > 0 {
+		res.PreStopSnapshot = p.preStopSnapshot(ctx, log, stack)
 	}
 	if err := ctx.Err(); err != nil {
 		return res, err // cancelled before anything was stopped

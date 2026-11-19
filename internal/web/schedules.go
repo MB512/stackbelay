@@ -81,7 +81,6 @@ func (s *Server) createSchedule(w http.ResponseWriter, r *http.Request) {
 	in := newSchedule{
 		CronExpr: scheduler.Normalize(r.PostFormValue("cron_expr")),
 		Update:   r.PostFormValue("job_type") == string(jobs.TypeUpdate),
-		PreStop:  r.PostFormValue("pre_stop") == "on",
 	}
 	in.ConfirmNoBackup = r.PostFormValue("confirm_no_backup") == "on"
 	expr := in.CronExpr
@@ -105,7 +104,7 @@ func (s *Server) createSchedule(w http.ResponseWriter, r *http.Request) {
 		fail(fmt.Sprintf("A stack can have at most %d schedules.", maxSchedulesPerStack))
 		return
 	}
-	sc := store.Schedule{StackID: st.ID, CronExpr: expr, Type: jobs.TypeBackup, PreStop: in.PreStop}
+	sc := store.Schedule{StackID: st.ID, CronExpr: expr, Type: jobs.TypeBackup}
 	if in.Update {
 		sc.Type = jobs.TypeUpdate
 		hasRepo, err := s.hasRepository(ctx, st)
@@ -121,7 +120,7 @@ func (s *Server) createSchedule(w http.ResponseWriter, r *http.Request) {
 				fail("This stack has no repository: confirm that its scheduled updates run without backup and without rollback.")
 				return
 			}
-			sc.NoBackup, sc.PreStop = true, false
+			sc.NoBackup = true
 		}
 	}
 	id, err := s.Store.CreateSchedule(ctx, sc)
@@ -130,8 +129,7 @@ func (s *Server) createSchedule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(r, store.AuditEntry{UserID: authFrom(ctx).User.ID, Action: "schedule.create", StackID: st.ID,
-		Detail: fmt.Sprintf("schedule %d: %s %s, pre-stop snapshot: %t, without backup: %t",
-			id, sc.Type, expr, sc.PreStop, sc.NoBackup)})
+		Detail: fmt.Sprintf("schedule %d: %s %s, without backup: %t", id, sc.Type, expr, sc.NoBackup)})
 	s.reloadSchedules(ctx)
 	http.Redirect(w, r, settingsURL(st), http.StatusSeeOther) //nolint:gosec // G710: same-site path, see settingsURL
 }

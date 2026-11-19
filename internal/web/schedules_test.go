@@ -62,7 +62,7 @@ func TestSchedules(t *testing.T) {
 
 	// Invalid expressions are refused and the input is kept.
 	for _, expr := range []string{"", "every night", "0 3 * *", "@every 10s", "CRON_TZ=UTC 0 3 * * *"} {
-		r := post("/stacks/web/schedules", url.Values{"cron_expr": {expr}, "pre_stop": {"on"}})
+		r := post("/stacks/web/schedules", url.Values{"cron_expr": {expr}})
 		expect(t, r, http.StatusBadRequest, "")
 		if expr != "" && !strings.Contains(r.body, `value="`+expr+`"`) {
 			t.Errorf("input %q not kept:\n%s", expr, r.body)
@@ -73,10 +73,10 @@ func TestSchedules(t *testing.T) {
 	}
 
 	// A valid schedule is saved normalized, audited and loaded by the scheduler.
-	expect(t, post("/stacks/web/schedules", url.Values{"cron_expr": {"  0  3 * * * "}, "pre_stop": {"on"}}),
+	expect(t, post("/stacks/web/schedules", url.Values{"cron_expr": {"  0  3 * * * "}}),
 		http.StatusSeeOther, "/stacks/web/settings")
 	list, err := e.st.ListSchedules(ctx, web.ID)
-	if err != nil || len(list) != 1 || list[0].CronExpr != "0 3 * * *" || !list[0].PreStop || !list[0].Enabled {
+	if err != nil || len(list) != 1 || list[0].CronExpr != "0 3 * * *" || !list[0].Enabled {
 		t.Fatalf("schedules = %+v, %v", list, err)
 	}
 	id := itoa(list[0].ID)
@@ -131,7 +131,7 @@ func TestSchedules(t *testing.T) {
 	expect(t, post("/stacks/web/schedules", url.Values{"cron_expr": {"@daily"}, "job_type": {"backup"}}),
 		http.StatusSeeOther, "/stacks/web/settings")
 	list, _ = e.st.ListSchedules(ctx, web.ID)
-	if len(list) != 2 || list[0].Type != jobs.TypeUpdate || list[0].PreStop ||
+	if len(list) != 2 || list[0].Type != jobs.TypeUpdate ||
 		list[1].Type != jobs.TypeBackup {
 		t.Fatalf("schedules = %+v", list)
 	}
@@ -215,8 +215,7 @@ func TestUpdateScheduleWithoutRepository(t *testing.T) {
 
 	token := e.csrf("/stacks/db/settings")
 	form := func(stack string, extra url.Values) response {
-		v := url.Values{"csrf_token": {token}, "cron_expr": {"0 4 * * *"}, "job_type": {"update"},
-			"pre_stop": {"on"}}
+		v := url.Values{"csrf_token": {token}, "cron_expr": {"0 4 * * *"}, "job_type": {"update"}}
 		for k, vs := range extra {
 			v[k] = vs
 		}
@@ -228,7 +227,7 @@ func TestUpdateScheduleWithoutRepository(t *testing.T) {
 	}
 	expect(t, form("db", url.Values{"confirm_no_backup": {"on"}}), http.StatusSeeOther, "/stacks/db/settings")
 	list, _ := e.st.ListSchedules(ctx, db.ID)
-	if len(list) != 1 || !list[0].NoBackup || list[0].PreStop {
+	if len(list) != 1 || !list[0].NoBackup {
 		t.Fatalf("stored: %+v", list)
 	}
 	if r := e.get("/stacks/db/settings"); !strings.Contains(r.body, "without backup and rollback</strong> while the stack has no repository") {
@@ -238,7 +237,7 @@ func TestUpdateScheduleWithoutRepository(t *testing.T) {
 	// With a repository the confirmation is ignored: backup as usual.
 	expect(t, form("web", url.Values{"confirm_no_backup": {"on"}}), http.StatusSeeOther, "/stacks/web/settings")
 	list, _ = e.st.ListSchedules(ctx, web.ID)
-	if len(list) != 1 || list[0].NoBackup || !list[0].PreStop {
+	if len(list) != 1 || list[0].NoBackup {
 		t.Fatalf("stored on web: %+v", list)
 	}
 	// Backup schedules need no confirmation (they fail without repository).
@@ -255,7 +254,7 @@ func TestJobPageUpdateWithoutBackup(t *testing.T) {
 	st, _ := e.st.StackByName(ctx, "db")
 	if err := e.st.CreateJob(ctx, store.Job{ID: "01M7M8Q4T1R4WKXGJEHRRFD980", StackID: st.ID, Type: jobs.TypeUpdate,
 		Trigger: store.TriggerSchedule, QueuedAt: e.clock(),
-		Options: store.JobOptions{OnlyIfNew: true, NoBackup: true, NoPreStop: true}}); err != nil {
+		Options: store.JobOptions{OnlyIfNew: true, NoBackup: true}}); err != nil {
 		t.Fatal(err)
 	}
 	e.loginAdmin()

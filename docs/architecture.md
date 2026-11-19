@@ -244,10 +244,12 @@ does not stop a running orphan.
    (`docker compose ps --format json`, `docker image inspect` ->
    `.Id` and `.RepoDigests`). Write `metadata.txt` into the stack folder (it is
    then part of the snapshot). See "metadata.txt format" below.
-3. **Pre-stop snapshot (optional)**: stack still running, `restic backup`
-   with tag `pre-stop`. Not guaranteed consistent; its purpose is to make the
-   final run fast (parent snapshot, small delta). Failure here is non-fatal:
-   log a warning and continue without a parent.
+3. **Pre-stop snapshot** (always, issue #34; skipped only if no service
+   is running): stack still running, `restic backup` with tag `pre-stop`.
+   Not guaranteed consistent; its purpose is to make the final run fast
+   (parent snapshot, small delta), so the stack is only down for the
+   changes in between. Failure here is non-fatal: log a warning and
+   continue without a parent.
 4. **Stop**: `docker compose stop` (not `down`, containers and networks are
    preserved). Remember which services were running.
 5. **Final snapshot**: `restic backup --parent <pre-stop-id> --tag final`
@@ -518,10 +520,8 @@ cancel):
    service changes, the job ends here as `succeeded` with
    `result.unchanged`: no snapshots, nothing stopped. Services without an
    image (built locally) do not count.
-3. With a repository: pre-stop snapshot (failure only warns). It can be
-   turned off (`no_pre_stop`, worker flag `--no-pre-stop`, checkbox in the
-   update form and in update schedules); the final snapshot then has no
-   parent and copies everything with the stack stopped.
+3. With a repository: pre-stop snapshot (always, issue #34; failure only
+   warns).
 4. `compose stop`.
 5. With a repository: final snapshot (parent = pre-stop): the state the
    rollback returns to. Failure in 4–5 (or cancellation before 6): `compose
@@ -791,7 +791,7 @@ with a light and a dark set; the job log is a dark panel in both modes.
 | `GET /stacks/{name}` | view right | "Status" tab, the home of a stack: containers with state and image, recent jobs, "Back up now" (backup right), see "Status tab" |
 | `GET /stacks/{name}/status/live` | view right | the self-refreshing part of the Status tab (HTMX fragment, polled every 10 s) |
 | `GET /stacks/{name}/backups` | view right | "Backups" tab: repository location, cached snapshots (same for every user) |
-| `POST /stacks/{name}/backup` | backup right | queue a backup (option: pre-stop snapshot) |
+| `POST /stacks/{name}/backup` | backup right | queue a backup |
 | `POST /stacks/{name}/up`, `/start`, `/restart`, `/stop`, `/down` | operate right | queue an up, start, restart, stop or down without backup, see "Stop, start and restart" (no stop or down for the manager's own stack) |
 | `GET /stacks/{name}/logs` | logs right | "Logs" tab: container checkboxes and live log panel |
 | `GET /stacks/{name}/logs/events` | logs right | live container logs (SSE), see "Container logs" |
@@ -817,7 +817,7 @@ with a light and a dark set; the job log is a dark panel in both modes.
 | `POST /stacks/{name}/permissions` | admin | set one user's backup/restore right (HTMX: returns the table row) |
 | `POST /stacks/{name}/source-host` | admin | set the host whose snapshots the stack lists and restores, see "Restore from another host" |
 | `POST /stacks/{name}/enabled` | admin | enable/disable the stack for scheduled backups |
-| `POST /stacks/{name}/schedules` | admin | add a schedule (cron expression, pre-stop option); at most 20 per stack |
+| `POST /stacks/{name}/schedules` | admin | add a schedule (cron expression, job type); at most 20 per stack |
 | `POST /stacks/{name}/schedules/{id}/enabled` | admin | enable/disable one schedule |
 | `POST /stacks/{name}/schedules/{id}/delete` | admin | delete one schedule |
 | `GET/POST /admin/users` | admin | list users, create a user with a generated one-time password |
@@ -1183,10 +1183,9 @@ creates a `queued` job (trigger `schedule`, no requesting user); execution
 always goes through the same queue, per-stack lock and worker path as manual
 runs. A schedule has a job type (Settings tab, admins):
 
-- **backup**, with the option "pre-stop snapshot";
+- **backup** (with pre-stop snapshot, like every backup);
 - **update**, always with "only if new" (a scheduled update never stops or
   backs up a stack when no running service gets a new image or is pinned),
-  with the option "pre-stop snapshot" (`no_pre_stop` in the job when off).
   It fails if the stack is not running. On a
   stack without repository, creating an update schedule requires the same
   confirmation as a manual update ("no backup and no rollback": a checkbox
@@ -1288,9 +1287,9 @@ to them. `restic restore <id>:<subpath>` requires restic >= 0.17.
 
 ```
 worker run <job-dir>
-worker backup  [--pre-stop] <stack>
+worker backup  <stack>
 worker restore [--no-start] [--pin-images] [--import] [--limit-download <KiB/s>] <stack> <snapshot-id>
-worker update  [--no-backup] [--only-if-new] [--no-pre-stop] <stack>
+worker update  [--no-backup] [--only-if-new] <stack>
 worker stop|start|restart|up|down <stack>
 worker cleanup [--image-min-age <duration>]
 ```

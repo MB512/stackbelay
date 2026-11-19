@@ -216,10 +216,9 @@ func (d *Dispatcher) reconcileDir(ctx context.Context, id string, importing bool
 	queued, _ := jobs.IDTime(id)
 	j := store.Job{
 		ID: id, StackID: st.ID, StackName: st.Name, Type: spec.Type, Trigger: spec.Trigger, QueuedAt: queued,
-		Options: store.JobOptions{PreStop: spec.PreStop, SnapshotID: spec.SnapshotID,
+		Options: store.JobOptions{SnapshotID: spec.SnapshotID,
 			NoStart: spec.NoStart, PinImages: spec.PinImages,
-			Import: spec.Import, LimitDownloadKiB: spec.LimitDownloadKiB, NoBackup: spec.NoBackup, OnlyIfNew: spec.OnlyIfNew,
-			NoPreStop: spec.NoPreStop},
+			Import: spec.Import, LimitDownloadKiB: spec.LimitDownloadKiB, NoBackup: spec.NoBackup, OnlyIfNew: spec.OnlyIfNew},
 	}
 	if j.Trigger == "" {
 		j.Trigger = store.TriggerManual
@@ -327,10 +326,10 @@ func (d *Dispatcher) start(ctx context.Context, j store.Job) {
 	}
 	spec := jobs.Spec{
 		ID: j.ID, Type: j.Type, Stack: j.StackName,
-		PreStop: j.Options.PreStop, SnapshotID: j.Options.SnapshotID,
-		NoStart: j.Options.NoStart, PinImages: j.Options.PinImages,
+		SnapshotID: j.Options.SnapshotID,
+		NoStart:    j.Options.NoStart, PinImages: j.Options.PinImages,
 		Import: j.Options.Import, LimitDownloadKiB: j.Options.LimitDownloadKiB,
-		OnlyIfNew: j.Options.OnlyIfNew, NoPreStop: j.Options.NoPreStop, Trigger: j.Trigger, Requester: j.Requester, NoBackup: noBackup,
+		OnlyIfNew: j.Options.OnlyIfNew, Trigger: j.Trigger, Requester: j.Requester, NoBackup: noBackup,
 	}
 	if j.Type == jobs.TypeComposeApply {
 		spec.ComposeSHA256, spec.ComposeBaseSHA256 = j.Options.ComposeSHA256, j.Options.ComposeBaseSHA256

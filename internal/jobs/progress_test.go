@@ -39,7 +39,7 @@ func TestBackupPhases(t *testing.T) {
 	e := newEnv(t)
 	prog := &fakeProgress{}
 	e.p.Progress = prog
-	if _, err := e.p.Backup(context.Background(), e.stack, BackupOptions{PreStop: true}); err != nil {
+	if _, err := e.p.Backup(context.Background(), e.stack); err != nil {
 		t.Fatal(err)
 	}
 	want := []string{"pre-stop snapshot", "stopping stack", "final snapshot", "starting stack", "waiting until healthy"}

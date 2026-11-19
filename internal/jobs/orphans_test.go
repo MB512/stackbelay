@@ -87,7 +87,7 @@ func TestOrphansAreLeftAlone(t *testing.T) {
 	t.Run("backup restarts and records defined services only", func(t *testing.T) {
 		e := setup(t)
 		logs := logTo(e)
-		if _, err := e.p.Backup(context.Background(), e.stack, BackupOptions{}); err != nil {
+		if _, err := e.p.Backup(context.Background(), e.stack); err != nil {
 			t.Fatal(err)
 		}
 		assertNoOrphan(t, e)

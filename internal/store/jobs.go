@@ -20,7 +20,6 @@ const (
 
 // JobOptions are the options of a job, stored as JSON.
 type JobOptions struct {
-	PreStop    bool   `json:"pre_stop,omitempty"`    // backup
 	SnapshotID string `json:"snapshot_id,omitempty"` // restore: snapshot to restore
 	NoStart    bool   `json:"no_start,omitempty"`    // restore
 	PinImages  bool   `json:"pin_images,omitempty"`  // restore: image versions from metadata.txt
@@ -41,8 +40,6 @@ type JobOptions struct {
 	// OnlyIfNew (update): end after the pull if no running service gets a
 	// new image.
 	OnlyIfNew bool `json:"only_if_new,omitempty"`
-	// NoPreStop (update): no snapshot while the stack still runs.
-	NoPreStop bool `json:"no_pre_stop,omitempty"`
 	// Compose editor (compose-apply): the stack's main compose file (base
 	// name), the SHA-256 (hex) of the content the editor started from and
 	// of the new content (stored in job_compose, see Job.ComposeContent).

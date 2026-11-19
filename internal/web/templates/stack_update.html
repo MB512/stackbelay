@@ -25,7 +25,6 @@
     <form method="post" action="/stacks/{{$.Data.Stack.Name}}/update">
       <input type="hidden" name="csrf_token" value="{{$.Data.CSRF}}">
       <input type="hidden" name="only_if_new" value="on">
-      <input type="hidden" name="pre_stop" value="on">
       <button type="submit"{{if $.Data.Unavailable}} disabled{{end}}>Unpin now</button>
     </form>
     {{- else}}
@@ -74,9 +73,8 @@
       running service already runs the newest image of its tag (a version pinned by a restore counts as new: the
       update switches it back to the tag)</label>
     {{- if .HasRepo}}
-    <label class="check"><input type="checkbox" name="pre_stop" checked>
-      Snapshot before stopping (shorter downtime for large stacks)</label>
-    <p class="hint">A rollback restores the final snapshot taken just before the update in place: only the files that
+    <p class="hint">The stack is backed up first: a snapshot while it runs, then a final one with it stopped (only the
+      changes in between, so the downtime is short). A rollback restores the final snapshot taken just before the update in place: only the files that
       changed since then are rewritten.</p>
     {{- else}}
     <label class="check"><input type="checkbox" name="confirm_no_backup" required>

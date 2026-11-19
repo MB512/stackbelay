@@ -17,13 +17,6 @@ import (
 	"github.com/MB512/stackvault/internal/stacks"
 )
 
-// BackupOptions control a backup job.
-type BackupOptions struct {
-	// PreStop takes an additional snapshot while the stack is still running,
-	// used as parent for the final snapshot to keep downtime short.
-	PreStop bool
-}
-
 // BackupResult reports the snapshots created by a backup job.
 type BackupResult struct {
 	PreStopSnapshot string // "" if not taken or failed
@@ -31,14 +24,16 @@ type BackupResult struct {
 }
 
 // Backup runs the backup pipeline for stack (see docs/architecture.md):
-// metadata.txt -> optional pre-stop snapshot -> stop -> final snapshot ->
-// start. Once the stack has been stopped it is always started again, even if
+// metadata.txt -> pre-stop snapshot -> stop -> final snapshot -> start.
+// The pre-stop snapshot (taken while the stack runs, issue #34: always) is
+// the parent of the final one, so the stack is only down for the changes
+// in between. Once the stack has been stopped it is always started again, even if
 // the job fails or ctx is cancelled.
 //
 // The named return value err lets the deferred restart add its own error
 // to the one being returned (a defer runs like a C# finally block, and can
 // still modify named results).
-func (p *Pipeline) Backup(ctx context.Context, stack stacks.Stack, opts BackupOptions) (res BackupResult, err error) {
+func (p *Pipeline) Backup(ctx context.Context, stack stacks.Stack) (res BackupResult, err error) {
 	log := p.logger().With("stack", stack.Name, "job", "backup")
 
 	// 1. Preflight.
@@ -66,17 +61,10 @@ func (p *Pipeline) Backup(ctx context.Context, stack stacks.Stack, opts BackupOp
 		return res, fmt.Errorf("writing %s: %w", MetadataFile, err)
 	}
 
-	// 3. Optional pre-stop snapshot. Failure is not fatal.
-	if opts.PreStop {
-		log.Info("taking pre-stop snapshot")
-		p.phase("pre-stop snapshot")
-		id, err := p.Restic.Backup(ctx, p.Repo, stack.Dir, restic.BackupOptions{Host: p.Host, Tags: []string{TagPreStop}})
-		if err != nil {
-			log.Warn("pre-stop snapshot failed; continuing without parent", "error", err)
-		} else {
-			res.PreStopSnapshot = id
-			log.Info("pre-stop snapshot done", "snapshot", id)
-		}
+	// 3. Pre-stop snapshot while the stack runs (nothing running: the
+	// final snapshot is the only one). Failure is not fatal.
+	if len(running) > 0 {
+		res.PreStopSnapshot = p.preStopSnapshot(ctx, log, stack)
 	}
 	if err := ctx.Err(); err != nil {
 		return res, err // cancelled before anything was stopped
@@ -220,4 +208,19 @@ func fileSHA256(path string) (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// preStopSnapshot takes the snapshot of the running stack that becomes the
+// parent of the final one. It returns "" if it failed: the backup then
+// continues without parent (the final snapshot takes longer).
+func (p *Pipeline) preStopSnapshot(ctx context.Context, log *slog.Logger, stack stacks.Stack) string {
+	log.Info("taking pre-stop snapshot")
+	p.phase("pre-stop snapshot")
+	id, err := p.Restic.Backup(ctx, p.Repo, stack.Dir, restic.BackupOptions{Host: p.Host, Tags: []string{TagPreStop}})
+	if err != nil {
+		log.Warn("pre-stop snapshot failed; continuing without parent", "error", err)
+		return ""
+	}
+	log.Info("pre-stop snapshot done", "snapshot", id)
+	return id
 }
