@@ -6,6 +6,13 @@ All notable changes to StackVault. The format is based on
 
 ## [Unreleased]
 
+### Changed
+
+- **Job timeout** raised from 6 h to 48 h and configurable on the manager
+  with `STACKVAULT_JOB_TIMEOUT` (e.g. `72h`; #32). Before, the variable was
+  only read by the worker and the manager did not pass it on, so large
+  restores were always stopped after 6 h.
+
 ### Fixed
 
 - **Cancelled and timed-out jobs** were shown as failed with restic's last

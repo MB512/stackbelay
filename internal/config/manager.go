@@ -30,8 +30,11 @@ type Manager struct {
 	// MaxJobs is the number of jobs that may run at the same time across
 	// all stacks (STACKVAULT_MAX_JOBS, default 1). Each job stops a stack,
 	// so parallel jobs are opt-in.
-	MaxJobs  int
-	LogLevel slog.Level // STACKVAULT_LOG_LEVEL, default info
+	MaxJobs int
+	// JobTimeout is the hard limit for one job, passed to every worker
+	// (STACKVAULT_JOB_TIMEOUT, default DefaultJobTimeout).
+	JobTimeout time.Duration
+	LogLevel   slog.Level // STACKVAULT_LOG_LEVEL, default info
 	// EnableShell allows admins to open shells in stack containers
 	// (STACKVAULT_ENABLE_SHELL, default false). Off by default: a shell is
 	// free-form command execution.
@@ -79,6 +82,7 @@ func LoadManager(getenv func(string) string, readFile func(string) ([]byte, erro
 	c.StacksRoot, errs = absPath(getenv, "STACKS_ROOT", "", errs)
 	c.DataDir, errs = absPath(getenv, "STACKVAULT_DATA_DIR", "/data", errs)
 	c.LogLevel, errs = logLevel(getenv, errs)
+	c.JobTimeout, errs = jobTimeout(getenv, errs)
 
 	if c.Hostname == "" {
 		errs = append(errs, errors.New("STACKVAULT_HOSTNAME is required (name of the Docker host, used as restic --host)"))

@@ -88,3 +88,24 @@ func TestLoadWorkerRepository(t *testing.T) {
 		})
 	}
 }
+
+func TestJobTimeout(t *testing.T) {
+	tests := []struct {
+		value   string
+		want    time.Duration
+		wantErr bool
+	}{
+		{"", DefaultJobTimeout, false},
+		{"72h", 72 * time.Hour, false},
+		{"1m", time.Minute, false},
+		{"30s", DefaultJobTimeout, true},
+		{"-1h", DefaultJobTimeout, true},
+		{"forever", DefaultJobTimeout, true},
+	}
+	for _, tt := range tests {
+		got, errs := jobTimeout(lookup(map[string]string{"STACKVAULT_JOB_TIMEOUT": tt.value}), nil)
+		if got != tt.want || (len(errs) > 0) != tt.wantErr {
+			t.Errorf("%q: got %v, errors %v; want %v, error %v", tt.value, got, errs, tt.want, tt.wantErr)
+		}
+	}
+}

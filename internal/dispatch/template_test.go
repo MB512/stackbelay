@@ -3,13 +3,14 @@ package dispatch
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/MB512/stackvault/internal/docker"
 	"github.com/MB512/stackvault/internal/restic"
 )
 
 func TestNewTemplate(t *testing.T) {
-	cfg := TemplateConfig{StacksRoot: "/home/docker", JobsDir: "/data/jobs", Hostname: "host-a"}
+	cfg := TemplateConfig{StacksRoot: "/home/docker", JobsDir: "/data/jobs", Hostname: "host-a", JobTimeout: 72 * time.Hour}
 	stacksMount := docker.Mount{Type: "bind", Source: "/home/docker", Target: "/home/docker"}
 	socket := docker.Mount{Type: "bind", Source: "/run/user/1000/docker.sock", Target: "/var/run/docker.sock"}
 
@@ -43,6 +44,9 @@ func TestNewTemplate(t *testing.T) {
 	}
 	if cs.Mounts[2] != (docker.Mount{Type: "volume", Source: "stackvault_data", Target: "/job", SubPath: "jobs/01ABCDEFGHJKMNPQRSTVWXYZ01"}) {
 		t.Fatalf("job mount: %+v", cs.Mounts[2])
+	}
+	if cs.Env["STACKVAULT_JOB_TIMEOUT"] != "72h0m0s" {
+		t.Fatalf("job timeout env: %q", cs.Env["STACKVAULT_JOB_TIMEOUT"])
 	}
 
 	// Errors: stacks root not at the same path, data not mounted, no image.

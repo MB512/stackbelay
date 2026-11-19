@@ -22,7 +22,7 @@ func TestLoadManagerDefaults(t *testing.T) {
 	}
 	if c.DataDir != "/data" || c.ListenAddr != ":8080" || c.SessionTTL != 12*time.Hour ||
 		c.AllowInsecureHTTP || c.WorkerImage != "" || len(c.SecretKey) != 32 || c.MaxJobs != 1 || c.EnableShell ||
-		c.CleanupImageMinAge != 168*time.Hour {
+		c.CleanupImageMinAge != 168*time.Hour || c.JobTimeout != 48*time.Hour {
 		t.Fatalf("unexpected config %+v", c)
 	}
 	if c.DBPath() != "/data/stackvault.db" || c.JobsDir() != "/data/jobs" {
@@ -60,6 +60,7 @@ func TestLoadManagerKeyFile(t *testing.T) {
 		"STACKVAULT_MAX_JOBS":              "3",
 		"STACKVAULT_ENABLE_SHELL":          "true",
 		"STACKVAULT_CLEANUP_IMAGE_MIN_AGE": "48h",
+		"STACKVAULT_JOB_TIMEOUT":           "72h",
 		"TZ":                               ":Europe/Berlin",
 	}), read)
 	if err != nil {
@@ -69,7 +70,7 @@ func TestLoadManagerKeyFile(t *testing.T) {
 		t.Fatalf("time zone %v", c.TimeZone)
 	}
 	if len(c.SecretKey) != 32 || c.DataDir != "/srv/sv" || !c.AllowInsecureHTTP || c.SessionTTL != 30*time.Minute || c.MaxJobs != 3 || !c.EnableShell ||
-		c.CleanupImageMinAge != 48*time.Hour {
+		c.CleanupImageMinAge != 48*time.Hour || c.JobTimeout != 72*time.Hour {
 		t.Fatalf("unexpected config %+v", c)
 	}
 }

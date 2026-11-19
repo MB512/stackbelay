@@ -67,6 +67,7 @@ compose, so they are never affected by stopping a stack.
 | `STACKVAULT_ALLOW_INSECURE_HTTP` | accept logins over plain HTTP (testing without TLS proxy), default `false` |
 | `STACKVAULT_WORKER_IMAGE` | image for worker containers, default: the manager's own image |
 | `STACKVAULT_MAX_JOBS` | jobs running at the same time across all stacks, default `1` |
+| `STACKVAULT_JOB_TIMEOUT` | hard limit for one job (Go duration, at least `1m`), default `48h`; passed to every worker (issue #32) |
 | `STACKVAULT_CLEANUP_IMAGE_MIN_AGE` | host cleanup: keep dangling images pulled, tagged or replaced by an update less than this long ago, whole hours, default `168h`; see "Host cleanup" |
 | `STACKVAULT_ENABLE_SHELL` | admin-only container shells ("Shell" per container on the Status tab), default `false`; see "Container shell" |
 | `STACKVAULT_LOG_LEVEL` | `debug`, `info`, `warn`, `error` |
@@ -211,6 +212,7 @@ docker run --detach --name stackvault-job-<id>
   --mount <host jobs dir>/<ID> -> /job   (bind, or volume with volume-subpath)
   --mount type=volume,source=stackvault-restic-cache,target=/cache
   --env STACKS_ROOT --env STACKVAULT_HOSTNAME --env RESTIC_CACHE_DIR
+  --env STACKVAULT_JOB_TIMEOUT [--env STACKVAULT_LOG_LEVEL]
   --env RESTIC_REPOSITORY --env RESTIC_PASSWORD --env <backend variables>
   <image> /app/worker run /job
 ```
@@ -1317,7 +1319,7 @@ The repository always comes from the environment:
 | `RESTIC_REPOSITORY` | repository (required) |
 | `RESTIC_PASSWORD_FILE` / `RESTIC_PASSWORD` | one is required |
 | backend variables (`AWS_*`, `B2_*`, `AZURE_*`, `GOOGLE_*`, `RESTIC_REST_*`) | passed to restic; values are redacted from output |
-| `STACKVAULT_JOB_TIMEOUT` | hard job timeout, Go duration, default `6h` |
+| `STACKVAULT_JOB_TIMEOUT` | hard job timeout, Go duration (at least `1m`), default `48h` |
 | `STACKVAULT_LOG_LEVEL` | `debug`, `info`, `warn`, `error` |
 
 restic never inherits the full process environment: it gets an allow-list

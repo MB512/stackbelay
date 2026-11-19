@@ -17,7 +17,7 @@ import (
 type Worker struct {
 	StacksRoot string        // STACKS_ROOT, absolute
 	Hostname   string        // STACKVAULT_HOSTNAME, passed to restic --host
-	JobTimeout time.Duration // STACKVAULT_JOB_TIMEOUT, default 6h
+	JobTimeout time.Duration // STACKVAULT_JOB_TIMEOUT, default DefaultJobTimeout
 	LogLevel   slog.Level    // STACKVAULT_LOG_LEVEL, default info
 
 	// RepoLocation is RESTIC_REPOSITORY.
@@ -39,7 +39,6 @@ func LoadWorker(getenv func(string) string) (Worker, error) {
 		StacksRoot:   getenv("STACKS_ROOT"),
 		Hostname:     getenv("STACKVAULT_HOSTNAME"),
 		RepoLocation: getenv("RESTIC_REPOSITORY"),
-		JobTimeout:   6 * time.Hour,
 	}
 
 	c.StacksRoot, errs = absPath(getenv, "STACKS_ROOT", "", errs)
@@ -67,18 +66,30 @@ func LoadWorker(getenv func(string) string) (Worker, error) {
 		}
 	}
 
-	if v := getenv("STACKVAULT_JOB_TIMEOUT"); v != "" {
-		d, err := time.ParseDuration(v)
-		if err != nil || d <= 0 {
-			errs = append(errs, fmt.Errorf("STACKVAULT_JOB_TIMEOUT: invalid duration %q", v))
-		} else {
-			c.JobTimeout = d
-		}
-	}
+	c.JobTimeout, errs = jobTimeout(getenv, errs)
 
 	c.LogLevel, errs = logLevel(getenv, errs)
 
 	return c, errors.Join(errs...)
+}
+
+// DefaultJobTimeout is the hard limit for one job (pre-stop snapshot,
+// downtime, restore, everything). High, because a first restore of a large
+// stack over the internet can take a day.
+const DefaultJobTimeout = 48 * time.Hour
+
+// jobTimeout reads STACKVAULT_JOB_TIMEOUT (Go duration, at least 1m). The
+// manager reads it to pass it on to its workers, the worker to apply it.
+func jobTimeout(getenv func(string) string, errs []error) (time.Duration, []error) {
+	v := getenv("STACKVAULT_JOB_TIMEOUT")
+	if v == "" {
+		return DefaultJobTimeout, errs
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil || d < time.Minute {
+		return DefaultJobTimeout, append(errs, fmt.Errorf("STACKVAULT_JOB_TIMEOUT: invalid duration %q (minimum 1m, e.g. 48h)", v))
+	}
+	return d, errs
 }
 
 // absPath reads an absolute path variable. def is used if the variable is

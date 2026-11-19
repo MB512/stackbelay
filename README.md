@@ -176,6 +176,7 @@ Environment variables only:
 | `STACKVAULT_SESSION_TTL` | session lifetime, default `12h` |
 | `STACKVAULT_ALLOW_INSECURE_HTTP` | accept logins over plain HTTP (testing only), default `false` |
 | `STACKVAULT_WORKER_IMAGE` | image for worker containers, default: the manager's own image |
+| `STACKVAULT_JOB_TIMEOUT` | hard limit for one job (backup, restore, update, ...), e.g. `72h`, default `48h`; a job running longer is stopped (the stack is restarted as after any failure) |
 | `STACKVAULT_MAX_JOBS` | jobs running at the same time across all stacks, default `1` (restores into a stack that is not running do not count) |
 | `STACKVAULT_CLEANUP_IMAGE_MIN_AGE` | host cleanup: keep unused untagged images pulled or replaced by an update less than this long ago, whole hours, default `168h` |
 | `STACKVAULT_ENABLE_SHELL` | `true` gives admins a shell in stack containers ("Shell" per container on the Status tab), default `false` |

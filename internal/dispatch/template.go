@@ -10,6 +10,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/MB512/stackvault/internal/docker"
 	"github.com/MB512/stackvault/internal/jobs"
@@ -52,6 +53,9 @@ type Template struct {
 	Socket   string
 	Hostname string // STACKVAULT_HOSTNAME for restic --host
 	LogLevel string // STACKVAULT_LOG_LEVEL, optional
+	// JobTimeout is passed as STACKVAULT_JOB_TIMEOUT; 0 leaves the
+	// worker's default.
+	JobTimeout time.Duration
 	// OwnStack is the name of the stack the manager itself belongs to (its
 	// compose project directory is a stack directory under STACKS_ROOT),
 	// or "" if it is not one of the stacks.
@@ -80,6 +84,9 @@ func (t Template) Spec(jobID string, repo restic.Repo) (docker.ContainerSpec, er
 	}
 	if t.LogLevel != "" {
 		env["STACKVAULT_LOG_LEVEL"] = t.LogLevel
+	}
+	if t.JobTimeout > 0 {
+		env["STACKVAULT_JOB_TIMEOUT"] = t.JobTimeout.String()
 	}
 	for _, kv := range repo.Env {
 		k, v, ok := strings.Cut(kv, "=")
@@ -127,6 +134,7 @@ type TemplateConfig struct {
 	JobsDir     string // the jobs directory as the manager sees it
 	Hostname    string
 	LogLevel    string
+	JobTimeout  time.Duration
 }
 
 // NewTemplate builds the worker template. self describes the manager's own
@@ -135,7 +143,7 @@ type TemplateConfig struct {
 func NewTemplate(cfg TemplateConfig, self *docker.SelfInfo) (Template, error) {
 	t := Template{
 		Image: cfg.WorkerImage, StacksRoot: cfg.StacksRoot, Socket: dockerSocket,
-		Hostname: cfg.Hostname, LogLevel: cfg.LogLevel,
+		Hostname: cfg.Hostname, LogLevel: cfg.LogLevel, JobTimeout: cfg.JobTimeout,
 		Jobs: docker.Mount{Type: "bind", Source: cfg.JobsDir},
 	}
 	if self == nil {
