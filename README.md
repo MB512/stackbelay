@@ -157,6 +157,11 @@ The image is `ghcr.io/mb512/stackvault` (linux/amd64, linux/arm64). It
 contains the manager (web UI, scheduler) and the worker; the manager starts
 its workers from its own image.
 
+Tags: `<major>.<minor>.<patch>`, `<major>.<minor>` and `latest` for
+releases. `dev` is an untested development build of an arbitrary commit,
+moved to each new dev build without a version number (the UI shows
+`dev-<commit>`); do not use it in production.
+
 ## Configuration
 
 Environment variables only:
