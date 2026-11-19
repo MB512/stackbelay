@@ -12,6 +12,9 @@ All notable changes to StackVault. The format is based on
   output as the error (e.g. `restic restore: signal: killed`; #30). A
   cancelled job is now `cancelled`, and a job stopped by the job timeout
   says `job timeout (…) exceeded`.
+- A cancelled or timed-out job **killed restic**, which left its lock in
+  the repository (an append-only repository cannot remove it; #30). restic
+  is now interrupted like Ctrl+C and killed only after 30 s.
 
 ## [0.4.0] - 2026-11-18
 

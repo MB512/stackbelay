@@ -196,7 +196,10 @@ the worker stops through the raw socket loses these mounts and cannot be
 started again (only recreated). Use Docker Engine on Linux (or inside WSL
 without Docker Desktop). Stacks without bind mounts are not affected. Cancelling a queued job marks it `cancelled`;
 cancelling a running job sends SIGTERM (never SIGKILL) to the worker, which
-restarts the stack and reports `cancelled`.
+restarts the stack and reports `cancelled`. When a job is cancelled or
+runs into the job timeout, a running restic gets SIGINT (killed only if it
+has not exited after 30 s), so it removes its lock from the repository: in
+an append-only repository a client cannot remove a stale lock.
 
 Worker container template (fixed, nothing from user input):
 

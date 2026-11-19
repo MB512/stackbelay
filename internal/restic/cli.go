@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // CLI implements Runner by running the restic binary.
@@ -63,8 +64,19 @@ func (c *CLI) command(ctx context.Context, repo Repo, args ...string) (*exec.Cmd
 	}
 	cmd := exec.CommandContext(ctx, c.binary(), args...)
 	cmd.Env = env
+	// When ctx ends (cancel, job timeout), ask restic to stop like Ctrl+C
+	// does, so it removes its lock from the repository: in an append-only
+	// repository a stale lock cannot be removed by a client. Only if restic
+	// has not exited after stopGrace is it killed (the default without
+	// Cancel is an immediate kill). Like Process.CloseMainWindow before
+	// Process.Kill in .NET.
+	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
+	cmd.WaitDelay = stopGrace
 	return cmd, nil
 }
+
+// stopGrace is how long restic may take to clean up after an interrupt.
+const stopGrace = 30 * time.Second
 
 // withLimits puts the repository's global options (download limit) in
 // front of args.

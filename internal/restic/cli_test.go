@@ -1,7 +1,11 @@
 package restic
 
 import (
+	"context"
 	"errors"
+	"os"
+	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -169,5 +173,35 @@ func TestWithLimits(t *testing.T) {
 		if _, err := withLimits(Repo{LimitDownloadKiB: bad}, nil); err == nil {
 			t.Errorf("limit %d accepted", bad)
 		}
+	}
+}
+
+// TestCancelInterruptsRestic checks that an ended context interrupts
+// restic (SIGINT, so it can remove its repository lock) instead of
+// killing it (issue #30).
+func TestCancelInterruptsRestic(t *testing.T) {
+	bin := filepath.Join(t.TempDir(), "restic")
+	script := "#!/bin/sh\n" +
+		"trap 'echo interrupted; exit 130' INT\n" +
+		"echo started\n" +
+		"while :; do sleep 0.05; done\n"
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var lines []string
+	c := &CLI{Binary: bin}
+	err := c.runJSON(ctx, Repo{Location: "/repo"}, func(b []byte) {
+		lines = append(lines, string(b))
+		if string(b) == "started" {
+			cancel()
+		}
+	}, "restore")
+	if err == nil {
+		t.Fatal("runJSON: want an error after cancel")
+	}
+	if want := []string{"started", "interrupted"}; !reflect.DeepEqual(lines, want) {
+		t.Errorf("output = %q, want %q (restic was not interrupted)", lines, want)
 	}
 }
