@@ -597,6 +597,14 @@ and without confirmation fails. The worker gets `no_backup` in the spec
 explicitly; without it, missing repository settings fail the job instead of
 silently skipping the backup.
 
+A stack **with** a repository cannot be updated without backup: if the
+repository is unreachable (e.g. the repository server or the connection to
+it is down), every update of the stack, manual or scheduled, fails at step
+1 once restic gives up retrying, before anything is pulled or stopped. The
+updates have to wait until the repository is reachable again; the
+"no backup" confirmation is offered only for stacks without repository
+(discussion: issue #43).
+
 Not covered: images built locally (`build:`) are not rebuilt; a service
 that starts, passes the check and fails later is not detected.
 
