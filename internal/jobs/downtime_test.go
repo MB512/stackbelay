@@ -127,7 +127,7 @@ func TestUpdateDowntime(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "downtime timeout") || !strings.Contains(err.Error(), "the stack was not changed") {
 		t.Fatalf("err = %v", err)
 	}
-	assertCalls(t, e.calls.list(), []string{"restic.CheckRepo", "docker.Services", "docker.Pull app,db",
+	assertCalls(t, e.calls.list(), []string{"restic.CheckRepo", "docker.Services", "docker.Pull app,db", "docker.ConfiguredImages app,db",
 		"restic.Backup tag=pre-stop parent= host=host-a", "gate.Acquire", "docker.Stop",
 		"restic.Backup tag=final parent=snap-pre-stop host=host-a", "docker.Start app,db", "docker.WaitHealthy"})
 }

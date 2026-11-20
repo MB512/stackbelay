@@ -15,6 +15,7 @@ func TestUpdate(t *testing.T) {
 		check   = "restic.CheckRepo"
 		svcs    = "docker.Services"
 		pull    = "docker.Pull app,db"
+		cmp     = "docker.ConfiguredImages app,db"
 		prestop = "restic.Backup tag=pre-stop parent= host=host-a"
 		final   = "restic.Backup tag=final parent=snap-pre-stop host=host-a"
 		stop    = "docker.Stop"
@@ -34,12 +35,12 @@ func TestUpdate(t *testing.T) {
 		{
 			name:      "with backup",
 			opts:      UpdateOptions{Backup: true},
-			wantCalls: []string{check, svcs, pull, prestop, stop, final, up, healthy, after},
+			wantCalls: []string{check, svcs, pull, cmp, prestop, stop, final, up, healthy, after},
 			wantRes:   ChangeResult{PreStopSnapshot: "snap-pre-stop", Snapshot: "snap-final"},
 		},
 		{
 			name:      "without repository: no snapshots",
-			wantCalls: []string{svcs, pull, stop, up, healthy, after},
+			wantCalls: []string{svcs, pull, cmp, stop, up, healthy, after},
 		},
 		{
 			name:      "pull fails: nothing is stopped",
@@ -59,33 +60,33 @@ func TestUpdate(t *testing.T) {
 			name:      "pre-stop snapshot fails: continue without parent",
 			opts:      UpdateOptions{Backup: true},
 			setup:     func(e *env) { e.restic.failOn["Backup:pre-stop"] = errBoom },
-			wantCalls: []string{check, svcs, pull, prestop, stop, "restic.Backup tag=final parent= host=host-a", up, healthy, after},
+			wantCalls: []string{check, svcs, pull, cmp, prestop, stop, "restic.Backup tag=final parent= host=host-a", up, healthy, after},
 			wantRes:   ChangeResult{Snapshot: "snap-final"},
 		},
 		{
 			name:      "final snapshot fails after stop: old containers restart, no up",
 			opts:      UpdateOptions{Backup: true},
 			setup:     func(e *env) { e.restic.failOn["Backup:final"] = errBoom },
-			wantCalls: []string{check, svcs, pull, prestop, stop, final, start, healthy},
+			wantCalls: []string{check, svcs, pull, cmp, prestop, stop, final, start, healthy},
 			wantRes:   ChangeResult{PreStopSnapshot: "snap-pre-stop"},
 			wantErr:   "final snapshot (the stack was not changed)",
 		},
 		{
 			name:      "stop fails: old containers restart",
 			setup:     func(e *env) { e.docker.failOn["Stop"] = errBoom },
-			wantCalls: []string{svcs, pull, stop, start, healthy},
+			wantCalls: []string{svcs, pull, cmp, stop, start, healthy},
 			wantErr:   "stopping stack",
 		},
 		{
 			name:      "up fails without repository: no rollback, old version not started",
 			setup:     func(e *env) { e.docker.upFailures = 1 },
-			wantCalls: []string{svcs, pull, stop, up},
+			wantCalls: []string{svcs, pull, cmp, stop, up},
 			wantErr:   "not rolled back (no repository)",
 		},
 		{
 			name:      "unhealthy without repository: no rollback",
 			setup:     func(e *env) { e.docker.failOn["WaitHealthy"] = errBoom },
-			wantCalls: []string{svcs, pull, stop, up, healthy},
+			wantCalls: []string{svcs, pull, cmp, stop, up, healthy},
 			wantErr:   "not rolled back (no repository)",
 		},
 		{
@@ -97,7 +98,7 @@ func TestUpdate(t *testing.T) {
 				e.docker.servicesAfter = append([]docker.ServiceState(nil), e.docker.services...)
 				e.docker.servicesAfter[0].ImageID = "sha256:new"
 			},
-			wantCalls: []string{check, svcs, pull, prestop, stop, final, up, healthy, after},
+			wantCalls: []string{check, svcs, pull, cmp, prestop, stop, final, up, healthy, after},
 			wantRes: ChangeResult{PreStopSnapshot: "snap-pre-stop", Snapshot: "snap-final", ImagesChanged: []string{"app"},
 				ReplacedImages: []string{"sha256:cd34cd34cd34cd34cd34cd34cd34cd34cd34cd34cd34cd34cd34cd34cd34cd34"}},
 		},
@@ -105,56 +106,56 @@ func TestUpdate(t *testing.T) {
 			name:      "reading the state after the update fails: success, nothing recorded",
 			opts:      UpdateOptions{Backup: true},
 			setup:     func(e *env) { e.docker.failOn["ServicesAfter"] = errBoom },
-			wantCalls: []string{check, svcs, pull, prestop, stop, final, up, healthy, after},
+			wantCalls: []string{check, svcs, pull, cmp, prestop, stop, final, up, healthy, after},
 			wantRes:   ChangeResult{PreStopSnapshot: "snap-pre-stop", Snapshot: "snap-final"},
 		},
 		{
-			name: "only if new: no new image, nothing touched",
-			opts: UpdateOptions{Backup: true, OnlyIfNew: true},
+			name: "no new image: nothing touched",
+			opts: UpdateOptions{Backup: true},
 			setup: func(e *env) {
 				e.docker.images = map[string]docker.ConfiguredImage{
 					"app": {Ref: "nextcloud:29", ID: testImageID},
 					"db":  {Ref: "postgres:16"}, // image not present: nothing to compare
 				}
 			},
-			wantCalls: []string{check, svcs, pull, "docker.ConfiguredImages app,db"},
+			wantCalls: []string{check, svcs, pull, cmp},
 			wantRes:   ChangeResult{Unchanged: true},
 		},
 		{
-			name: "only if new: a new image, full update",
-			opts: UpdateOptions{Backup: true, OnlyIfNew: true},
+			name: "a new image: full update",
+			opts: UpdateOptions{Backup: true},
 			setup: func(e *env) {
 				e.docker.images = map[string]docker.ConfiguredImage{"app": {Ref: "nextcloud:29", ID: "sha256:new"}, "db": {Ref: "postgres:16"}}
 			},
-			wantCalls: []string{check, svcs, pull, "docker.ConfiguredImages app,db", prestop, stop, final, up, healthy, after},
+			wantCalls: []string{check, svcs, pull, cmp, prestop, stop, final, up, healthy, after},
 			wantRes:   ChangeResult{PreStopSnapshot: "snap-pre-stop", Snapshot: "snap-final"},
 		},
 		{
 			// Same image, but the container runs it by digest (pinned by a
 			// restore): the update recreates it with the tag ("unpin").
-			name: "only if new: pinned container, full update",
-			opts: UpdateOptions{Backup: true, OnlyIfNew: true},
+			name: "pinned container: full update",
+			opts: UpdateOptions{Backup: true},
 			setup: func(e *env) {
 				e.docker.services[0].ImageRef = "nextcloud@" + strings.TrimPrefix(testDigest, "nextcloud@")
 				e.docker.images = map[string]docker.ConfiguredImage{"app": {Ref: "nextcloud:29", ID: testImageID}, "db": {Ref: "postgres:16"}}
 			},
-			wantCalls: []string{check, svcs, pull, "docker.ConfiguredImages app,db", prestop, stop, final, up, healthy, after},
+			wantCalls: []string{check, svcs, pull, cmp, prestop, stop, final, up, healthy, after},
 			wantRes:   ChangeResult{PreStopSnapshot: "snap-pre-stop", Snapshot: "snap-final"},
 		},
 		{
-			name: "only if new: built locally does not count",
-			opts: UpdateOptions{Backup: true, OnlyIfNew: true},
+			name: "built locally does not count",
+			opts: UpdateOptions{Backup: true},
 			setup: func(e *env) {
 				e.docker.images = map[string]docker.ConfiguredImage{"app": {}, "db": {}}
 			},
-			wantCalls: []string{check, svcs, pull, "docker.ConfiguredImages app,db"},
+			wantCalls: []string{check, svcs, pull, cmp},
 			wantRes:   ChangeResult{Unchanged: true},
 		},
 		{
-			name:      "only if new: comparing fails, nothing touched",
-			opts:      UpdateOptions{Backup: true, OnlyIfNew: true},
+			name:      "comparing fails: nothing touched",
+			opts:      UpdateOptions{Backup: true},
 			setup:     func(e *env) { e.docker.failOn["ConfiguredImages"] = errBoom },
-			wantCalls: []string{check, svcs, pull, "docker.ConfiguredImages app,db"},
+			wantCalls: []string{check, svcs, pull, cmp},
 			wantErr:   "comparing images (the stack was not changed)",
 		},
 		{
@@ -198,7 +199,7 @@ func rollbackEnv(t *testing.T) *env {
 
 func TestUpdateRollback(t *testing.T) {
 	head := []string{
-		"restic.CheckRepo", "docker.Services", "docker.Pull app,db",
+		"restic.CheckRepo", "docker.Services", "docker.Pull app,db", "docker.ConfiguredImages app,db",
 		"restic.Backup tag=pre-stop parent= host=host-a", "docker.Stop",
 		"restic.Backup tag=final parent=snap-pre-stop host=host-a",
 		"docker.Up app,db",

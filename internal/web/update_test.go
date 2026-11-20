@@ -39,7 +39,7 @@ func TestUpdateJob(t *testing.T) {
 	}
 	r = e.do(carol, http.MethodGet, "/stacks/web/update", nil, nil)
 	expect(t, r, http.StatusOK, "")
-	for _, want := range []string{"<h1>Update web</h1>", "rolled back", `name="only_if_new" checked`, "a snapshot while it runs",
+	for _, want := range []string{"<h1>Update web</h1>", "rolled back", "a snapshot while it runs",
 		"restores the final snapshot taken just before the update in place", "No update check since the manager started"} {
 		if !strings.Contains(r.body, want) {
 			t.Errorf("update page lacks %s", want)
@@ -52,14 +52,13 @@ func TestUpdateJob(t *testing.T) {
 	// Carol queues an update with backup; she may cancel it, alice may not.
 	token := csrfOf(e, carol, "/stacks/web/update")
 	r = e.do(carol, http.MethodPost, "/stacks/web/update",
-		url.Values{"csrf_token": {token}, "only_if_new": {"on"}}, nil)
+		url.Values{"csrf_token": {token}}, nil)
 	if r.status != http.StatusSeeOther || !strings.HasPrefix(r.location, jobLocation) {
 		t.Fatalf("update: %d %q %s", r.status, r.location, r.body)
 	}
 	id := strings.TrimPrefix(r.location, jobLocation)
 	j, err := e.st.JobByID(ctx, id)
-	if err != nil || j.Type != jobs.TypeUpdate || j.Options.NoBackup || j.Requester != "carol" ||
-		!j.Options.OnlyIfNew {
+	if err != nil || j.Type != jobs.TypeUpdate || j.Options.NoBackup || j.Requester != "carol" {
 		t.Fatalf("job: %+v %v", j, err)
 	}
 	if r := e.do(alice, http.MethodGet, "/jobs/"+id, nil, nil); strings.Contains(r.body, "/cancel") {
@@ -96,7 +95,7 @@ func TestUpdateJob(t *testing.T) {
 		t.Fatalf("confirmed: %d %s", r.status, r.body)
 	}
 	j, err = e.st.JobByID(ctx, strings.TrimPrefix(r.location, jobLocation))
-	if err != nil || j.Type != jobs.TypeUpdate || !j.Options.NoBackup || j.Options.OnlyIfNew {
+	if err != nil || j.Type != jobs.TypeUpdate || !j.Options.NoBackup {
 		t.Fatalf("job without backup: %+v %v", j, err)
 	}
 
@@ -173,8 +172,7 @@ func TestUpdateCheck(t *testing.T) {
 	}
 	r = e.get("/stacks/web/update")
 	for _, want := range []string{"Last update check", "1 running service can be updated",
-		"<code>db</code>\n      runs the image by digest", ">Unpin now</button>",
-		`<input type="hidden" name="only_if_new" value="on">`} {
+		"<code>db</code>\n      runs the image by digest", ">Unpin now</button>"} {
 		if !strings.Contains(r.body, want) {
 			t.Errorf("update page lacks %q", want)
 		}

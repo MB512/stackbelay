@@ -33,9 +33,6 @@ type JobOptions struct {
 	// repository, i.e. without backup and without rollback. It only takes
 	// effect if the stack still has no repository when the job starts.
 	NoBackup bool `json:"no_backup,omitempty"`
-	// OnlyIfNew (update): end after the pull if no running service gets a
-	// new image.
-	OnlyIfNew bool `json:"only_if_new,omitempty"`
 	// Compose editor (compose-apply): the stack's main compose file (base
 	// name), the SHA-256 (hex) of the content the editor started from and
 	// of the new content (stored in job_compose, see Job.ComposeContent).
@@ -52,7 +49,7 @@ type JobResult struct {
 	// 0.4 or older kept (shown for old jobs only).
 	PreviousDir string `json:"previous_dir,omitempty"`
 	RolledBack  bool   `json:"rolled_back,omitempty"` // update: failed and restored to the job's snapshot
-	Unchanged   bool   `json:"unchanged,omitempty"`   // update "only if new": no new image, nothing done
+	Unchanged   bool   `json:"unchanged,omitempty"`   // update: no new image, nothing done
 	// ImagesChanged: update, compose apply: services whose running image
 	// (image id) differs after the change.
 	ImagesChanged []string `json:"images_changed,omitempty"`

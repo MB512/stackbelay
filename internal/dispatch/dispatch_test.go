@@ -549,7 +549,7 @@ func TestUpdateRepositoryHandling(t *testing.T) {
 		t.Fatalf("update without repository and confirmation: %+v", got)
 	}
 
-	opts := store.JobOptions{NoBackup: true, OnlyIfNew: true}
+	opts := store.JobOptions{NoBackup: true}
 	confirmed := e.submit("norepo", jobs.TypeUpdate, opts)
 	withRepo := e.submit("web", jobs.TypeUpdate, opts) // repository wins
 	e.d.Step(ctx)
@@ -571,9 +571,6 @@ func TestUpdateRepositoryHandling(t *testing.T) {
 		}
 		if spec.NoBackup != tc.wantNoBackup || spec.CarryOverJobs != tc.wantCarry {
 			t.Errorf("spec of %s: no_backup %v, carry-over %q", spec.Stack, spec.NoBackup, spec.CarryOverJobs)
-		}
-		if !spec.OnlyIfNew {
-			t.Errorf("spec of %s: only_if_new %v", spec.Stack, spec.OnlyIfNew)
 		}
 		var env map[string]string
 		for _, cs := range e.docker.started {

@@ -7,7 +7,7 @@
 //	worker run <job-dir>
 //	worker backup  <stack>
 //	worker restore [--no-start] [--pin-images] [--import] [--limit-download <KiB/s>] <stack> <snapshot-id>
-//	worker update  [--no-backup] [--only-if-new] <stack>
+//	worker update  [--no-backup] <stack>
 //	worker stop|start|restart|up|down <stack>
 //	worker cleanup [--image-min-age <duration>]
 //
@@ -49,7 +49,7 @@ const usage = `usage:
   worker run <job-dir>
   worker backup  <stack>
   worker restore [--no-start] [--pin-images] [--import] [--limit-download <KiB/s>] <stack> <snapshot-id>
-  worker update  [--no-backup] [--only-if-new] <stack>
+  worker update  [--no-backup] <stack>
   worker stop|start|restart|up|down <stack>
   worker cleanup [--image-min-age <duration>]
 `
@@ -243,11 +243,10 @@ func parseArgs(args []string) (jobs.Spec, string, error) {
 		fs := flag.NewFlagSet("update", flag.ContinueOnError)
 		fs.SetOutput(io.Discard)
 		noBackup := fs.Bool("no-backup", false, "update without snapshots and without rollback (no repository)")
-		onlyIfNew := fs.Bool("only-if-new", false, "stop after the pull if no running service gets a new image")
 		if err := fs.Parse(args[1:]); err != nil || fs.NArg() != 1 {
-			return jobs.Spec{}, "", fmt.Errorf("%w: update expects [--no-backup] [--only-if-new] <stack>", errUsage)
+			return jobs.Spec{}, "", fmt.Errorf("%w: update expects [--no-backup] <stack>", errUsage)
 		}
-		return jobs.Spec{Type: jobs.TypeUpdate, Stack: fs.Arg(0), NoBackup: *noBackup, OnlyIfNew: *onlyIfNew}, "", nil
+		return jobs.Spec{Type: jobs.TypeUpdate, Stack: fs.Arg(0), NoBackup: *noBackup}, "", nil
 
 	case "cleanup":
 		fs := flag.NewFlagSet("cleanup", flag.ContinueOnError)
@@ -310,8 +309,7 @@ func execute(ctx context.Context, p *jobs.Pipeline, cfg config.Worker, spec jobs
 		status.Snapshot, status.SafetySnapshot = res.Snapshot, res.SafetySnapshot
 		return err
 	case jobs.TypeUpdate:
-		res, err := p.Update(ctx, stack, jobs.UpdateOptions{Backup: !spec.NoBackup, CarryOver: spec.CarryOverJobs,
-			OnlyIfNew: spec.OnlyIfNew})
+		res, err := p.Update(ctx, stack, jobs.UpdateOptions{Backup: !spec.NoBackup, CarryOver: spec.CarryOverJobs})
 		recordChange(status, res)
 		return err
 	case jobs.TypeComposeApply:

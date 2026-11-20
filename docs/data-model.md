@@ -84,7 +84,7 @@ CREATE TABLE jobs (
   trigger       TEXT NOT NULL,              -- manual | schedule
   requested_by  INTEGER REFERENCES users(id), -- NULL for schedule
   state         TEXT NOT NULL,              -- queued | running | succeeded | failed | cancelled
-  options       TEXT NOT NULL DEFAULT '{}', -- JSON (snapshot id, only_if_new, ...)
+  options       TEXT NOT NULL DEFAULT '{}', -- JSON (snapshot id, no_backup, ...)
   snapshot_id   TEXT,
   error         TEXT,
   queued_at     TEXT NOT NULL,

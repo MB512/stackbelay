@@ -186,12 +186,11 @@ func (s *Scheduler) Fire(ctx context.Context, scheduleID int64) {
 			// Confirmed when the schedule was created: while the stack has
 			// no repository, the update runs without backup and rollback
 			// (the dispatcher still backs up if it has one by then).
-			job.Options = store.JobOptions{OnlyIfNew: true, NoBackup: true}
-			detail = "only if new, without backup if the stack has no repository"
+			job.Options = store.JobOptions{NoBackup: true}
+			detail = "without backup if the stack has no repository"
 			break
 		}
-		job.Options = store.JobOptions{OnlyIfNew: true}
-		detail = "only if new"
+		detail = "update"
 	default:
 		log.Error("skipping schedule with unknown job type")
 		return

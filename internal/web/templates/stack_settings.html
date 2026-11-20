@@ -102,7 +102,7 @@
       <tr>
         <td><code>{{.CronExpr}}</code>{{if not .Enabled}} <span class="badge">disabled</span>{{end}}</td>
         <td>{{if eq .Type "update"}}Update{{else}}Backup{{end}}</td>
-        <td>{{if eq .Type "update"}}only if new{{if .NoBackup}}, <strong>without backup and rollback</strong> while the stack has no repository{{end}}
+        <td>{{if and (eq .Type "update") .NoBackup}}<strong>without backup and rollback</strong> while the stack has no repository
           {{- else}}<span class="muted">–</span>{{end}}</td>
         <td>{{if .Next.IsZero}}<span class="muted">—</span>{{else}}{{when .Next}}{{end}}</td>
         <td class="actions">
@@ -145,7 +145,7 @@
       <label class="check"><input type="radio" name="job_type" value="backup"{{if not .NewSchedule.Update}} checked{{end}}>
         Backup</label>
       <label class="check"><input type="radio" name="job_type" value="update"{{if .NewSchedule.Update}} checked{{end}}>
-        Update (only if there is a new image; with backup and automatic rollback)</label>
+        Update (with backup and automatic rollback)</label>
       <p class="hint">A scheduled update pulls the images of the running services and only continues if one of them is
         new (or runs a version pinned by a restore): then it backs up, recreates and verifies the services and rolls back
         if they do not come up. It needs a running stack; without repository it runs without backup and without

@@ -18,13 +18,12 @@
     <p><strong>Pinned versions:</strong> {{range $i, $s := .}}{{if $i}}, {{end}}<code>{{$s}}</code>{{end}}
       {{if eq (len .) 1}}runs{{else}}run{{end}} the image by digest, as a restore or rollback started
       {{if eq (len .) 1}}it{{else}}them{{end}}, not by the tag in the compose file. Unpinning recreates
-      {{if eq (len .) 1}}it{{else}}them{{end}} with the tag: an update with "only if there is something new", so it
+      {{if eq (len .) 1}}it{{else}}them{{end}} with the tag: an update, so it
       also pulls newer images of the tags and recreates their services{{if $.Data.HasRepo}}, with backup and
       automatic rollback{{end}}.</p>
     {{- if $.Data.HasRepo}}
     <form method="post" action="/stacks/{{$.Data.Stack.Name}}/update">
       <input type="hidden" name="csrf_token" value="{{$.Data.CSRF}}">
-      <input type="hidden" name="only_if_new" value="on">
       <button type="submit"{{if $.Data.Unavailable}} disabled{{end}}>Unpin now</button>
     </form>
     {{- else}}
@@ -43,7 +42,9 @@
   <div class="card wide">
     <p>The update recreates the running services with the newest images of their tags:</p>
     <ol>
-      <li>Pull the images (<code>docker compose pull</code>) while the stack keeps running. If that fails, nothing is changed.</li>
+      <li>Pull the images (<code>docker compose pull</code>) while the stack keeps running. If that fails, nothing is changed.
+        If every running service already runs the newest image of its tag, the update ends here: nothing is backed up,
+        stopped or recreated (a version pinned by a restore counts as new: the update switches it back to the tag).</li>
       {{- if .HasRepo}}
       <li>Back up the stack: a snapshot while it runs (optional), then stop it and take the final snapshot.</li>
       {{- else}}
@@ -68,10 +69,6 @@
         {{- if not .HasRepo}} data-confirm="Update {{.Stack.Name}} without backup? It has no repository: a failed update is not rolled back and leaves the stack as it is."{{end}}>
     <input type="hidden" name="csrf_token" value="{{.CSRF}}">
     {{- with .Problem}}<p class="error" role="alert">{{.}}</p>{{end}}
-    <label class="check"><input type="checkbox" name="only_if_new" checked>
-      Only if there is something new: after the pull, stop without backup and without restarting anything if every
-      running service already runs the newest image of its tag (a version pinned by a restore counts as new: the
-      update switches it back to the tag)</label>
     {{- if .HasRepo}}
     <p class="hint">The stack is backed up first: a snapshot while it runs, then a final one with it stopped (only the
       changes in between, so the downtime is short). A rollback restores the final snapshot taken just before the update in place: only the files that

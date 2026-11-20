@@ -208,9 +208,8 @@ func (s *Server) startUpdate(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	opts := store.JobOptions{OnlyIfNew: r.PostFormValue("only_if_new") == "on"}
-	if page.HasRepo {
-	} else {
+	var opts store.JobOptions
+	if !page.HasRepo {
 		if r.PostFormValue("confirm_no_backup") != "on" {
 			page.Problem = "Confirm that the stack is updated without backup and without rollback."
 			s.renderUpdate(w, r, http.StatusBadRequest, page)
@@ -219,6 +218,6 @@ func (s *Server) startUpdate(w http.ResponseWriter, r *http.Request) {
 		opts.NoBackup = true
 	}
 	s.submitJob(w, r, st, store.Job{Type: jobs.TypeUpdate, Options: opts},
-		fmt.Sprintf("update, backup: %t, only if new: %t", page.HasRepo, opts.OnlyIfNew),
+		fmt.Sprintf("update, backup: %t", page.HasRepo),
 		page.HasRepo)
 }

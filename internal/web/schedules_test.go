@@ -136,7 +136,7 @@ func TestSchedules(t *testing.T) {
 		t.Fatalf("schedules = %+v", list)
 	}
 	r = e.get("/stacks/web/settings")
-	if !strings.Contains(r.body, "<td>Update</td>") || !strings.Contains(r.body, "only if new") {
+	if !strings.Contains(r.body, "<td>Update</td>") {
 		t.Errorf("update schedule not listed:\n%s", r.body)
 	}
 	expect(t, post("/stacks/web/schedules/"+itoa(list[1].ID)+"/delete", url.Values{}), http.StatusSeeOther, "/stacks/web/settings")
@@ -254,7 +254,7 @@ func TestJobPageUpdateWithoutBackup(t *testing.T) {
 	st, _ := e.st.StackByName(ctx, "db")
 	if err := e.st.CreateJob(ctx, store.Job{ID: "01M7M8Q4T1R4WKXGJEHRRFD980", StackID: st.ID, Type: jobs.TypeUpdate,
 		Trigger: store.TriggerSchedule, QueuedAt: e.clock(),
-		Options: store.JobOptions{OnlyIfNew: true, NoBackup: true}}); err != nil {
+		Options: store.JobOptions{NoBackup: true}}); err != nil {
 		t.Fatal(err)
 	}
 	e.loginAdmin()

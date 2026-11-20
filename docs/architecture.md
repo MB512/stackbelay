@@ -544,9 +544,7 @@ cancel):
    **before** the update.
 2. `docker compose pull --ignore-buildable --quiet -- <running services>`
    while the stack keeps running. Failure: the job fails, nothing changed.
-   With the option **only if new** (`only_if_new`, worker flag
-   `--only-if-new`, preselected in the UI) the worker then compares, per
-   running service, the id of the local image its compose file names
+   The worker then compares, per running service, the id of the local image its compose file names
    (`docker image inspect <ref>`, i.e. what `up` would use) with the
    container's image id, and the container's image reference with the
    compose file's. A service also counts as changed when its container
@@ -554,7 +552,10 @@ cancel):
    rollback: recreating it switches back to the tag ("unpin"). If no
    service changes, the job ends here as `succeeded` with
    `result.unchanged`: no snapshots, nothing stopped. Services without an
-   image (built locally) do not count.
+   image (built locally) do not count. This check is not optional (issue
+   #41): an update without a new image would only cause downtime. A
+   `spec.json` from an older version may still carry `only_if_new`; it is
+   accepted and ignored.
 3. With a repository: pre-stop snapshot (always, issue #34; failure only
    warns).
 4. `compose stop`.
@@ -628,13 +629,13 @@ argument lists:
    container started by a pinned restore or rollback
    (`name@sha256:...` instead of the tag) is compared by digest and marked
    as pinned. If running services are pinned, the update page offers
-   **Unpin now** (with a repository): it queues an update with "only if new",
+   **Unpin now** (with a repository): it queues an update,
    which recreates them with their tag (and, as any
    update, pulls newer images of the tags). The column shows running and available version: the version
    label if the image has one, else creation date and short digest.
 
 At most one check per user and three in total run at a time. The check is
-a preview: the update job pulls and compares again itself ("only if new").
+a preview: the update job pulls and compares again itself.
 ## Stop, start and restart
 
 Job types `stop`, `start` and `restart` (decided in issue #18) and `up`
@@ -844,7 +845,7 @@ with a light and a dark set; the job log is a dark panel in both modes.
 | `GET /stacks/{name}/logs/events` | logs right | live container logs (SSE), see "Container logs" |
 | `GET /logs` | logs right on the chosen stacks | global log view: choose up to 4 stacks (`?stack=a&stack=b`), see "Global log view" |
 | `GET /logs/events` | logs right on every `?stack=` | merged live container logs of those stacks (SSE) |
-| `GET /stacks/{name}/update` | update right | update page (no tab, linked from Status): last check, unpin, update form (only if new, rollback method); without repository it requires confirming "no backup, no rollback" |
+| `GET /stacks/{name}/update` | update right | update page (no tab, linked from Status): last check, unpin, update form; without repository it requires confirming "no backup, no rollback" |
 | `POST /stacks/{name}/update/check` | update right | check for newer images (registry query, no pull), see "Update check"; HTMX: returns the Status tab's fragment |
 | `POST /stacks/{name}/update` | update right | queue an update, see "Update pipeline" |
 | `GET /stacks/{name}/restore?snapshot=<id>` | restore right | confirmation page with options |
@@ -1287,8 +1288,8 @@ runs. Each schedule is enabled or disabled on its own; "Enable all" and
 (Settings tab, admins):
 
 - **backup** (with pre-stop snapshot, like every backup);
-- **update**, always with "only if new" (a scheduled update never stops or
-  backs up a stack when no running service gets a new image or is pinned).
+- **update** (like every update, it never stops or backs up a stack when
+  no running service gets a new image or is pinned).
   It fails if the stack is not running. On a
   stack without repository, creating an update schedule requires the same
   confirmation as a manual update ("no backup and no rollback": a checkbox
@@ -1390,7 +1391,7 @@ to them. `restic restore <id>:<subpath>` requires restic >= 0.17.
 worker run <job-dir>
 worker backup  <stack>
 worker restore [--no-start] [--pin-images] [--import] [--limit-download <KiB/s>] <stack> <snapshot-id>
-worker update  [--no-backup] [--only-if-new] <stack>
+worker update  [--no-backup] <stack>
 worker stop|start|restart|up|down <stack>
 worker cleanup [--image-min-age <duration>]
 ```

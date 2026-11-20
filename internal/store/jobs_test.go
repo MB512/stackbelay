@@ -30,7 +30,7 @@ func TestJobQueueAndPerStackLock(t *testing.T) {
 
 	// Ids sort by time, like real ULIDs.
 	if err := s.CreateJob(ctx, Job{ID: "01AAAAAAAAAAAAAAAAAAAAAAA1", StackID: web, Type: jobs.TypeBackup,
-		Trigger: TriggerManual, RequestedBy: uid, QueuedAt: t0, Options: JobOptions{OnlyIfNew: true}}); err != nil {
+		Trigger: TriggerManual, RequestedBy: uid, QueuedAt: t0, Options: JobOptions{SnapshotID: "0123abcd"}}); err != nil {
 		t.Fatal(err)
 	}
 	newJob(t, s, "01AAAAAAAAAAAAAAAAAAAAAAA2", web, jobs.TypeRestore, t0.Add(time.Second))
@@ -44,7 +44,7 @@ func TestJobQueueAndPerStackLock(t *testing.T) {
 
 	j, err := s.JobByID(ctx, "01AAAAAAAAAAAAAAAAAAAAAAA1")
 	if err != nil || j.StackName != "web" || j.Requester != "alice" || j.State != jobs.StateQueued ||
-		!j.Options.OnlyIfNew || !j.QueuedAt.Equal(t0) || !j.StartedAt.IsZero() {
+		j.Options.SnapshotID != "0123abcd" || !j.QueuedAt.Equal(t0) || !j.StartedAt.IsZero() {
 		t.Fatalf("JobByID: %+v, %v", j, err)
 	}
 

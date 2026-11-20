@@ -268,7 +268,7 @@ func (d *Dispatcher) reconcileDir(ctx context.Context, id string, importing bool
 		ID: id, StackID: st.ID, StackName: st.Name, Type: spec.Type, Trigger: spec.Trigger, QueuedAt: queued,
 		Options: store.JobOptions{SnapshotID: spec.SnapshotID,
 			NoStart: spec.NoStart, PinImages: spec.PinImages,
-			Import: spec.Import, LimitDownloadKiB: spec.LimitDownloadKiB, NoBackup: spec.NoBackup, OnlyIfNew: spec.OnlyIfNew},
+			Import: spec.Import, LimitDownloadKiB: spec.LimitDownloadKiB, NoBackup: spec.NoBackup},
 	}
 	if j.Trigger == "" {
 		j.Trigger = store.TriggerManual
@@ -415,7 +415,7 @@ func (d *Dispatcher) start(ctx context.Context, j store.Job) {
 		SnapshotID: j.Options.SnapshotID,
 		NoStart:    j.Options.NoStart, PinImages: j.Options.PinImages,
 		Import: j.Options.Import, LimitDownloadKiB: j.Options.LimitDownloadKiB,
-		OnlyIfNew: j.Options.OnlyIfNew, Trigger: j.Trigger, Requester: j.Requester, NoBackup: noBackup,
+		Trigger: j.Trigger, Requester: j.Requester, NoBackup: noBackup,
 	}
 	if j.Type == jobs.TypeComposeApply {
 		spec.ComposeSHA256, spec.ComposeBaseSHA256 = j.Options.ComposeSHA256, j.Options.ComposeBaseSHA256

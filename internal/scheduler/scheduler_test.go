@@ -165,7 +165,7 @@ func TestFire(t *testing.T) {
 		if len(got) != 2 {
 			t.Fatalf("submitted %d jobs, want 2", len(got))
 		}
-		want := []store.JobOptions{{OnlyIfNew: true}, {OnlyIfNew: true}}
+		want := []store.JobOptions{{}, {}}
 		for i, j := range got {
 			if j.Type != jobs.TypeUpdate || j.Trigger != store.TriggerSchedule || j.Options != want[i] {
 				t.Errorf("job %d = %+v, options want %+v", i, j, want[i])
@@ -194,7 +194,7 @@ func TestFire(t *testing.T) {
 		e := newEnv(t)
 		e.s.Fire(ctx, e.scheduleOf(t, store.Schedule{StackID: e.db.ID, CronExpr: "@daily", Type: jobs.TypeUpdate, NoBackup: true}))
 		got := e.queue.submitted()
-		if want := (store.JobOptions{OnlyIfNew: true, NoBackup: true}); len(got) != 1 || got[0].Options != want {
+		if want := (store.JobOptions{NoBackup: true}); len(got) != 1 || got[0].Options != want {
 			t.Fatalf("submitted %+v, want options %+v", got, want)
 		}
 		audit, _ := e.st.ListAudit(ctx, 10)

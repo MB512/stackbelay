@@ -37,6 +37,10 @@ older than 90 days are deleted on the first start; set
 
 ### Changed
 
+- **Updates always skip when nothing is new** (#41): the option "only if
+  there is something new" is gone, it is now how every update works. After
+  the pull, an update without a new (or pinned) image ends without backup,
+  stop or recreate. The worker flag `--only-if-new` was removed.
 - **Every restore runs in place** (#33): only files that differ from the
   snapshot are downloaded and rewritten, files not in the snapshot are
   deleted. The "switch over" method (restore into `<stack>.restore-tmp`,

@@ -18,16 +18,14 @@ type UpdateOptions struct {
 	// CarryOver is passed to the rollback restore (see
 	// RestoreOptions.CarryOver).
 	CarryOver string
-	// OnlyIfNew ends the job after the pull, without snapshots and without
-	// stopping anything, if no running service would get another image or
-	// configuration (see Pipeline.newImages).
-	OnlyIfNew bool
 }
 
 // Update runs the update pipeline for a running stack (see "Update
 // pipeline" in docs/architecture.md): pull the images while the stack
 // runs, back up, recreate the running services and wait until they run
-// and are healthy; if they do not, roll back to the final snapshot.
+// and are healthy; if they do not, roll back to the final snapshot. If no
+// running service gets another image (see Pipeline.newImages), the job
+// ends after the pull, without snapshots and without stopping anything.
 func (p *Pipeline) Update(ctx context.Context, stack stacks.Stack, opts UpdateOptions) (ChangeResult, error) {
 	log := p.logger().With("stack", stack.Name, "job", "update")
 	return p.runChange(ctx, stack, change{
@@ -37,9 +35,6 @@ func (p *Pipeline) Update(ctx context.Context, stack stacks.Stack, opts UpdateOp
 			p.phase("pulling images")
 			if err := p.Docker.Pull(ctx, stack.Dir, running); err != nil {
 				return fmt.Errorf("pulling images (the stack was not changed): %w", err)
-			}
-			if !opts.OnlyIfNew {
-				return nil
 			}
 			changed, err := p.newImages(ctx, log, stack, services, running)
 			if err != nil {

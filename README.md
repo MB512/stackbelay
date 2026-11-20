@@ -33,7 +33,7 @@ already trust until it has proven itself on your hosts. Upgrading from 0.3
 - **Updates** with backup and automatic rollback: pull newer images, back
   up, recreate the services, roll back to the backup if they do not come
   up. An update check shows which services have newer images (without
-  pulling); "only if new" skips everything when nothing changed.
+  pulling); an update skips everything when no image changed.
 - **Schedules** (cron expressions) per stack for backups and updates, plus
   manual runs. Jobs are queued; one job per stack at a time.
 - **Stack list** with the state of every stack (started, stopped,

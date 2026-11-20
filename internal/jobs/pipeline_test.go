@@ -49,7 +49,10 @@ func newEnv(t *testing.T) *env {
 		{Name: "db", State: "running", ImageRef: "postgres:16", ContainerID: "db0db0db0db0"},
 		{Name: "tool", State: "exited", ContainerID: "7007700770077"},
 		{Name: "never"}, // defined, but no container (e.g. added while the stack was stopped)
-	}}
+	},
+		// After the pull, app has a new image: an update goes all the way.
+		images: map[string]docker.ConfiguredImage{"app": {Ref: "nextcloud:29", ID: "sha256:new"}, "db": {Ref: "postgres:16"}},
+	}
 	r := &fakeRestic{calls: c, failOn: map[string]error{}}
 	return &env{
 		calls:  c,

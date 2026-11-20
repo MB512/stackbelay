@@ -5,7 +5,7 @@
 #   1. update with backup succeeds (pull, pre-stop + final snapshot, up)
 #   2. update with backup fails (service unhealthy) -> automatic rollback
 #      (in place)
-#   1b. update "only if new" without a new image -> nothing touched
+#   1b. update without a new image -> nothing touched
 #   3. update without backup fails -> no rollback, stack left as it is
 #   4. compose-apply (compose editor job) with a valid change
 #   5. compose-apply with an image that does not exist -> rollback to the
@@ -13,7 +13,9 @@
 #
 # A failure is forced with a healthcheck that fails once the file "broken"
 # exists in a named volume (not part of the stack directory, so neither the
-# snapshot nor the rollback touches it).
+# snapshot nor the rollback touches it). An update only acts when a running
+# service gets a new image; pin_app makes that so without a registry by
+# running the app pinned by digest, as a rollback does.
 #
 # Requirements: docker (with compose plugin) usable without sudo, network
 # access to Docker Hub (compose pull), restic >= 0.17, go.
@@ -48,6 +50,13 @@ state() { # service -> container state ("" if none)
 container_id() { docker compose --project-directory "$DIR" ps --all --quiet app; }
 has_msg() { grep -q "\"msg\":\"$2" "$1"; } # log file, start of msg
 snapshots() { restic snapshots --json --tag "$1" | python3 -I -c 'import json,sys; print(len(json.load(sys.stdin)))'; }
+pin_app() {
+	local digest
+	digest="$(docker image inspect --format '{{index .RepoDigests 0}}' busybox:1.36)"
+	printf 'services:\n  app:\n    image: %s\n' "$digest" >"$WORK/pin.yml"
+	docker compose --project-directory "$DIR" --file "$DIR/compose.yml" --file "$WORK/pin.yml" \
+		up --detach --quiet-pull --wait app >/dev/null
+}
 set_broken() { docker run --rm -v "${PROJECT}_flags:/flags" busybox:1.36 sh -c "$1"; }
 
 step "build worker"
@@ -79,6 +88,7 @@ env "${REPO_ENV[@]}" restic init --quiet
 pass "app running"
 
 step "1. update with backup succeeds"
+pin_app
 before="$(container_id)"
 env "${REPO_ENV[@]}" bin/worker update "$STACK" 2>"$WORK/update1.log" || { cat "$WORK/update1.log"; fail "update failed"; }
 [[ "$(state app)" == running ]] || fail "app not running after update"
@@ -89,9 +99,9 @@ export RESTIC_REPOSITORY="$WORK/repo" RESTIC_PASSWORD_FILE="$WORK/pw"
 unset RESTIC_REPOSITORY RESTIC_PASSWORD_FILE
 pass "pre-stop and final snapshot taken"
 
-step "1b. update only if new: no new image, nothing touched"
+step "1b. update again: no new image, nothing touched"
 before="$(container_id)"
-env "${REPO_ENV[@]}" bin/worker update --only-if-new "$STACK" 2>"$WORK/update1b.log" || { cat "$WORK/update1b.log"; fail "update failed"; }
+env "${REPO_ENV[@]}" bin/worker update "$STACK" 2>"$WORK/update1b.log" || { cat "$WORK/update1b.log"; fail "update failed"; }
 has_msg "$WORK/update1b.log" "nothing to change" || { cat "$WORK/update1b.log"; fail "no 'nothing to change'"; }
 [[ "$(container_id)" == "$before" ]] || fail "container recreated although nothing was new"
 export RESTIC_REPOSITORY="$WORK/repo" RESTIC_PASSWORD_FILE="$WORK/pw"
@@ -100,6 +110,7 @@ unset RESTIC_REPOSITORY RESTIC_PASSWORD_FILE
 pass "pulled, compared, nothing backed up or recreated"
 
 step "2. update with backup fails: automatic rollback (in place)"
+pin_app
 echo v2 >"$DIR/data/value.txt" # the state the rollback must return to
 inode="$(stat -c %i "$DIR")"
 set_broken "touch /flags/broken"

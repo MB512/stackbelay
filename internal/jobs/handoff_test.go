@@ -33,7 +33,7 @@ func TestSpecRoundTrip(t *testing.T) {
 
 func TestUpdateSpecRoundTrip(t *testing.T) {
 	dir := t.TempDir()
-	want := Spec{ID: testJobID, Type: TypeUpdate, Stack: "web", OnlyIfNew: true, CarryOverJobs: "data/jobs", Trigger: "manual"}
+	want := Spec{ID: testJobID, Type: TypeUpdate, Stack: "web", CarryOverJobs: "data/jobs", Trigger: "manual"}
 	if err := WriteSpec(dir, want); err != nil {
 		t.Fatal(err)
 	}
@@ -44,6 +44,20 @@ func TestUpdateSpecRoundTrip(t *testing.T) {
 	want.Version = 1
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v, want %+v", got, want)
+	}
+}
+
+// Job directories written before issue #41 may carry only_if_new; it is
+// accepted (the manager reads them when it rebuilds its job list) and
+// ignored.
+func TestReadSpecObsoleteOnlyIfNew(t *testing.T) {
+	dir := t.TempDir()
+	data := `{"version":1,"id":"` + testJobID + `","type":"update","stack":"web","only_if_new":true}`
+	if err := os.WriteFile(filepath.Join(dir, SpecFile), []byte(data), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReadSpec(dir); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -101,7 +115,6 @@ func TestReadSpecRejects(t *testing.T) {
 		{"restore with flag-like snapshot", `{"version":1,"id":"` + testJobID + `","type":"restore","stack":"web","snapshot_id":"--help"}`},
 		{"backup with restore option", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"web","no_start":true}`},
 		{"backup with pinned images", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"web","pin_images":true}`},
-		{"only-if-new on a compose apply", `{"version":1,"id":"` + testJobID + `","type":"compose-apply","stack":"web","only_if_new":true,"compose_sha256":"` + strings.Repeat("a", 64) + `","compose_base_sha256":"` + strings.Repeat("b", 64) + `"}`},
 		{"removed option no_pre_stop (#34)", `{"version":1,"id":"` + testJobID + `","type":"update","stack":"web","no_pre_stop":true}`},
 		{"removed option pre_stop (#34)", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"web","pre_stop":true}`},
 		{"carry-over outside the stack", `{"version":1,"id":"` + testJobID + `","type":"restore","stack":"web","snapshot_id":"0123abcd","carry_over_jobs":"../manager/data"}`},
@@ -117,7 +130,6 @@ func TestReadSpecRejects(t *testing.T) {
 		{"start with snapshot", `{"version":1,"id":"` + testJobID + `","type":"start","stack":"web","snapshot_id":"0123abcd"}`},
 		{"restart with carry-over", `{"version":1,"id":"` + testJobID + `","type":"restart","stack":"web","carry_over_jobs":"data/jobs"}`},
 		{"restart without backup flag", `{"version":1,"id":"` + testJobID + `","type":"restart","stack":"web","no_backup":true}`},
-		{"stop with update option", `{"version":1,"id":"` + testJobID + `","type":"stop","stack":"web","only_if_new":true}`},
 		{"start with compose checksum", `{"version":1,"id":"` + testJobID + `","type":"start","stack":"web","compose_sha256":"` + strings.Repeat("a", 64) + `"}`},
 		{"cleanup with a stack", `{"version":1,"id":"` + testJobID + `","type":"cleanup","stack":"web"}`},
 		{"cleanup with negative age", `{"version":1,"id":"` + testJobID + `","type":"cleanup","image_min_age_hours":-1}`},

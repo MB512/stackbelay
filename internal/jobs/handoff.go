@@ -135,8 +135,11 @@ type Spec struct {
 	// explicit choice of the manager, so missing repository settings in
 	// the worker can never silently turn off the backup of an update.
 	NoBackup bool `json:"no_backup,omitempty"`
-	// OnlyIfNew (update): see UpdateOptions.
-	OnlyIfNew bool `json:"only_if_new,omitempty"`
+	// ObsoleteOnlyIfNew is ignored: every update skips when there is no
+	// new image (issue #41). It is still accepted so that job directories
+	// written by older versions can be read (strict decoding) when the
+	// manager rebuilds its job list after restoring its own stack.
+	ObsoleteOnlyIfNew bool `json:"only_if_new,omitempty"`
 
 	// Cleanup options (host job, Stack is empty): see CleanupOptions.
 	ImageMinAgeHours int      `json:"image_min_age_hours,omitempty"`
@@ -186,9 +189,6 @@ func (s Spec) Validate() error {
 	}
 	if s.Type != TypeComposeApply && (s.ComposeSHA256 != "" || s.ComposeBaseSHA256 != "") {
 		return errors.New("compose options set on a job that does not apply a compose file")
-	}
-	if s.OnlyIfNew && s.Type != TypeUpdate {
-		return fmt.Errorf("update options set on a job of type %s", s.Type)
 	}
 	switch s.Type {
 	case TypeBackup:
