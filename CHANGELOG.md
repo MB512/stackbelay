@@ -34,6 +34,11 @@ older than 90 days are deleted on the first start; set
   of jobs that finished more than 90 days ago are removed
   (`STACKVAULT_JOB_LOG_RETENTION`, `0` keeps them); the jobs stay in the
   lists.
+- **restic's messages in the job log** (#42): retries (e.g. of a slow or
+  failing repository server), lock messages and per-file errors appear
+  in the job log while restic runs, not only when it fails. When restic
+  prints nothing for a minute, the log says "restic is still running, no
+  output" with the elapsed time.
 
 ### Changed
 

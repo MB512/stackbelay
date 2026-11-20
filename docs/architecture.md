@@ -1073,6 +1073,18 @@ waits for its downtime slot shows the phase "waiting for a downtime slot".
   renders it in the job details section, which the live stream already
   re-sends when it changes (`details` event, checked every 500 ms). The bar
   is a native `<progress>` element (no inline styles, CSP unchanged).
+- restic's own messages (issue #42): `restic.CLI` logs every stderr line
+  of restic while it runs, redacted like the error tail: retries of a
+  failing repository server, lock messages, warnings, and the per-file
+  `error` lines of `--json` (with item, during and error). The fatal
+  `exit_error` is not logged because the returned error carries it. At
+  most 200 lines per restic command are logged. When restic has printed
+  nothing on stdout for a minute (`CLI.SilenceInterval`), "restic is
+  still running, no output" is logged with the elapsed time, and again
+  every minute. Backups and restores print a status line every second,
+  so this only appears when restic waits, e.g. for a slow repository
+  server. In the worker these lines go to the job log, in the manager
+  (snapshot refresh) to its own log.
 
 ## Live logs
 

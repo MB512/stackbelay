@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -26,6 +28,9 @@ type CLI struct {
 	// (about once per second, see progressFPS). The worker turns them into
 	// the job's progress.
 	Progress func(Progress)
+	// SilenceInterval: when restic prints nothing on stdout for this long,
+	// "restic is still running" is logged; default one minute.
+	SilenceInterval time.Duration
 }
 
 // progressFPS limits restic's status lines when Progress is set: with
@@ -127,8 +132,14 @@ func (c *CLI) runJSON(ctx context.Context, repo Repo, onLine func([]byte), args 
 	if err != nil {
 		return err
 	}
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
+	// restic's stderr (retries, lock waits, warnings) is logged line by line
+	// while restic runs (issue #42) and kept for the error below.
+	log := c.logger().With("command", "restic "+args[0])
+	stderr := &stderrLog{
+		emit: func(line string) { logStderrLine(log, redact(line, repo)) },
+		max:  maxStderrLines,
+	}
+	cmd.Stderr = stderr
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return fmt.Errorf("restic %s: %w", args[0], err)
@@ -136,21 +147,171 @@ func (c *CLI) runJSON(ctx context.Context, repo Repo, onLine func([]byte), args 
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("starting restic %s: %w", args[0], err)
 	}
+	// A goroutine notes when restic has been silent on stdout for a while,
+	// so a hang (e.g. a slow repository server) is visible in the job log.
+	// lastOutput is shared with it, hence atomic (like Interlocked in .NET).
+	var lastOutput atomic.Int64
+	lastOutput.Store(time.Now().UnixNano())
+	// On return, close done and wait until the watcher has exited, so it
+	// never logs after runJSON returned (like cancelling a Task and
+	// awaiting it in .NET).
+	done := make(chan struct{})
+	var watcher sync.WaitGroup
+	watcher.Go(func() { c.watchSilence(log, &lastOutput, done) })
+	defer watcher.Wait()
+	defer close(done)
+
 	sc := bufio.NewScanner(stdout)
 	sc.Buffer(make([]byte, 64*1024), 16*1024*1024)
 	for sc.Scan() {
+		lastOutput.Store(time.Now().UnixNano())
 		onLine(sc.Bytes())
 	}
 	scanErr := sc.Err()
 	// Wait must be called after reading stdout completely (similar to
 	// awaiting Process.WaitForExit after draining the output stream in .NET).
-	if err := cmd.Wait(); err != nil {
-		return &Error{Op: args[0], Err: err, Stderr: redact(tail(stderr.String()), repo)}
+	waitErr := cmd.Wait()
+	// Wait has also finished copying stderr, so a last line without a
+	// newline can be flushed now.
+	stderr.flush()
+	if waitErr != nil {
+		return &Error{Op: args[0], Err: waitErr, Stderr: redact(tail(stderr.String()), repo)}
 	}
 	if scanErr != nil {
 		return fmt.Errorf("reading restic %s output: %w", args[0], scanErr)
 	}
 	return nil
+}
+
+// maxStderrLines limits how many stderr lines of one restic command are
+// logged, so e.g. a restore with many unreadable files cannot flood the
+// job log. The error tail still has the last lines.
+const maxStderrLines = 200
+
+// defaultSilenceInterval is how long restic may print nothing on stdout
+// before "restic is still running" is logged (and again after each further
+// interval). Backups and restores print a status line every second, so
+// this only shows up when restic waits for something.
+const defaultSilenceInterval = time.Minute
+
+func (c *CLI) silenceInterval() time.Duration {
+	if c.SilenceInterval <= 0 {
+		return defaultSilenceInterval
+	}
+	return c.SilenceInterval
+}
+
+// watchSilence logs "restic is still running" whenever restic has printed
+// nothing on stdout for silenceInterval, until done is closed.
+func (c *CLI) watchSilence(log *slog.Logger, lastOutput *atomic.Int64, done <-chan struct{}) {
+	interval := c.silenceInterval()
+	start := time.Now()
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-done:
+			return
+		case now := <-ticker.C:
+			silent := now.Sub(time.Unix(0, lastOutput.Load()))
+			if silent >= interval {
+				log.Info("restic is still running, no output", "elapsed", now.Sub(start).Round(time.Second).String(),
+					"silent_for", silent.Round(time.Second).String())
+			}
+		}
+	}
+}
+
+// stderrLog is restic's stderr: it keeps everything for the error tail and
+// passes each complete line to emit (at most max lines). Write is called
+// from the goroutine that exec uses to copy stderr, String and flush only
+// after Wait, so the mutex is only a safeguard.
+type stderrLog struct {
+	mu      sync.Mutex
+	all     bytes.Buffer
+	partial []byte
+	emitted int
+	max     int
+	emit    func(string)
+}
+
+func (s *stderrLog) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.all.Write(p)
+	s.partial = append(s.partial, p...)
+	for {
+		i := bytes.IndexByte(s.partial, '\n')
+		if i < 0 {
+			break
+		}
+		s.line(string(s.partial[:i]))
+		s.partial = s.partial[i+1:]
+	}
+	return len(p), nil
+}
+
+// flush emits a last line that did not end with a newline.
+func (s *stderrLog) flush() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.partial) > 0 {
+		s.line(string(s.partial))
+		s.partial = nil
+	}
+}
+
+func (s *stderrLog) line(line string) {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return
+	}
+	switch {
+	case s.emitted < s.max:
+		s.emit(line)
+	case s.emitted == s.max:
+		s.emit("(further restic messages are not logged)")
+	default:
+		return
+	}
+	s.emitted++
+}
+
+func (s *stderrLog) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.all.String()
+}
+
+// logStderrLine logs one (redacted) stderr line of restic. With --json,
+// restic writes errors as JSON to stderr: per-file errors of backup and
+// restore are logged with their fields; the fatal exit_error is skipped
+// because the returned *Error reports it. Plain text lines (retries,
+// warnings) are logged as they are.
+func logStderrLine(log *slog.Logger, line string) {
+	var m struct {
+		Type    string `json:"message_type"`
+		Message string `json:"message"`
+		Item    string `json:"item"`
+		During  string `json:"during"`
+		Error   struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if !strings.HasPrefix(line, "{") || json.Unmarshal([]byte(line), &m) != nil {
+		log.Warn("restic: " + line)
+		return
+	}
+	switch {
+	case m.Type == "exit_error":
+		return
+	case m.Type == "error":
+		log.Warn("restic error", "item", m.Item, "during", m.During, "error", m.Error.Message)
+	case m.Message != "":
+		log.Warn("restic: " + m.Message)
+	default:
+		log.Warn("restic: " + line)
+	}
 }
 
 // Error is returned when restic exits unsuccessfully.

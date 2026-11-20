@@ -1,12 +1,15 @@
 package restic
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -204,4 +207,71 @@ func TestCancelInterruptsRestic(t *testing.T) {
 	if want := []string{"started", "interrupted"}; !reflect.DeepEqual(lines, want) {
 		t.Errorf("output = %q, want %q (restic was not interrupted)", lines, want)
 	}
+}
+
+// restic's stderr is logged while restic runs (redacted, JSON errors with
+// their fields, exit_error skipped), and a silence on stdout is noted
+// (issue #42).
+func TestStderrAndSilenceAreLogged(t *testing.T) {
+	bin := filepath.Join(t.TempDir(), "restic")
+	script := "#!/bin/sh\n" +
+		"echo 'Load(<config/0000000000>, 0, 0) returned error, retrying after 1s: 500 for pw-s3cret' >&2\n" +
+		`echo '{"message_type":"error","error":{"message":"permission denied"},"during":"archival","item":"/s/web/x"}' >&2` + "\n" +
+		"sleep 0.3\n" +
+		"echo '{}'\n" +
+		`printf '{"message_type":"exit_error","code":1,"message":"Fatal: boom"}' >&2` + "\n" +
+		"exit 1\n"
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil { //nolint:gosec // test script must be executable
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	log := slog.New(slog.NewTextHandler(&lockedWriter{w: &buf}, nil))
+	c := &CLI{Binary: bin, Logger: log, SilenceInterval: 100 * time.Millisecond}
+	repo := Repo{Location: "/r", Env: []string{"RESTIC_PASSWORD=pw-s3cret"}}
+
+	err := c.runJSON(context.Background(), repo, func([]byte) {}, "cat", "config")
+	var rerr *Error
+	if !errors.As(err, &rerr) || rerr.Message() != "Fatal: boom" {
+		t.Fatalf("err = %v, want restic's exit_error", err)
+	}
+	out := buf.String()
+	for _, want := range []string{
+		`msg="restic: Load(<config/0000000000>, 0, 0) returned error, retrying after 1s: 500 for [REDACTED]"`,
+		`msg="restic error" command="restic cat" item=/s/web/x during=archival error="permission denied"`,
+		`msg="restic is still running, no output"`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("log lacks %s:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "pw-s3cret") || strings.Contains(out, "boom") {
+		t.Errorf("log contains the secret or the exit_error:\n%s", out)
+	}
+}
+
+func TestStderrLogLimit(t *testing.T) {
+	var got []string
+	s := &stderrLog{max: 2, emit: func(l string) { got = append(got, l) }}
+	_, _ = s.Write([]byte("a\n\nb\nc\nd"))
+	s.flush()
+	want := []string{"a", "b", "(further restic messages are not logged)"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("emitted %q, want %q", got, want)
+	}
+	if s.String() != "a\n\nb\nc\nd" {
+		t.Errorf("String() = %q", s.String())
+	}
+}
+
+// lockedWriter serializes writes: the silence watcher and the stderr copy
+// log from their own goroutines.
+type lockedWriter struct {
+	mu sync.Mutex
+	w  *bytes.Buffer
+}
+
+func (l *lockedWriter) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.w.Write(p)
 }
