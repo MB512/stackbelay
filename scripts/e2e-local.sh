@@ -88,7 +88,7 @@ pass "final $SNAP, pre-stop $PRESTOP"
 [[ "$(state app)" == running ]] || fail "app not restarted after backup"
 [[ "$(state oneshot)" == exited ]] || fail "oneshot was started although it was not running"
 pass "app restarted, oneshot left alone"
-grep -q '^# stackvault-metadata v1$' "$DIR/metadata.txt" || fail "metadata.txt missing"
+grep -q '^# stackbelay-metadata v1$' "$DIR/metadata.txt" || fail "metadata.txt missing"
 grep -qP '^app\trunning\tbusybox:1.36\tbusybox@sha256:[0-9a-f]{64}\tsha256:' "$DIR/metadata.txt" ||
 	{ cat "$DIR/metadata.txt"; fail "metadata.txt has no digest for app"; }
 pass "metadata.txt records app with repo digest"

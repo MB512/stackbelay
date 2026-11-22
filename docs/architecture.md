@@ -314,7 +314,7 @@ Human-readable but strictly parseable, versioned, one record per line, tab
 separated, so the restore can rely on it:
 
 ```
-# stackvault-metadata v1
+# stackbelay-metadata v1
 created_at     2026-11-12T20:15:00Z
 stack          nextcloud
 compose_sha256 <hash of the main compose file>
@@ -329,6 +329,9 @@ web        exited   -                    -                                sha256
   and to detect whether the exact image is still present locally.
 - Images built locally (`build:`) have no repo digest: write `-`.
 - Services without a container (never created) are recorded with `-`.
+- StackVault 0.4 and older wrote the header `# stackvault-metadata v1`
+  (issue #44). The format is the same; the restore accepts both headers,
+  so snapshots made before the rename restore unchanged.
 
 ## Restore pipeline
 

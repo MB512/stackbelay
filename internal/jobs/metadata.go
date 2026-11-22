@@ -16,11 +16,15 @@ import (
 const MetadataFile = "metadata.txt"
 
 const (
-	metadataHeader   = "# stackvault-metadata v1"
-	metadataColumns  = "# service\tstate\timage_ref\trepo_digest\timage_id\tcontainer_id"
-	metadataMaxBytes = 1 << 20 // 1 MiB; a real file is a few KiB at most
-	metadataMaxLines = 10_000
-	none             = "-"
+	metadataHeader = "# stackbelay-metadata v1"
+	// metadataHeaderLegacy is written by StackVault 0.4 and older (issue
+	// #44); snapshots made by them keep it, so the parser accepts it too.
+	// The format is the same.
+	metadataHeaderLegacy = "# stackvault-metadata v1"
+	metadataColumns      = "# service\tstate\timage_ref\trepo_digest\timage_id\tcontainer_id"
+	metadataMaxBytes     = 1 << 20 // 1 MiB; a real file is a few KiB at most
+	metadataMaxLines     = 10_000
+	none                 = "-"
 )
 
 // Validation patterns. metadata.txt comes from a snapshot and must be treated
@@ -111,7 +115,7 @@ func ParseMetadata(r io.Reader, wantStack string) (*Metadata, error) {
 		}
 		line := sc.Text()
 		if lineNo == 1 {
-			if line != metadataHeader {
+			if line != metadataHeader && line != metadataHeaderLegacy {
 				return nil, fmt.Errorf("unsupported metadata header %q", truncate(line))
 			}
 			continue

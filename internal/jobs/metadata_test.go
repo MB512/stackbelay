@@ -33,7 +33,7 @@ func TestMetadataRoundTrip(t *testing.T) {
 	if err := WriteMetadata(&buf, m); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(buf.String(), "# stackvault-metadata v1\n") {
+	if !strings.HasPrefix(buf.String(), "# stackbelay-metadata v1\n") {
 		t.Fatalf("missing header:\n%s", buf.String())
 	}
 	got, err := ParseMetadata(&buf, "nextcloud")
@@ -66,6 +66,7 @@ func TestParseMetadataRejects(t *testing.T) {
 	}{
 		{"empty", ""},
 		{"wrong header", "# stackvault-metadata v2\n"},
+		{"wrong new header", "# stackbelay-metadata v2\n"},
 		{"wrong stack", strings.Replace(valid, "stack\tnextcloud", "stack\tother", 1)},
 		{"missing stack", "# stackvault-metadata v1\ncreated_at\t2026-11-12T20:15:00Z\n"},
 		{"bad time", strings.Replace(valid, "2026-11-12T20:15:00Z", "yesterday", 1)},
@@ -99,5 +100,18 @@ func TestParseMetadataIgnoresUnknownKeysAndComments(t *testing.T) {
 	}
 	if len(m.Services) != 1 || m.Services[0].Name != "app" {
 		t.Fatalf("unexpected services %+v", m.Services)
+	}
+}
+
+func TestParseMetadataAcceptsBothHeaders(t *testing.T) {
+	body := "created_at\t2026-11-12T20:15:00Z\nstack\tnextcloud\ncompose_sha256\t-\napp\trunning\tnextcloud:29\t-\t-\t-\n"
+	for _, header := range []string{"# stackbelay-metadata v1", "# stackvault-metadata v1"} {
+		m, err := ParseMetadata(strings.NewReader(header+"\n"+body), "nextcloud")
+		if err != nil {
+			t.Fatalf("%s: %v", header, err)
+		}
+		if m.Stack != "nextcloud" || len(m.Services) != 1 || m.Services[0].Name != "app" {
+			t.Fatalf("%s: unexpected %+v", header, m)
+		}
 	}
 }
