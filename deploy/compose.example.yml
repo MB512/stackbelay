@@ -14,7 +14,7 @@
 # without it the repository passwords cannot be decrypted.
 #
 # Optional hardening, so the key is in no backup: keep it outside
-# STACKS_ROOT and enable the two commented STACKVAULT_SECRET_KEY_FILE lines
+# STACKS_ROOT and enable the two commented STACKBELAY_SECRET_KEY_FILE lines
 # below (on an existing installation, move data/secret.key there):
 #
 #   sudo install -d -m 700 /etc/stackvault
@@ -36,15 +36,15 @@ services:
       # Must be the same absolute path as on the host (see the volume below).
       STACKS_ROOT: /home/docker
       # Name of this Docker host, recorded as restic --host in every snapshot.
-      STACKVAULT_HOSTNAME: myhost
+      STACKBELAY_HOSTNAME: myhost
       # Optional, see above:
-      # STACKVAULT_SECRET_KEY_FILE: /run/secrets/stackvault.key
+      # STACKBELAY_SECRET_KEY_FILE: /run/secrets/stackvault.key
       # Time zone of the backup schedules.
       TZ: Europe/Berlin
       # Only for a first test without a TLS proxy:
-      # STACKVAULT_ALLOW_INSECURE_HTTP: "true"
+      # STACKBELAY_ALLOW_INSECURE_HTTP: "true"
       # Shells in stack containers for admins ("Shell" tab), off by default:
-      # STACKVAULT_ENABLE_SHELL: "true"
+      # STACKBELAY_ENABLE_SHELL: "true"
     ports:
       - "127.0.0.1:8080:8080"
     volumes:

@@ -96,7 +96,7 @@ func withLimits(repo Repo, args []string) ([]string, error) {
 }
 
 // passThroughEnv are the only variables restic inherits from our own
-// process. Everything else (in the manager e.g. STACKVAULT_SECRET_KEY) must
+// process. Everything else (in the manager e.g. STACKBELAY_SECRET_KEY) must
 // not reach the child process.
 var passThroughEnv = []string{
 	"PATH", "HOME", "TMPDIR", "TZ", "LANG", "LC_ALL",

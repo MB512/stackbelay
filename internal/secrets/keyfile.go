@@ -12,7 +12,7 @@ import (
 )
 
 // KeyFileName is the key file in the data directory, used when neither
-// STACKVAULT_SECRET_KEY nor STACKVAULT_SECRET_KEY_FILE is set.
+// STACKBELAY_SECRET_KEY nor STACKBELAY_SECRET_KEY_FILE is set.
 const KeyFileName = "secret.key"
 
 // maxKeyFileSize bounds how much of a key file is read; a valid key file
@@ -20,7 +20,7 @@ const KeyFileName = "secret.key"
 const maxKeyFileSize = 1024
 
 // LoadOrCreateKeyFile returns the key stored in the file at path (base64 of
-// KeySize bytes, surrounding whitespace ignored, as in STACKVAULT_SECRET_KEY).
+// KeySize bytes, surrounding whitespace ignored, as in STACKBELAY_SECRET_KEY).
 //
 // If the file does not exist and create is true, a new random key is
 // written there and created is true. The file is created exclusively

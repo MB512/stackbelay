@@ -95,7 +95,7 @@ Run `go vet` and `go test ./... -race` before every commit.
 
 - Never build shell commands from user input. Use `exec.CommandContext` with an
   argument list, never `sh -c`. The only interactive execution is the
-  opt-in, admin-only container shell (`STACKVAULT_ENABLE_SHELL`, see
+  opt-in, admin-only container shell (`STACKBELAY_ENABLE_SHELL`, see
   `docs/security.md` rule 13); never widen it without discussion.
 - Stack names come only from discovery (directory scan) or, for the admin
   "Import stack" (issue #1), from a repository's snapshot paths (last

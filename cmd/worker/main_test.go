@@ -23,7 +23,7 @@ func testEnv(t *testing.T) func(string) string {
 	t.Helper()
 	env := map[string]string{
 		"STACKS_ROOT":          t.TempDir(),
-		"STACKVAULT_HOSTNAME":  "h",
+		"STACKBELAY_HOSTNAME":  "h",
 		"RESTIC_REPOSITORY":    "/nonexistent",
 		"RESTIC_PASSWORD":      "super-secret-repo-pw",
 		"RESTIC_REST_PASSWORD": "rest-server-secret",
@@ -141,7 +141,7 @@ func TestRunWithoutRepository(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "web", "compose.yaml"), []byte("services: {}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	env := map[string]string{"STACKS_ROOT": root, "STACKVAULT_HOSTNAME": "h"}
+	env := map[string]string{"STACKS_ROOT": root, "STACKBELAY_HOSTNAME": "h"}
 	getenv := func(k string) string { return env[k] }
 	for _, args := range [][]string{{"backup", "web"}, {"update", "web"}, {"restore", "web", "0123abcd"}} {
 		var out bytes.Buffer
@@ -267,7 +267,7 @@ func TestImportRefusesExistingStack(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(root, "web"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	env := map[string]string{"STACKS_ROOT": root, "STACKVAULT_HOSTNAME": "h", "RESTIC_REPOSITORY": "/r", "RESTIC_PASSWORD": "pw"}
+	env := map[string]string{"STACKS_ROOT": root, "STACKBELAY_HOSTNAME": "h", "RESTIC_REPOSITORY": "/r", "RESTIC_PASSWORD": "pw"}
 	var out bytes.Buffer
 	if code := run([]string{"restore", "--import", "web", "0123abcd"}, func(k string) string { return env[k] }, &out); code != 1 ||
 		!strings.Contains(out.String(), "already exists") {

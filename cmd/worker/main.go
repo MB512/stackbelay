@@ -62,7 +62,8 @@ func main() {
 var errUsage = errors.New("usage error")
 
 func run(args []string, getenv func(string) string, stderr io.Writer) int {
-	cfg, err := config.LoadWorker(getenv)
+	env := config.NewEnv(getenv) // falls back to the old STACKVAULT_* names
+	cfg, err := config.LoadWorker(env.Get)
 	if err != nil {
 		fmt.Fprintf(stderr, "configuration error:\n%v\n", err)
 		return 2
@@ -100,6 +101,7 @@ func run(args []string, getenv func(string) string, stderr io.Writer) int {
 	if spec.ID != "" {
 		log = log.With("job_id", spec.ID)
 	}
+	env.WarnLegacy(log)
 	log.Debug("worker started", "version", buildinfo.Version)
 
 	// SIGTERM/SIGINT cancel the context (like a CancellationToken in .NET);

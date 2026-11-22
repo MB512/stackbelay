@@ -16,13 +16,13 @@ import (
 // Worker is the configuration of the worker binary.
 type Worker struct {
 	StacksRoot string        // STACKS_ROOT, absolute
-	Hostname   string        // STACKVAULT_HOSTNAME, passed to restic --host
-	JobTimeout time.Duration // STACKVAULT_JOB_TIMEOUT, default DefaultJobTimeout
+	Hostname   string        // STACKBELAY_HOSTNAME, passed to restic --host
+	JobTimeout time.Duration // STACKBELAY_JOB_TIMEOUT, default DefaultJobTimeout
 	// DowntimeTimeout bounds stop -> final snapshot of a backup, update or
-	// compose apply (STACKVAULT_DOWNTIME_TIMEOUT, default
+	// compose apply (STACKBELAY_DOWNTIME_TIMEOUT, default
 	// DefaultDowntimeTimeout).
 	DowntimeTimeout time.Duration
-	LogLevel        slog.Level // STACKVAULT_LOG_LEVEL, default info
+	LogLevel        slog.Level // STACKBELAY_LOG_LEVEL, default info
 
 	// RepoLocation is RESTIC_REPOSITORY.
 	RepoLocation string
@@ -41,7 +41,7 @@ func LoadWorker(getenv func(string) string) (Worker, error) {
 	var errs []error
 	c := Worker{
 		StacksRoot:   getenv("STACKS_ROOT"),
-		Hostname:     getenv("STACKVAULT_HOSTNAME"),
+		Hostname:     getenv("STACKBELAY_HOSTNAME"),
 		RepoLocation: getenv("RESTIC_REPOSITORY"),
 	}
 
@@ -50,7 +50,7 @@ func LoadWorker(getenv func(string) string) (Worker, error) {
 	if c.Hostname == "" {
 		h, err := os.Hostname()
 		if err != nil {
-			errs = append(errs, fmt.Errorf("STACKVAULT_HOSTNAME not set and hostname unavailable: %w", err))
+			errs = append(errs, fmt.Errorf("STACKBELAY_HOSTNAME not set and hostname unavailable: %w", err))
 		}
 		c.Hostname = h
 	}
@@ -88,15 +88,15 @@ const DefaultJobTimeout = 48 * time.Hour
 // (issue #36).
 const DefaultDowntimeTimeout = time.Hour
 
-// jobTimeout reads STACKVAULT_JOB_TIMEOUT (Go duration, at least 1m). The
+// jobTimeout reads STACKBELAY_JOB_TIMEOUT (Go duration, at least 1m). The
 // manager reads it to pass it on to its workers, the worker to apply it.
 func jobTimeout(getenv func(string) string, errs []error) (time.Duration, []error) {
-	return minuteDuration(getenv, "STACKVAULT_JOB_TIMEOUT", DefaultJobTimeout, "48h", errs)
+	return minuteDuration(getenv, "STACKBELAY_JOB_TIMEOUT", DefaultJobTimeout, "48h", errs)
 }
 
-// downtimeTimeout reads STACKVAULT_DOWNTIME_TIMEOUT like jobTimeout.
+// downtimeTimeout reads STACKBELAY_DOWNTIME_TIMEOUT like jobTimeout.
 func downtimeTimeout(getenv func(string) string, errs []error) (time.Duration, []error) {
-	return minuteDuration(getenv, "STACKVAULT_DOWNTIME_TIMEOUT", DefaultDowntimeTimeout, "1h", errs)
+	return minuteDuration(getenv, "STACKBELAY_DOWNTIME_TIMEOUT", DefaultDowntimeTimeout, "1h", errs)
 }
 
 // minuteDuration reads a Go duration of at least one minute; def if unset.
@@ -130,9 +130,9 @@ func absPath(getenv func(string) string, name, def string, errs []error) (string
 
 func logLevel(getenv func(string) string, errs []error) (slog.Level, []error) {
 	var l slog.Level
-	if v := getenv("STACKVAULT_LOG_LEVEL"); v != "" {
+	if v := getenv("STACKBELAY_LOG_LEVEL"); v != "" {
 		if err := l.UnmarshalText([]byte(strings.ToUpper(v))); err != nil {
-			errs = append(errs, fmt.Errorf("STACKVAULT_LOG_LEVEL: %w", err))
+			errs = append(errs, fmt.Errorf("STACKBELAY_LOG_LEVEL: %w", err))
 		}
 	}
 	return l, errs

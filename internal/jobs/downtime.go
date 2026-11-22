@@ -13,7 +13,7 @@ import (
 
 // Downtime slots (issue #36): only the part of a job that keeps a stack
 // stopped (stop -> final snapshot -> start) is limited by
-// STACKVAULT_MAX_DOWNTIMES; the pre-stop snapshot before it and restores
+// STACKBELAY_MAX_DOWNTIMES; the pre-stop snapshot before it and restores
 // are not. The worker asks the manager for a slot through its job
 // directory, the only channel between them: it writes DowntimeRequestFile
 // and waits until the manager wrote DowntimeGrantFile. Both live as long
@@ -94,7 +94,7 @@ func (p *Pipeline) acquireDowntime(ctx context.Context, log *slog.Logger) error 
 	if p.Downtime == nil {
 		return nil
 	}
-	log.Info("waiting for a downtime slot (STACKVAULT_MAX_DOWNTIMES)")
+	log.Info("waiting for a downtime slot (STACKBELAY_MAX_DOWNTIMES)")
 	p.phase("waiting for a downtime slot")
 	if err := p.Downtime.Acquire(ctx); err != nil {
 		return fmt.Errorf("waiting for a downtime slot (the stack was not stopped): %w", err)
@@ -117,7 +117,7 @@ func (p *Pipeline) downtimeContext(ctx context.Context) (context.Context, contex
 // stack is started again.
 func (p *Pipeline) downtimeErr(ctx, dctx context.Context, err error) error {
 	if ctx.Err() == nil && errors.Is(dctx.Err(), context.DeadlineExceeded) {
-		return fmt.Errorf("downtime timeout (%s, STACKVAULT_DOWNTIME_TIMEOUT) exceeded: the final snapshot was aborted "+
+		return fmt.Errorf("downtime timeout (%s, STACKBELAY_DOWNTIME_TIMEOUT) exceeded: the final snapshot was aborted "+
 			"and the stack is started again: %w", p.DowntimeTimeout, err)
 	}
 	return err

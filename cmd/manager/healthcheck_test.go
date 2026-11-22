@@ -43,7 +43,7 @@ func TestHealthcheck(t *testing.T) {
 	defer srv.Close()
 	u, _ := url.Parse(srv.URL)
 	getenv := func(k string) string {
-		if k == "STACKVAULT_LISTEN" {
+		if k == "STACKBELAY_LISTEN" {
 			return u.Host
 		}
 		return ""

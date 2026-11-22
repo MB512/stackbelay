@@ -51,10 +51,10 @@ type Template struct {
 	Jobs docker.Mount
 	// Socket is the host path of the Docker socket.
 	Socket   string
-	Hostname string // STACKVAULT_HOSTNAME for restic --host
-	LogLevel string // STACKVAULT_LOG_LEVEL, optional
-	// JobTimeout and DowntimeTimeout are passed as STACKVAULT_JOB_TIMEOUT
-	// and STACKVAULT_DOWNTIME_TIMEOUT; 0 leaves the worker's default.
+	Hostname string // STACKBELAY_HOSTNAME for restic --host
+	LogLevel string // STACKBELAY_LOG_LEVEL, optional
+	// JobTimeout and DowntimeTimeout are passed as STACKBELAY_JOB_TIMEOUT
+	// and STACKBELAY_DOWNTIME_TIMEOUT; 0 leaves the worker's default.
 	JobTimeout, DowntimeTimeout time.Duration
 	// DockerConfig is the manager's own mount of the docker client
 	// configuration (registry credentials, issue #14), passed read-only to
@@ -80,20 +80,20 @@ func (t Template) Spec(jobID string, repo restic.Repo) (docker.ContainerSpec, er
 	}
 	env := map[string]string{
 		"STACKS_ROOT":         t.StacksRoot,
-		"STACKVAULT_HOSTNAME": t.Hostname,
+		"STACKBELAY_HOSTNAME": t.Hostname,
 		"RESTIC_CACHE_DIR":    workerCacheDir,
 	}
 	if repo.Location != "" { // empty: an update without backup (no repository)
 		env["RESTIC_REPOSITORY"] = repo.Location
 	}
 	if t.LogLevel != "" {
-		env["STACKVAULT_LOG_LEVEL"] = t.LogLevel
+		env["STACKBELAY_LOG_LEVEL"] = t.LogLevel
 	}
 	if t.JobTimeout > 0 {
-		env["STACKVAULT_JOB_TIMEOUT"] = t.JobTimeout.String()
+		env["STACKBELAY_JOB_TIMEOUT"] = t.JobTimeout.String()
 	}
 	if t.DowntimeTimeout > 0 {
-		env["STACKVAULT_DOWNTIME_TIMEOUT"] = t.DowntimeTimeout.String()
+		env["STACKBELAY_DOWNTIME_TIMEOUT"] = t.DowntimeTimeout.String()
 	}
 	for _, kv := range repo.Env {
 		k, v, ok := strings.Cut(kv, "=")
@@ -161,7 +161,7 @@ func NewTemplate(cfg TemplateConfig, self *docker.SelfInfo) (Template, error) {
 	}
 	if self == nil {
 		if t.Image == "" {
-			return Template{}, errors.New("STACKVAULT_WORKER_IMAGE is required when the manager does not run in a container")
+			return Template{}, errors.New("STACKBELAY_WORKER_IMAGE is required when the manager does not run in a container")
 		}
 		return t, nil
 	}

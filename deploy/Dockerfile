@@ -26,7 +26,7 @@ ARG VERSION=dev
 RUN apk add --no-cache restic \
  && restic version && docker compose version
 COPY --from=build /out/manager /out/worker /app/
-ENV STACKVAULT_DATA_DIR=/data
+ENV STACKBELAY_DATA_DIR=/data
 EXPOSE 8080
 LABEL org.opencontainers.image.title="StackBelay" \
       org.opencontainers.image.description="Backs up Docker Compose stacks to restic repositories" \
@@ -35,7 +35,7 @@ LABEL org.opencontainers.image.title="StackBelay" \
       org.opencontainers.image.version="${VERSION}"
 # The base image's entrypoint (docker-entrypoint.sh) is not wanted: workers
 # are started as "/app/worker run /job" from this image without --entrypoint.
-# The manager's health check (GET /healthz on STACKVAULT_LISTEN). Worker
+# The manager's health check (GET /healthz on STACKBELAY_LISTEN). Worker
 # containers use the same image and are started with --no-healthcheck.
 # A "healthcheck:" in a compose file still overrides this one.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

@@ -46,10 +46,10 @@ func TestRunServesAndShutsDown(t *testing.T) {
 	data := t.TempDir()
 	env := map[string]string{
 		"STACKS_ROOT":           root,
-		"STACKVAULT_DATA_DIR":   data,
-		"STACKVAULT_HOSTNAME":   "host-a",
-		"STACKVAULT_SECRET_KEY": "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
-		"STACKVAULT_LISTEN":     "127.0.0.1:0", // any free port
+		"STACKBELAY_DATA_DIR":   data,
+		"STACKBELAY_HOSTNAME":   "host-a",
+		"STACKBELAY_SECRET_KEY": "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+		"STACKBELAY_LISTEN":     "127.0.0.1:0", // any free port
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

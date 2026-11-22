@@ -14,8 +14,8 @@ func noFiles(string) ([]byte, error) { return nil, fs.ErrNotExist }
 func TestLoadManagerDefaults(t *testing.T) {
 	c, err := LoadManager(lookup(map[string]string{
 		"STACKS_ROOT":           "/home/docker",
-		"STACKVAULT_HOSTNAME":   "host-a",
-		"STACKVAULT_SECRET_KEY": testKey,
+		"STACKBELAY_HOSTNAME":   "host-a",
+		"STACKBELAY_SECRET_KEY": testKey,
 	}), noFiles)
 	if err != nil {
 		t.Fatal(err)
@@ -34,7 +34,7 @@ func TestLoadManagerDefaults(t *testing.T) {
 func TestLoadManagerWithoutKeySource(t *testing.T) {
 	c, err := LoadManager(lookup(map[string]string{
 		"STACKS_ROOT":         "/home/docker",
-		"STACKVAULT_HOSTNAME": "host-a",
+		"STACKBELAY_HOSTNAME": "host-a",
 	}), noFiles)
 	if err != nil {
 		t.Fatal(err)
@@ -53,17 +53,17 @@ func TestLoadManagerKeyFile(t *testing.T) {
 	}
 	c, err := LoadManager(lookup(map[string]string{
 		"STACKS_ROOT":                      "/home/docker",
-		"STACKVAULT_HOSTNAME":              "host-a",
-		"STACKVAULT_SECRET_KEY_FILE":       "/run/secrets/key",
-		"STACKVAULT_DATA_DIR":              "/srv/sv/",
-		"STACKVAULT_ALLOW_INSECURE_HTTP":   "true",
-		"STACKVAULT_SESSION_TTL":           "30m",
-		"STACKVAULT_MAX_JOBS":              "5",
-		"STACKVAULT_ENABLE_SHELL":          "true",
-		"STACKVAULT_CLEANUP_IMAGE_MIN_AGE": "48h",
-		"STACKVAULT_JOB_TIMEOUT":           "72h",
-		"STACKVAULT_MAX_DOWNTIMES":         "2",
-		"STACKVAULT_DOWNTIME_TIMEOUT":      "30m",
+		"STACKBELAY_HOSTNAME":              "host-a",
+		"STACKBELAY_SECRET_KEY_FILE":       "/run/secrets/key",
+		"STACKBELAY_DATA_DIR":              "/srv/sv/",
+		"STACKBELAY_ALLOW_INSECURE_HTTP":   "true",
+		"STACKBELAY_SESSION_TTL":           "30m",
+		"STACKBELAY_MAX_JOBS":              "5",
+		"STACKBELAY_ENABLE_SHELL":          "true",
+		"STACKBELAY_CLEANUP_IMAGE_MIN_AGE": "48h",
+		"STACKBELAY_JOB_TIMEOUT":           "72h",
+		"STACKBELAY_MAX_DOWNTIMES":         "2",
+		"STACKBELAY_DOWNTIME_TIMEOUT":      "30m",
 		"TZ":                               ":Europe/Berlin",
 	}), read)
 	if err != nil {
@@ -85,20 +85,20 @@ func TestLoadManagerErrors(t *testing.T) {
 		env     map[string]string
 		wantErr []string
 	}{
-		{"nothing set", map[string]string{}, []string{"STACKS_ROOT", "STACKVAULT_HOSTNAME"}},
-		{"both keys", map[string]string{"STACKVAULT_SECRET_KEY": testKey, "STACKVAULT_SECRET_KEY_FILE": "/k"}, []string{"only one"}},
-		{"short key", map[string]string{"STACKVAULT_SECRET_KEY": "c2hvcnQ="}, []string{"32 bytes"}},
-		{"missing key file", map[string]string{"STACKVAULT_SECRET_KEY_FILE": "/nope"}, []string{"STACKVAULT_SECRET_KEY_FILE"}},
-		{"relative data dir", map[string]string{"STACKVAULT_DATA_DIR": "data"}, []string{"STACKVAULT_DATA_DIR must be an absolute path"}},
-		{"bad bool", map[string]string{"STACKVAULT_ALLOW_INSECURE_HTTP": "maybe"}, []string{"STACKVAULT_ALLOW_INSECURE_HTTP"}},
-		{"bad ttl", map[string]string{"STACKVAULT_SESSION_TTL": "5s"}, []string{"STACKVAULT_SESSION_TTL"}},
-		{"bad max jobs", map[string]string{"STACKVAULT_MAX_JOBS": "0"}, []string{"STACKVAULT_MAX_JOBS"}},
-		{"short log retention", map[string]string{"STACKVAULT_JOB_LOG_RETENTION": "1h"}, []string{"STACKVAULT_JOB_LOG_RETENTION"}},
-		{"bad max downtimes", map[string]string{"STACKVAULT_MAX_DOWNTIMES": "33"}, []string{"STACKVAULT_MAX_DOWNTIMES"}},
-		{"bad downtime timeout", map[string]string{"STACKVAULT_DOWNTIME_TIMEOUT": "10s"}, []string{"STACKVAULT_DOWNTIME_TIMEOUT"}},
-		{"bad cleanup age", map[string]string{"STACKVAULT_CLEANUP_IMAGE_MIN_AGE": "90m"}, []string{"STACKVAULT_CLEANUP_IMAGE_MIN_AGE"}},
-		{"negative cleanup age", map[string]string{"STACKVAULT_CLEANUP_IMAGE_MIN_AGE": "-1h"}, []string{"STACKVAULT_CLEANUP_IMAGE_MIN_AGE"}},
-		{"bad shell flag", map[string]string{"STACKVAULT_ENABLE_SHELL": "maybe"}, []string{"STACKVAULT_ENABLE_SHELL"}},
+		{"nothing set", map[string]string{}, []string{"STACKS_ROOT", "STACKBELAY_HOSTNAME"}},
+		{"both keys", map[string]string{"STACKBELAY_SECRET_KEY": testKey, "STACKBELAY_SECRET_KEY_FILE": "/k"}, []string{"only one"}},
+		{"short key", map[string]string{"STACKBELAY_SECRET_KEY": "c2hvcnQ="}, []string{"32 bytes"}},
+		{"missing key file", map[string]string{"STACKBELAY_SECRET_KEY_FILE": "/nope"}, []string{"STACKBELAY_SECRET_KEY_FILE"}},
+		{"relative data dir", map[string]string{"STACKBELAY_DATA_DIR": "data"}, []string{"STACKBELAY_DATA_DIR must be an absolute path"}},
+		{"bad bool", map[string]string{"STACKBELAY_ALLOW_INSECURE_HTTP": "maybe"}, []string{"STACKBELAY_ALLOW_INSECURE_HTTP"}},
+		{"bad ttl", map[string]string{"STACKBELAY_SESSION_TTL": "5s"}, []string{"STACKBELAY_SESSION_TTL"}},
+		{"bad max jobs", map[string]string{"STACKBELAY_MAX_JOBS": "0"}, []string{"STACKBELAY_MAX_JOBS"}},
+		{"short log retention", map[string]string{"STACKBELAY_JOB_LOG_RETENTION": "1h"}, []string{"STACKBELAY_JOB_LOG_RETENTION"}},
+		{"bad max downtimes", map[string]string{"STACKBELAY_MAX_DOWNTIMES": "33"}, []string{"STACKBELAY_MAX_DOWNTIMES"}},
+		{"bad downtime timeout", map[string]string{"STACKBELAY_DOWNTIME_TIMEOUT": "10s"}, []string{"STACKBELAY_DOWNTIME_TIMEOUT"}},
+		{"bad cleanup age", map[string]string{"STACKBELAY_CLEANUP_IMAGE_MIN_AGE": "90m"}, []string{"STACKBELAY_CLEANUP_IMAGE_MIN_AGE"}},
+		{"negative cleanup age", map[string]string{"STACKBELAY_CLEANUP_IMAGE_MIN_AGE": "-1h"}, []string{"STACKBELAY_CLEANUP_IMAGE_MIN_AGE"}},
+		{"bad shell flag", map[string]string{"STACKBELAY_ENABLE_SHELL": "maybe"}, []string{"STACKBELAY_ENABLE_SHELL"}},
 		{"unknown time zone", map[string]string{"TZ": "Europe/Atlantis"}, []string{"TZ:"}},
 	}
 	for _, tt := range tests {

@@ -400,7 +400,7 @@ func jobURL(id string) string { return "/jobs/" + url.PathEscape(id) }
 // queueInfo is the queue state of a queued job for the job page.
 type queueInfo struct {
 	store.QueueState
-	MaxJobs int // STACKVAULT_MAX_JOBS; 0 if unknown
+	MaxJobs int // STACKBELAY_MAX_JOBS; 0 if unknown
 }
 
 // SlotsFull reports whether the job waits for a running job to finish

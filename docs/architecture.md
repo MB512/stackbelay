@@ -59,26 +59,26 @@ compose, so they are never affected by stopping a stack.
 | Variable | Meaning |
 |---|---|
 | `STACKS_ROOT` | absolute stacks root, mounted at the same path as on the host (required) |
-| `STACKVAULT_HOSTNAME` | name of the Docker host, passed to workers for `restic --host` (required) |
-| `STACKVAULT_SECRET_KEY` / `STACKVAULT_SECRET_KEY_FILE` | 32-byte key, base64 (`openssl rand -base64 32`); at most one may be set. Neither set: `<STACKVAULT_DATA_DIR>/secret.key`, created on a fresh install. See "Secret key" |
-| `STACKVAULT_DATA_DIR` | database and job directories, default `/data` |
-| `STACKVAULT_LISTEN` | listen address, default `:8080` |
-| `STACKVAULT_SESSION_TTL` | session lifetime, default `12h` |
-| `STACKVAULT_ALLOW_INSECURE_HTTP` | accept logins over plain HTTP (testing without TLS proxy), default `false` |
-| `STACKVAULT_WORKER_IMAGE` | image for worker containers, default: the manager's own image |
-| `STACKVAULT_MAX_JOBS` | jobs running at the same time across all stacks (disk and network load), default `3`; restores count too (issue #36) |
-| `STACKVAULT_MAX_DOWNTIMES` | jobs that may keep a stack stopped at the same time (downtime slots, see "Downtime slots"), default `1` |
-| `STACKVAULT_DOWNTIME_TIMEOUT` | limit for stop -> final snapshot of a backup, update or compose apply (Go duration, at least `1m`), default `1h`; passed to every worker |
-| `STACKVAULT_JOB_TIMEOUT` | hard limit for one job (Go duration, at least `1m`), default `48h`; passed to every worker (issue #32) |
-| `STACKVAULT_JOB_LOG_RETENTION` | job directories (logs) of jobs finished longer ago are deleted, the job rows stay; Go duration, at least `24h`, default `2160h` (90 days), `0` keeps them (issue #16) |
-| `STACKVAULT_CLEANUP_IMAGE_MIN_AGE` | host cleanup: keep dangling images pulled, tagged or replaced by an update less than this long ago, whole hours, default `168h`; see "Host cleanup" |
-| `STACKVAULT_ENABLE_SHELL` | admin-only container shells ("Shell" per container on the Status tab), default `false`; see "Container shell" |
-| `STACKVAULT_LOG_LEVEL` | `debug`, `info`, `warn`, `error` |
+| `STACKBELAY_HOSTNAME` | name of the Docker host, passed to workers for `restic --host` (required) |
+| `STACKBELAY_SECRET_KEY` / `STACKBELAY_SECRET_KEY_FILE` | 32-byte key, base64 (`openssl rand -base64 32`); at most one may be set. Neither set: `<STACKBELAY_DATA_DIR>/secret.key`, created on a fresh install. See "Secret key" |
+| `STACKBELAY_DATA_DIR` | database and job directories, default `/data` |
+| `STACKBELAY_LISTEN` | listen address, default `:8080` |
+| `STACKBELAY_SESSION_TTL` | session lifetime, default `12h` |
+| `STACKBELAY_ALLOW_INSECURE_HTTP` | accept logins over plain HTTP (testing without TLS proxy), default `false` |
+| `STACKBELAY_WORKER_IMAGE` | image for worker containers, default: the manager's own image |
+| `STACKBELAY_MAX_JOBS` | jobs running at the same time across all stacks (disk and network load), default `3`; restores count too (issue #36) |
+| `STACKBELAY_MAX_DOWNTIMES` | jobs that may keep a stack stopped at the same time (downtime slots, see "Downtime slots"), default `1` |
+| `STACKBELAY_DOWNTIME_TIMEOUT` | limit for stop -> final snapshot of a backup, update or compose apply (Go duration, at least `1m`), default `1h`; passed to every worker |
+| `STACKBELAY_JOB_TIMEOUT` | hard limit for one job (Go duration, at least `1m`), default `48h`; passed to every worker (issue #32) |
+| `STACKBELAY_JOB_LOG_RETENTION` | job directories (logs) of jobs finished longer ago are deleted, the job rows stay; Go duration, at least `24h`, default `2160h` (90 days), `0` keeps them (issue #16) |
+| `STACKBELAY_CLEANUP_IMAGE_MIN_AGE` | host cleanup: keep dangling images pulled, tagged or replaced by an update less than this long ago, whole hours, default `168h`; see "Host cleanup" |
+| `STACKBELAY_ENABLE_SHELL` | admin-only container shells ("Shell" per container on the Status tab), default `false`; see "Container shell" |
+| `STACKBELAY_LOG_LEVEL` | `debug`, `info`, `warn`, `error` |
 | `TZ` | time zone of the cron schedules and of every time the UI shows (e.g. `Europe/Berlin`), default UTC in most images; the zone database is built into the binary; an unknown zone is a configuration error (Go would silently use UTC) |
 
 The database file is created with mode 0600. `/healthz` checks the database.
 The image's `HEALTHCHECK` runs `manager healthcheck`, which calls it on the
-address from `STACKVAULT_LISTEN`, so compose files need no `healthcheck:`
+address from `STACKBELAY_LISTEN`, so compose files need no `healthcheck:`
 (one there still overrides it). Workers are started with `--no-healthcheck`. Stacks are discovered at
 startup and mirrored into the database.
 
@@ -87,11 +87,11 @@ startup and mirrored into the database.
 The key encrypts repository credentials in the database (AES-256-GCM, see
 `internal/secrets`). Sources, in this order:
 
-1. `STACKVAULT_SECRET_KEY` (base64 in the variable) or
-   `STACKVAULT_SECRET_KEY_FILE` (path of a file containing it). Setting
+1. `STACKBELAY_SECRET_KEY` (base64 in the variable) or
+   `STACKBELAY_SECRET_KEY_FILE` (path of a file containing it). Setting
    both is a configuration error. If `<data>/secret.key` exists as well, it
    is ignored with a warning.
-2. Neither set: `<STACKVAULT_DATA_DIR>/secret.key`.
+2. Neither set: `<STACKBELAY_DATA_DIR>/secret.key`.
 
 The format is the same everywhere: base64 of 32 bytes, surrounding
 whitespace ignored. The data-dir key file is **generated only on a fresh
@@ -117,7 +117,7 @@ backups, next to the database. They are protected by the restic repository
 password, which is not stored on the host in plain text and must be known to
 restore anyway. Restoring the manager's stack restores the matching key and
 database together. To keep the key out of every backup, use
-`STACKVAULT_SECRET_KEY_FILE` with a file outside `STACKS_ROOT` (e.g.
+`STACKBELAY_SECRET_KEY_FILE` with a file outside `STACKS_ROOT` (e.g.
 `/etc/stackvault/secret.key`). Workers never receive the key: it is not in
 their environment, and their only data-dir mount is their own job directory.
 
@@ -175,7 +175,7 @@ A loop in the manager (every 2 s, and immediately when a job is queued):
    vanished without a final status fails the job ("exit code N").
 2. Grant downtime slots (see "Downtime slots").
 3. Claim queued jobs (oldest first, stack not locked, at most
-   `STACKVAULT_MAX_JOBS` running in total), write `spec.json`, start the
+   `STACKBELAY_MAX_JOBS` running in total), write `spec.json`, start the
    worker container. Start errors (no repository, `docker run` failed) fail
    the job and release the lock. Stop, start, restart and host cleanup
    jobs get no repository credentials at all. For a cleanup the spec gets
@@ -190,7 +190,7 @@ then asks for a **downtime slot** before it stops the stack: the worker
 writes `downtime-request` into its job directory, the job page shows
 "waiting for a downtime slot", and the dispatcher writes `downtime-granted`
 for the oldest waiting jobs (job ids sort by creation) while fewer than
-`STACKVAULT_MAX_DOWNTIMES` running jobs hold one (`grantDowntimes`). A slot
+`STACKBELAY_MAX_DOWNTIMES` running jobs hold one (`grantDowntimes`). A slot
 is held until the job ends. The state lives only in the job directories
 (`jobs.DowntimeState`), so it survives a restart of the manager, also when
 the slot was granted to the backup of the manager's own stack. Cancelling a
@@ -199,13 +199,13 @@ nothing is started again. Restores, imports, stop, start, restart, up,
 down and cleanups need no slot; a worker run by hand (`worker backup ...`)
 has no gate at all.
 
-`STACKVAULT_DOWNTIME_TIMEOUT` (default `1h`) bounds stop -> final snapshot:
+`STACKBELAY_DOWNTIME_TIMEOUT` (default `1h`) bounds stop -> final snapshot:
 when it runs out, the final snapshot is aborted, the stack is started
 again (as after any failure) and the job fails ("downtime timeout ...
 exceeded"); the pre-stop snapshot is kept. Waiting for the slot does not
 count. The start after a backup, the change and health wait of an update
 or compose apply and their rollback keep their own limits.
-`STACKVAULT_MAX_JOBS` (default `3`) still limits all running jobs,
+`STACKBELAY_MAX_JOBS` (default `3`) still limits all running jobs,
 restores included, for the disk and network load.
 
 All state is in the DB and the job directories, so a manager that was
@@ -239,8 +239,8 @@ docker run --detach --name stackvault-job-<id>
   --mount <host jobs dir>/<ID> -> /job   (bind, or volume with volume-subpath)
   --mount type=volume,source=stackvault-restic-cache,target=/cache
   [--mount <manager's /root/.docker or /root/.docker/config.json>,readonly]
-  --env STACKS_ROOT --env STACKVAULT_HOSTNAME --env RESTIC_CACHE_DIR
-  --env STACKVAULT_JOB_TIMEOUT --env STACKVAULT_DOWNTIME_TIMEOUT [--env STACKVAULT_LOG_LEVEL]
+  --env STACKS_ROOT --env STACKBELAY_HOSTNAME --env RESTIC_CACHE_DIR
+  --env STACKBELAY_JOB_TIMEOUT --env STACKBELAY_DOWNTIME_TIMEOUT [--env STACKBELAY_LOG_LEVEL]
   --env RESTIC_REPOSITORY --env RESTIC_PASSWORD --env <backend variables>
   <image> /app/worker run /job
 ```
@@ -255,7 +255,7 @@ restore, starts that pull); the manager's update check uses them too.
 `STACKS_ROOT` must be bind-mounted from the same path; `/data` may be a
 bind mount or a named volume (Docker >= 26 for `volume-subpath`). Outside a
 container (development) paths are used as they are and
-`STACKVAULT_WORKER_IMAGE` is required. The docker CLI gets an allow-listed
+`STACKBELAY_WORKER_IMAGE` is required. The docker CLI gets an allow-listed
 environment (`PATH`, `HOME`, `DOCKER_*`) plus the job's credentials, which
 `--env NAME` forwards by name.
 
@@ -451,7 +451,7 @@ rest of the path may differ (`/home/docker/web` on A restores into
   final downtime.
 - **Source host** (`stacks.source_host`, Settings tab): whose snapshots
   the Backups tab lists and the restore accepts (`StackSnapshots` with
-  that host instead of `STACKVAULT_HOSTNAME`). Offered are this host and
+  that host instead of `STACKBELAY_HOSTNAME`). Offered are this host and
   the hosts with cached snapshots of the stack. Restoring another host's
   snapshots is admin-only (restore links hidden, form and action answer
   403). Backups are always made under this host's name.
@@ -464,7 +464,7 @@ rest of the path may differ (`/home/docker/web` on A restores into
   inside the stack directory are in the snapshot).
 - **No downtime slot**: a restore needs none (see "Downtime slots"), so a
   long first restore does not hold up the scheduled backups of other
-  stacks; it counts against `STACKVAULT_MAX_JOBS` like every job.
+  stacks; it counts against `STACKBELAY_MAX_JOBS` like every job.
 - **Download limit**: restore option `limit_download_kib` (worker flag
   `--limit-download`), passed to every restic command of the job as
   `--limit-download` (KiB/s, at most `restic.MaxLimitKiB`).
@@ -768,7 +768,7 @@ the backup summary restic >= 0.17 records in every snapshot).
   uses the stack's own snapshots from this host: exactly one path whose
   last component is the stack name (restic records the backed-up path in
   every snapshot, so no extra tag is needed and older snapshots qualify
-  too) and `hostname` = `STACKVAULT_HOSTNAME` (`store.StackSnapshots`). The
+  too) and `hostname` = `STACKBELAY_HOSTNAME` (`store.StackSnapshots`). The
   page says how many other snapshots were hidden. The worker checks the
   path again before stopping anything.
 - Sizes and durations (issue #9), from the summary: the Backups tab shows
@@ -986,7 +986,7 @@ Below them the recent jobs of the stack. Users with the backup right get
 "Stop" and "Start" (Stop and Restart ask for confirmation,
 `static/forms.js`); every action checks its own right. Each
 container row links to the Logs tab with only that container selected
-(logs right) and, for admins with `STACKVAULT_ENABLE_SHELL`, to a shell in
+(logs right) and, for admins with `STACKBELAY_ENABLE_SHELL`, to a shell in
 it (shown disabled while the container is not running).
 
 Containers and jobs are one fragment (`status-live`) that HTMX reloads
@@ -1047,7 +1047,7 @@ phase is prefixed "rollback: ". While the stack stops and while the job
 waits until services are healthy, the services still pending are shown
 ("waiting for: app, db"; issue #8). A queued job says what it waits for:
 the running (or earlier queued) job of its stack, or a free slot when
-`STACKVAULT_MAX_JOBS` jobs run, and how many jobs are queued before it
+`STACKBELAY_MAX_JOBS` jobs run, and how many jobs are queued before it
 (`store.QueueState`, the same rules as `ClaimNextJob`). A running job that
 waits for its downtime slot shows the phase "waiting for a downtime slot".
 
@@ -1100,7 +1100,7 @@ The worker appends to `/job/log.txt` as JSON lines (`log/slog`; secrets
 redacted before writing).
 
 Job directories (log, status, spec, progress) of jobs that finished more
-than `STACKVAULT_JOB_LOG_RETENTION` ago (default `2160h` = 90 days; `0`
+than `STACKBELAY_JOB_LOG_RETENTION` ago (default `2160h` = 90 days; `0`
 keeps them) are deleted by the dispatcher, at start and every 6 hours
 (`CleanupJobDirs`, issue #16). One rule for every final state; queued and
 running jobs are never touched. The job rows stay, so job lists, the stack
@@ -1215,7 +1215,7 @@ several stacks in one view, with the same panel and script as the Logs tab
 
 ## Container shell
 
-Opt-in (`STACKVAULT_ENABLE_SHELL=true`, default off) and admin-only: the
+Opt-in (`STACKBELAY_ENABLE_SHELL=true`, default off) and admin-only: the
 "Shell" link of a container on the Status tab opens an interactive shell
 in it. Without the setting the links and the routes do not exist (an
 exception to "disabled, not hidden": the feature is meant to be invisible
@@ -1281,7 +1281,7 @@ job recomputes them itself.
    A rollback or pinned restore that needs a removed version pulls it again
    by digest (`EnsureImage`).
 
-   The minimum age is `STACKVAULT_CLEANUP_IMAGE_MIN_AGE`; when the job
+   The minimum age is `STACKBELAY_CLEANUP_IMAGE_MIN_AGE`; when the job
    starts, the dispatcher puts it into the spec together with the
    `replaced_images` of the jobs finished within it (at most 500; beyond
    that, images are protected only by their pull/tag time).
@@ -1429,13 +1429,13 @@ The repository always comes from the environment:
 | Variable | Meaning |
 |---|---|
 | `STACKS_ROOT` | absolute stacks root (required) |
-| `STACKVAULT_HOSTNAME` | value for `restic --host` (defaults to `os.Hostname()`, which is random inside a container, so set it there) |
+| `STACKBELAY_HOSTNAME` | value for `restic --host` (defaults to `os.Hostname()`, which is random inside a container, so set it there) |
 | `RESTIC_REPOSITORY` | repository (required) |
 | `RESTIC_PASSWORD_FILE` / `RESTIC_PASSWORD` | one is required |
 | backend variables (`AWS_*`, `B2_*`, `AZURE_*`, `GOOGLE_*`, `RESTIC_REST_*`) | passed to restic; values are redacted from output |
-| `STACKVAULT_JOB_TIMEOUT` | hard job timeout, Go duration (at least `1m`), default `48h` |
-| `STACKVAULT_DOWNTIME_TIMEOUT` | limit for stop -> final snapshot, Go duration (at least `1m`), default `1h` |
-| `STACKVAULT_LOG_LEVEL` | `debug`, `info`, `warn`, `error` |
+| `STACKBELAY_JOB_TIMEOUT` | hard job timeout, Go duration (at least `1m`), default `48h` |
+| `STACKBELAY_DOWNTIME_TIMEOUT` | limit for stop -> final snapshot, Go duration (at least `1m`), default `1h` |
+| `STACKBELAY_LOG_LEVEL` | `debug`, `info`, `warn`, `error` |
 
 restic never inherits the full process environment: it gets an allow-list
 (`PATH`, `HOME`, `TMPDIR`, proxy/CA settings, `RESTIC_CACHE_DIR`, ...), the

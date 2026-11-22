@@ -61,7 +61,7 @@
   <label>Limit download (MiB/s, empty = no limit)
     <input name="limit_download" type="number" min="0" step="1" inputmode="numeric"></label>
   <p class="hint">A restore needs no downtime slot: a long one does not hold up the scheduled backups of other stacks
-    (it counts against the jobs running at the same time, <code>STACKVAULT_MAX_JOBS</code>).</p>
+    (it counts against the jobs running at the same time, <code>STACKBELAY_MAX_JOBS</code>).</p>
   <div><button type="submit"{{if $.Error}} disabled{{end}}>Restore this snapshot</button></div>
 </form>
 {{- end}}

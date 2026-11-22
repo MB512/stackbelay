@@ -421,7 +421,7 @@ func (s *Store) queryJobs(ctx context.Context, query string, args ...any) ([]Job
 
 // ClaimNextJob marks the oldest queued job that may start as running and
 // returns it. ok is false if there is nothing to start: maxRunning jobs
-// (STACKVAULT_MAX_JOBS) run already, or no queued job may start.
+// (STACKBELAY_MAX_JOBS) run already, or no queued job may start.
 //
 // A stack job may start when its stack has no running job, no host job
 // runs and no host job was queued before it (so a host job is not starved

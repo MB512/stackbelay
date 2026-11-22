@@ -141,8 +141,8 @@ CREATE TABLE audit_log (
 ## Notes
 
 - Timestamps: UTC, RFC 3339 strings.
-- Secrets key: 32 bytes, base64, from `STACKVAULT_SECRET_KEY`,
-  `STACKVAULT_SECRET_KEY_FILE` or `<data>/secret.key` (generated on a fresh
+- Secrets key: 32 bytes, base64, from `STACKBELAY_SECRET_KEY`,
+  `STACKBELAY_SECRET_KEY_FILE` or `<data>/secret.key` (generated on a fresh
   install only). Losing it means losing access to stored repo credentials.
 - `meta.key_check`: AES-256-GCM of `stackvault key check` with associated
   data `stackvault:key-check`. Checked by `store.Open`; a key that does not
@@ -176,7 +176,7 @@ CREATE TABLE audit_log (
   `present = 0`, `seen_present = 0`, `source_host` = the host it is imported
   from. Its first restore creates the directory and sets `present = 1`.
 - Every running job counts against the limit of running jobs
-  (`STACKVAULT_MAX_JOBS`); the `options.background` exception of
+  (`STACKBELAY_MAX_JOBS`); the `options.background` exception of
   StackVault 0.4 is gone (issue #36; old values are ignored). Downtime
   slots are not in the database but in the job directories (see
   "Downtime slots" in architecture.md).

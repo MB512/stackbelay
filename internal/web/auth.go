@@ -193,7 +193,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 
 	if s.SecureCookies && !isHTTPS(r) {
 		fail(http.StatusBadRequest, "Login requires HTTPS. Run StackVault behind a TLS reverse proxy "+
-			"(or set STACKVAULT_ALLOW_INSECURE_HTTP=true for testing).")
+			"(or set STACKBELAY_ALLOW_INSECURE_HTTP=true for testing).")
 		return
 	}
 	if username == "" || password == "" || len(username) > 128 || len(password) > 1024 {
@@ -263,7 +263,7 @@ func (s *Server) startSession(w http.ResponseWriter, r *http.Request, userID int
 	}
 	// No Expires/MaxAge: a browser-session cookie. The server enforces the
 	// session lifetime. Secure is only false with the explicit
-	// STACKVAULT_ALLOW_INSECURE_HTTP opt-in.
+	// STACKBELAY_ALLOW_INSECURE_HTTP opt-in.
 	http.SetCookie(w, &http.Cookie{ //nolint:gosec // G124: see above
 		Name: s.cookieName(), Value: token, Path: "/",
 		HttpOnly: true, Secure: s.SecureCookies, SameSite: http.SameSiteLaxMode,

@@ -11,7 +11,7 @@
   {{- if .LogCut}}<p class="hint">Only the end of the log is shown.</p>{{end}}
   <div class="log" id="job-log" role="log">{{range .Log}}{{template "log-line" .}}{{end}}</div>
   {{- if not .Log}}
-  <p class="hint" id="job-log-empty">{{if .LogDeleted}}The log was deleted: jobs keep their log for {{.RetentionDays}} days (<code>STACKVAULT_JOB_LOG_RETENTION</code>).{{else if .Job.State.Final}}No log.{{else}}The log appears when the worker starts.{{end}}</p>
+  <p class="hint" id="job-log-empty">{{if .LogDeleted}}The log was deleted: jobs keep their log for {{.RetentionDays}} days (<code>STACKBELAY_JOB_LOG_RETENTION</code>).{{else if .Job.State.Final}}No log.{{else}}The log appears when the worker starts.{{end}}</p>
   {{- end}}
 </div>
 <script src="{{asset "joblog.js"}}" defer></script>
@@ -36,7 +36,7 @@
       {{- if not .StackName}}Waiting for the host cleanup (<a href="/jobs/{{.ID}}">{{if eq (print .State) "running"}}running{{else}}queued earlier{{end}}</a>): it runs alone.
       {{- else if not $.Job.StackName}}Waiting for the {{.Type}} of {{.StackName}} (<a href="/jobs/{{.ID}}">running</a>): a cleanup runs alone, when no other job runs.
       {{- else}}Waiting for the {{.Type}} of this stack (<a href="/jobs/{{.ID}}">{{if eq (print .State) "running"}}running{{else}}queued earlier{{end}}</a>): one job per stack at a time.{{end}}
-      {{- else}}{{if .SlotsFull}}Waiting for a free slot: {{.Running}} job{{if ne .Running 1}}s{{end}} running, at most {{.MaxJobs}} at a time (<code>STACKVAULT_MAX_JOBS</code>).
+      {{- else}}{{if .SlotsFull}}Waiting for a free slot: {{.Running}} job{{if ne .Running 1}}s{{end}} running, at most {{.MaxJobs}} at a time (<code>STACKBELAY_MAX_JOBS</code>).
       {{- else}}Starting in a moment.{{end}}{{end}}
       {{- with .Ahead}} {{.}} job{{if ne . 1}}s{{end}} queued before this one.{{end}}</p>
   </div>

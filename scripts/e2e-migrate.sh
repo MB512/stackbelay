@@ -49,8 +49,8 @@ for line in open(sys.argv[1]):
 }
 
 # worker on host A or B: separate stacks roots and host names, one repository.
-on_a() { STACKS_ROOT="$ROOT_A" STACKVAULT_HOSTNAME=host-a ./bin/worker "$@"; }
-on_b() { STACKS_ROOT="$ROOT_B" STACKVAULT_HOSTNAME=host-b ./bin/worker "$@"; }
+on_a() { STACKS_ROOT="$ROOT_A" STACKBELAY_HOSTNAME=host-a ./bin/worker "$@"; }
+on_b() { STACKS_ROOT="$ROOT_B" STACKBELAY_HOSTNAME=host-b ./bin/worker "$@"; }
 
 backup_a() { # value -> snapshot id; A runs, is backed up, then taken down
 	echo "$1" >"$DIR_A/data/value.txt"
@@ -75,7 +75,7 @@ services:
     volumes: ["./data:/data:ro"]
 EOF
 printf 'e2e-test-password\n' >"$WORK/pw"
-export RESTIC_REPOSITORY="$WORK/repo" RESTIC_PASSWORD_FILE="$WORK/pw" STACKVAULT_JOB_TIMEOUT=5m
+export RESTIC_REPOSITORY="$WORK/repo" RESTIC_PASSWORD_FILE="$WORK/pw" STACKBELAY_JOB_TIMEOUT=5m
 restic init --quiet
 SNAP1="$(backup_a v1)"
 [[ -n "$SNAP1" ]] || fail "no snapshot id"

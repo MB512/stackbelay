@@ -30,7 +30,7 @@ const (
 
 // hostPage is the data of the Host tab.
 type hostPage struct {
-	MinAge      time.Duration // STACKVAULT_CLEANUP_IMAGE_MIN_AGE
+	MinAge      time.Duration // STACKBELAY_CLEANUP_IMAGE_MIN_AGE
 	Unavailable string        // why no cleanup can be queued, or ""
 	Schedules   []scheduleRow
 	NewCron     string // the schedule form's input after an error

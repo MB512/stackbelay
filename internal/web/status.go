@@ -54,7 +54,7 @@ type statusLive struct {
 	CheckMessage string
 	CanUpdate    bool
 	CanLogs      bool // row link to the Logs tab
-	CanShell     bool // row link to a shell (admin, STACKVAULT_ENABLE_SHELL)
+	CanShell     bool // row link to a shell (admin, STACKBELAY_ENABLE_SHELL)
 }
 
 // ShowUpdates reports whether the services table has an update column: a

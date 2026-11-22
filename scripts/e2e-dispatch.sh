@@ -95,9 +95,9 @@ fi
 pass "stack $STACK running"
 
 step "start manager"
-STACKVAULT_HOSTNAME=e2e-host STACKS_ROOT="$ROOT" STACKVAULT_DATA_DIR="$WORK/data" \
-	STACKVAULT_SECRET_KEY="$(head -c32 /dev/urandom | base64)" STACKVAULT_ALLOW_INSECURE_HTTP=true \
-	STACKVAULT_LISTEN="127.0.0.1:$PORT" STACKVAULT_WORKER_IMAGE="$IMAGE" \
+STACKBELAY_HOSTNAME=e2e-host STACKS_ROOT="$ROOT" STACKBELAY_DATA_DIR="$WORK/data" \
+	STACKBELAY_SECRET_KEY="$(head -c32 /dev/urandom | base64)" STACKBELAY_ALLOW_INSECURE_HTTP=true \
+	STACKBELAY_LISTEN="127.0.0.1:$PORT" STACKBELAY_WORKER_IMAGE="$IMAGE" \
 	./bin/manager >"$WORK/manager.log" 2>&1 &
 MANAGER_PID=$!
 for _ in $(seq 1 50); do curl -sf "$B/healthz" >/dev/null && break; sleep 0.2; done

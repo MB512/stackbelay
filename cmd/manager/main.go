@@ -53,12 +53,14 @@ const shutdownTimeout = 8 * time.Second
 // server accepts connections (used by tests).
 func run(ctx context.Context, getenv func(string) string, readFile func(string) ([]byte, error),
 	stderr io.Writer, ready func(addr string)) int {
-	cfg, err := config.LoadManager(getenv, readFile)
+	env := config.NewEnv(getenv) // falls back to the old STACKVAULT_* names
+	cfg, err := config.LoadManager(env.Get, readFile)
 	if err != nil {
 		fmt.Fprintf(stderr, "configuration error:\n%v\n", err)
 		return 2
 	}
 	log := slog.New(slog.NewJSONHandler(stderr, &slog.HandlerOptions{Level: cfg.LogLevel}))
+	env.WarnLegacy(log)
 
 	st, err := openStore(ctx, cfg, log)
 	if err != nil {
@@ -157,7 +159,7 @@ func run(ctx context.Context, getenv func(string) string, readFile func(string) 
 	}
 	log.Info("manager listening", "version", buildinfo.Version, "addr", ln.Addr().String(), "stacks_root", cfg.StacksRoot, "data_dir", cfg.DataDir)
 	if cfg.AllowInsecureHTTP {
-		log.Warn("STACKVAULT_ALLOW_INSECURE_HTTP is set: logins over plain HTTP are accepted; use a TLS reverse proxy in production")
+		log.Warn("STACKBELAY_ALLOW_INSECURE_HTTP is set: logins over plain HTTP are accepted; use a TLS reverse proxy in production")
 	}
 
 	// Serve in a goroutine (a lightweight thread, like Task.Run in C#) and
@@ -224,7 +226,7 @@ func openStore(ctx context.Context, cfg config.Manager, log *slog.Logger) (*stor
 }
 
 // secretKey returns the key that encrypts repository credentials: from
-// STACKVAULT_SECRET_KEY or STACKVAULT_SECRET_KEY_FILE if set, otherwise
+// STACKBELAY_SECRET_KEY or STACKBELAY_SECRET_KEY_FILE if set, otherwise
 // from the key file in the data directory. That file is created only on a
 // fresh install (no database yet), never next to data that was encrypted
 // with another key.
@@ -232,7 +234,7 @@ func secretKey(cfg config.Manager, log *slog.Logger) ([]byte, error) {
 	keyPath := cfg.SecretKeyPath()
 	if cfg.SecretKey != nil {
 		if _, err := os.Lstat(keyPath); err == nil {
-			log.Warn("ignoring the key file in the data directory: STACKVAULT_SECRET_KEY or STACKVAULT_SECRET_KEY_FILE is set",
+			log.Warn("ignoring the key file in the data directory: STACKBELAY_SECRET_KEY or STACKBELAY_SECRET_KEY_FILE is set",
 				"path", keyPath)
 		}
 		return cfg.SecretKey, nil
@@ -246,7 +248,7 @@ func secretKey(cfg config.Manager, log *slog.Logger) ([]byte, error) {
 	key, _, err := secrets.LoadOrCreateKeyFile(keyPath, freshInstall, log)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, fmt.Errorf("no secret key: %s does not exist, but the database %s does; "+
-			"restore the key file or set STACKVAULT_SECRET_KEY_FILE (a new key could not decrypt the stored credentials)",
+			"restore the key file or set STACKBELAY_SECRET_KEY_FILE (a new key could not decrypt the stored credentials)",
 			keyPath, cfg.DBPath())
 	}
 	if err != nil {
@@ -258,7 +260,7 @@ func secretKey(cfg config.Manager, log *slog.Logger) ([]byte, error) {
 // keySourceName names where the secret key came from, for error messages.
 func keySourceName(cfg config.Manager) string {
 	if cfg.SecretKey != nil {
-		return "STACKVAULT_SECRET_KEY / STACKVAULT_SECRET_KEY_FILE"
+		return "STACKBELAY_SECRET_KEY / STACKBELAY_SECRET_KEY_FILE"
 	}
 	return cfg.SecretKeyPath()
 }

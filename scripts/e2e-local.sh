@@ -68,9 +68,9 @@ services:
     command: ["true"]
 EOF
 printf 'e2e-test-password\n' >"$WORK/pw"
-export STACKS_ROOT="$ROOT" STACKVAULT_HOSTNAME=e2e-host \
+export STACKS_ROOT="$ROOT" STACKBELAY_HOSTNAME=e2e-host \
 	RESTIC_REPOSITORY="$WORK/repo" RESTIC_PASSWORD_FILE="$WORK/pw" \
-	STACKVAULT_JOB_TIMEOUT=5m
+	STACKBELAY_JOB_TIMEOUT=5m
 restic init --quiet
 (cd "$DIR" && docker compose up --detach --quiet-pull --wait app >/dev/null)
 (cd "$DIR" && docker compose up --detach --quiet-pull oneshot >/dev/null)

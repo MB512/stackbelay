@@ -88,9 +88,9 @@ services:
     image: $IMAGE
     environment:
       STACKS_ROOT: $ROOT
-      STACKVAULT_HOSTNAME: e2e-self
-      STACKVAULT_SECRET_KEY_FILE: /run/secrets/key
-      STACKVAULT_ALLOW_INSECURE_HTTP: "true"
+      STACKBELAY_HOSTNAME: e2e-self
+      STACKBELAY_SECRET_KEY_FILE: /run/secrets/key
+      STACKBELAY_ALLOW_INSECURE_HTTP: "true"
     ports: ["127.0.0.1:$PORT:8080"]
     volumes:
       - $ROOT:$ROOT

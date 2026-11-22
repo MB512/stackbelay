@@ -87,7 +87,7 @@ design discussions are tracked in
 
 2. Copy [`deploy/compose.example.yml`](deploy/compose.example.yml) to
    `/home/docker/stackvault/compose.yml` and adjust `STACKS_ROOT`, the
-   matching volume, `STACKVAULT_HOSTNAME` and `TZ`.
+   matching volume, `STACKBELAY_HOSTNAME` and `TZ`.
 
 3. Start it and read the initial admin password from the log:
 
@@ -113,7 +113,7 @@ design discussions are tracked in
 `data/secret.key` lies inside the StackVault stack, so it is part of that
 stack's own backups (protected by its restic repository password). That
 makes restoring StackVault itself simple. To keep the key in no backup at
-all, store it outside `STACKS_ROOT` and point `STACKVAULT_SECRET_KEY_FILE`
+all, store it outside `STACKS_ROOT` and point `STACKBELAY_SECRET_KEY_FILE`
 at it:
 
 ```sh
@@ -128,7 +128,7 @@ match the database. Then enable the commented lines in the compose file.
 
 ### Upgrading from 0.1: move the secret key into the data directory
 
-0.1 required the secret key outside the stack (`STACKVAULT_SECRET_KEY_FILE`,
+0.1 required the secret key outside the stack (`STACKBELAY_SECRET_KEY_FILE`,
 usually `/etc/stackvault/secret.key`). That still works unchanged. Since 0.2
 the default place is `data/secret.key` inside the StackVault stack, so the
 stack's own backup contains everything needed to run StackVault again:
@@ -139,11 +139,11 @@ restore of its stack. To switch an existing installation:
 cd /home/docker/stackvault             # the StackVault stack directory
 docker compose down
 sudo install -m 600 /etc/stackvault/secret.key data/secret.key
-# with STACKVAULT_SECRET_KEY (the key itself in the environment) instead:
+# with STACKBELAY_SECRET_KEY (the key itself in the environment) instead:
 #   printf '%s\n' '<the key>' | sudo tee data/secret.key >/dev/null && sudo chmod 600 data/secret.key
 ```
 
-Then remove `STACKVAULT_SECRET_KEY_FILE` (or `STACKVAULT_SECRET_KEY`) and
+Then remove `STACKBELAY_SECRET_KEY_FILE` (or `STACKBELAY_SECRET_KEY`) and
 the key's volume line from `compose.yml`, set the image to `0.4`, and start
 it again (`docker compose up -d`). StackVault checks the key against the
 database at startup and refuses to start if it does not match, so a wrong
@@ -184,26 +184,29 @@ moved to each new dev build without a version number (the UI shows
 
 ## Configuration
 
-Environment variables only:
+Environment variables only. Up to version 0.4 the variables started with
+`STACKVAULT_` instead of `STACKBELAY_` (issue #44). The old names still work
+as a fallback when the new one is not set; the log warns about each one that
+is used, so rename them at your next change.
 
 | Variable | Meaning |
 |---|---|
 | `STACKS_ROOT` | absolute stacks root, mounted at the **same path** in the container (required) |
-| `STACKVAULT_HOSTNAME` | name of this Docker host, recorded in every snapshot (required) |
-| `STACKVAULT_SECRET_KEY_FILE` / `STACKVAULT_SECRET_KEY` | 32-byte key, base64; at most one. Default: `<STACKVAULT_DATA_DIR>/secret.key`, generated on the first start |
-| `STACKVAULT_DATA_DIR` | database and job files, default `/data` |
-| `STACKVAULT_LISTEN` | listen address, default `:8080` |
-| `STACKVAULT_SESSION_TTL` | session lifetime, default `12h` |
-| `STACKVAULT_ALLOW_INSECURE_HTTP` | accept logins over plain HTTP (testing only), default `false` |
-| `STACKVAULT_WORKER_IMAGE` | image for worker containers, default: the manager's own image |
-| `STACKVAULT_JOB_TIMEOUT` | hard limit for one job (backup, restore, update, ...), e.g. `72h`, default `48h`; a job running longer is stopped (the stack is restarted as after any failure) |
-| `STACKVAULT_MAX_JOBS` | jobs running at the same time across all stacks (disk and network load), default `3` |
-| `STACKVAULT_MAX_DOWNTIMES` | jobs that may keep a stack stopped at the same time, default `1`: a backup or update takes its snapshot while the stack runs and only then waits for this slot, so a long backup or restore does not hold up the other stacks |
-| `STACKVAULT_DOWNTIME_TIMEOUT` | limit for the time a backup or update keeps a stack stopped until its final snapshot, e.g. `2h`, default `1h`; when it runs out, the final snapshot is aborted and the stack started again (the job fails) |
-| `STACKVAULT_JOB_LOG_RETENTION` | logs of jobs that finished longer ago are deleted (the job list keeps them, without log), e.g. `720h` for 30 days, default `2160h` (90 days), `0` keeps them forever |
-| `STACKVAULT_CLEANUP_IMAGE_MIN_AGE` | host cleanup: keep unused untagged images pulled or replaced by an update less than this long ago, whole hours, default `168h` |
-| `STACKVAULT_ENABLE_SHELL` | `true` gives admins a shell in stack containers ("Shell" per container on the Status tab), default `false` |
-| `STACKVAULT_LOG_LEVEL` | `debug`, `info`, `warn`, `error` |
+| `STACKBELAY_HOSTNAME` | name of this Docker host, recorded in every snapshot (required) |
+| `STACKBELAY_SECRET_KEY_FILE` / `STACKBELAY_SECRET_KEY` | 32-byte key, base64; at most one. Default: `<STACKBELAY_DATA_DIR>/secret.key`, generated on the first start |
+| `STACKBELAY_DATA_DIR` | database and job files, default `/data` |
+| `STACKBELAY_LISTEN` | listen address, default `:8080` |
+| `STACKBELAY_SESSION_TTL` | session lifetime, default `12h` |
+| `STACKBELAY_ALLOW_INSECURE_HTTP` | accept logins over plain HTTP (testing only), default `false` |
+| `STACKBELAY_WORKER_IMAGE` | image for worker containers, default: the manager's own image |
+| `STACKBELAY_JOB_TIMEOUT` | hard limit for one job (backup, restore, update, ...), e.g. `72h`, default `48h`; a job running longer is stopped (the stack is restarted as after any failure) |
+| `STACKBELAY_MAX_JOBS` | jobs running at the same time across all stacks (disk and network load), default `3` |
+| `STACKBELAY_MAX_DOWNTIMES` | jobs that may keep a stack stopped at the same time, default `1`: a backup or update takes its snapshot while the stack runs and only then waits for this slot, so a long backup or restore does not hold up the other stacks |
+| `STACKBELAY_DOWNTIME_TIMEOUT` | limit for the time a backup or update keeps a stack stopped until its final snapshot, e.g. `2h`, default `1h`; when it runs out, the final snapshot is aborted and the stack started again (the job fails) |
+| `STACKBELAY_JOB_LOG_RETENTION` | logs of jobs that finished longer ago are deleted (the job list keeps them, without log), e.g. `720h` for 30 days, default `2160h` (90 days), `0` keeps them forever |
+| `STACKBELAY_CLEANUP_IMAGE_MIN_AGE` | host cleanup: keep unused untagged images pulled or replaced by an update less than this long ago, whole hours, default `168h` |
+| `STACKBELAY_ENABLE_SHELL` | `true` gives admins a shell in stack containers ("Shell" per container on the Status tab), default `false` |
+| `STACKBELAY_LOG_LEVEL` | `debug`, `info`, `warn`, `error` |
 | `TZ` | time zone of the schedules and of all times shown in the UI, e.g. `Europe/Berlin` (default UTC); an unknown zone stops the start |
 
 ## Security

@@ -14,12 +14,12 @@ func lookup(m map[string]string) func(string) string {
 func TestLoadWorker(t *testing.T) {
 	c, err := LoadWorker(lookup(map[string]string{
 		"STACKS_ROOT":            "/home/docker/",
-		"STACKVAULT_HOSTNAME":    "host-a",
+		"STACKBELAY_HOSTNAME":    "host-a",
 		"RESTIC_REPOSITORY":      "rest:https://backup.example/web",
 		"RESTIC_PASSWORD_FILE":   "/run/secrets/pw",
 		"AWS_SECRET_ACCESS_KEY":  "aws-secret",
-		"STACKVAULT_JOB_TIMEOUT": "30m",
-		"STACKVAULT_LOG_LEVEL":   "debug",
+		"STACKBELAY_JOB_TIMEOUT": "30m",
+		"STACKBELAY_LOG_LEVEL":   "debug",
 	}))
 	if err != nil {
 		t.Fatal(err)
@@ -37,13 +37,13 @@ func TestLoadWorker(t *testing.T) {
 func TestLoadWorkerErrors(t *testing.T) {
 	_, err := LoadWorker(lookup(map[string]string{
 		"STACKS_ROOT":            "relative",
-		"STACKVAULT_JOB_TIMEOUT": "forever",
-		"STACKVAULT_LOG_LEVEL":   "loud",
+		"STACKBELAY_JOB_TIMEOUT": "forever",
+		"STACKBELAY_LOG_LEVEL":   "loud",
 	}))
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	for _, want := range []string{"STACKS_ROOT", "STACKVAULT_JOB_TIMEOUT", "STACKVAULT_LOG_LEVEL"} {
+	for _, want := range []string{"STACKS_ROOT", "STACKBELAY_JOB_TIMEOUT", "STACKBELAY_LOG_LEVEL"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error does not mention %s: %v", want, err)
 		}
@@ -51,7 +51,7 @@ func TestLoadWorkerErrors(t *testing.T) {
 }
 
 func TestLoadWorkerRepository(t *testing.T) {
-	base := map[string]string{"STACKS_ROOT": "/home/docker", "STACKVAULT_HOSTNAME": "h"}
+	base := map[string]string{"STACKS_ROOT": "/home/docker", "STACKBELAY_HOSTNAME": "h"}
 	with := func(kv ...string) map[string]string {
 		m := map[string]string{}
 		for k, v := range base {
@@ -103,7 +103,7 @@ func TestJobTimeout(t *testing.T) {
 		{"forever", DefaultJobTimeout, true},
 	}
 	for _, tt := range tests {
-		got, errs := jobTimeout(lookup(map[string]string{"STACKVAULT_JOB_TIMEOUT": tt.value}), nil)
+		got, errs := jobTimeout(lookup(map[string]string{"STACKBELAY_JOB_TIMEOUT": tt.value}), nil)
 		if got != tt.want || (len(errs) > 0) != tt.wantErr {
 			t.Errorf("%q: got %v, errors %v; want %v, error %v", tt.value, got, errs, tt.want, tt.wantErr)
 		}

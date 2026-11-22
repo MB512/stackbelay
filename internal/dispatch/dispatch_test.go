@@ -203,7 +203,7 @@ func TestDispatchLifecycle(t *testing.T) {
 	if cs.Name != ContainerName(b1.ID) || cs.Image != "stackbelay:test" || cs.Labels[LabelJob] != b1.ID ||
 		cs.Env["RESTIC_REPOSITORY"] != "rest:https://backup.example/web" || cs.Env["RESTIC_PASSWORD"] != "repo-pw-web" ||
 		cs.Env["RESTIC_REST_PASSWORD"] != "rest-pw-web" || cs.Env["STACKS_ROOT"] != "/home/docker" ||
-		cs.Env["STACKVAULT_HOSTNAME"] != "host-a" || strings.Join(cs.Cmd, " ") != "/app/worker run /job" {
+		cs.Env["STACKBELAY_HOSTNAME"] != "host-a" || strings.Join(cs.Cmd, " ") != "/app/worker run /job" {
 		t.Fatalf("container spec: %+v", cs)
 	}
 	if cs.Mounts[2] != (docker.Mount{Type: "bind", Source: "/srv/stackvault/data/jobs/" + b1.ID, Target: "/job"}) {

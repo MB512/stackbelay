@@ -85,7 +85,7 @@ func findContainer(list []docker.Container, id string) (docker.Container, bool) 
 // stackShell shows the terminal of the container ?container=<id>
 // (static/shell.js connects it to shellSocket). Without a container it
 // redirects to the Status tab, which lists the containers. Admin only, and
-// only registered with STACKVAULT_ENABLE_SHELL.
+// only registered with STACKBELAY_ENABLE_SHELL.
 func (s *Server) stackShell(w http.ResponseWriter, r *http.Request) {
 	st, _, ok := s.loadStack(w, r, auth.ActionView) // the route requires an admin
 	if !ok {

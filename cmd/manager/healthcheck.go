@@ -7,13 +7,15 @@ import (
 	"net"
 	"net/http"
 	"time"
+
+	"github.com/MB512/stackbelay/internal/config"
 )
 
 // healthcheckTimeout stays below the HEALTHCHECK --timeout in the Dockerfile.
 const healthcheckTimeout = 4 * time.Second
 
 // healthURL returns the /healthz URL of a manager that listens on listen
-// (the value of STACKVAULT_LISTEN, default ":8080"). A wildcard or empty host
+// (the value of STACKBELAY_LISTEN, default ":8080"). A wildcard or empty host
 // is replaced by the loopback address: the check runs inside the container.
 func healthURL(listen string) (string, error) {
 	if listen == "" {
@@ -21,7 +23,7 @@ func healthURL(listen string) (string, error) {
 	}
 	host, port, err := net.SplitHostPort(listen)
 	if err != nil {
-		return "", fmt.Errorf("invalid STACKVAULT_LISTEN %q: %w", listen, err)
+		return "", fmt.Errorf("invalid STACKBELAY_LISTEN %q: %w", listen, err)
 	}
 	if ip := net.ParseIP(host); host == "" || (ip != nil && ip.IsUnspecified()) {
 		host = "127.0.0.1"
@@ -34,7 +36,7 @@ func healthURL(listen string) (string, error) {
 // process exit code (0 healthy, 1 unhealthy). Like a small console tool in
 // C# that calls HttpClient.GetAsync and returns the result as its exit code.
 func healthcheck(ctx context.Context, getenv func(string) string, stderr io.Writer) int {
-	url, err := healthURL(getenv("STACKVAULT_LISTEN"))
+	url, err := healthURL(config.NewEnv(getenv).Get("STACKBELAY_LISTEN"))
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1

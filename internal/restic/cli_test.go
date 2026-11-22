@@ -122,7 +122,7 @@ func TestEnviron(t *testing.T) {
 	own := map[string]string{
 		"PATH":                  "/usr/bin",
 		"HOME":                  "/root",
-		"STACKVAULT_SECRET_KEY": "master-key",
+		"STACKBELAY_SECRET_KEY": "master-key",
 		"RESTIC_PASSWORD":       "from-process",
 		"AWS_SECRET_ACCESS_KEY": "from-process",
 	}

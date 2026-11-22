@@ -1,6 +1,6 @@
 // Package secrets encrypts small secrets (repository credentials) for
 // storage in the database, using AES-256-GCM with a key that is never
-// stored in the database (STACKVAULT_SECRET_KEY).
+// stored in the database (STACKBELAY_SECRET_KEY).
 package secrets
 
 import (
@@ -47,7 +47,7 @@ func New(key []byte) (*Box, error) {
 }
 
 // ParseKey decodes a base64 (standard encoding) key as used in
-// STACKVAULT_SECRET_KEY. Surrounding whitespace is ignored, so the value can
+// STACKBELAY_SECRET_KEY. Surrounding whitespace is ignored, so the value can
 // come from a file with a trailing newline.
 func ParseKey(s string) ([]byte, error) {
 	key, err := base64.StdEncoding.DecodeString(strings.TrimSpace(s))

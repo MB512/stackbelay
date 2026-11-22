@@ -7,7 +7,7 @@
   <p class="hint">A cleanup removes what updates and compose changes leave behind: <strong>stopped</strong> containers of a
     stack whose service is no longer in its compose file (running ones are kept), and untagged images no container uses
     that were pulled, tagged or replaced by an update more than {{.MinAgeLabel}} ago
-    (<code>STACKVAULT_CLEANUP_IMAGE_MIN_AGE</code>). Volumes are never touched. It runs as a job on its own: it waits for
+    (<code>STACKBELAY_CLEANUP_IMAGE_MIN_AGE</code>). Volumes are never touched. It runs as a job on its own: it waits for
     running jobs, and other jobs wait for it.</p>
   <div class="actions-row">
     <form method="post" action="/admin/host/cleanup" class="inline"

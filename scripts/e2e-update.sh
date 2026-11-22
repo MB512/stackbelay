@@ -80,7 +80,7 @@ volumes:
   flags: {}
 EOF
 printf 'e2e-test-password\n' >"$WORK/pw"
-export STACKS_ROOT="$ROOT" STACKVAULT_HOSTNAME=e2e-host STACKVAULT_JOB_TIMEOUT=10m
+export STACKS_ROOT="$ROOT" STACKBELAY_HOSTNAME=e2e-host STACKBELAY_JOB_TIMEOUT=10m
 REPO_ENV=(RESTIC_REPOSITORY="$WORK/repo" RESTIC_PASSWORD_FILE="$WORK/pw")
 env "${REPO_ENV[@]}" restic init --quiet
 (cd "$DIR" && docker compose up --detach --quiet-pull --wait app >/dev/null)

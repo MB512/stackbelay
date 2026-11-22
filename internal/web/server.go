@@ -26,7 +26,7 @@ type Server struct {
 	// SessionTTL is the (sliding) session lifetime.
 	SessionTTL time.Duration
 	// SecureCookies marks cookies Secure and requires HTTPS for login. Only
-	// false with STACKVAULT_ALLOW_INSECURE_HTTP.
+	// false with STACKBELAY_ALLOW_INSECURE_HTTP.
 	SecureCookies bool
 	Limiter       *auth.LoginLimiter
 	// Snapshots refreshes snapshot caches (read-only restic). If nil,
@@ -39,7 +39,7 @@ type Server struct {
 	// unavailable and JobsDisabledReason says why.
 	Jobs               JobQueue
 	JobsDisabledReason string
-	// MaxJobs is STACKVAULT_MAX_JOBS (jobs running at the same time), for
+	// MaxJobs is STACKBELAY_MAX_JOBS (jobs running at the same time), for
 	// explaining why a job waits; 0 if unknown.
 	MaxJobs int
 	// Schedules is told when schedules change. nil: schedules can still be
@@ -63,7 +63,7 @@ type Server struct {
 	// cannot apply changes.
 	Compose ComposeValidator
 	// EnableShell turns on the admin-only "Shell" tab
-	// (STACKVAULT_ENABLE_SHELL). When false its routes do not exist.
+	// (STACKBELAY_ENABLE_SHELL). When false its routes do not exist.
 	EnableShell bool
 	// Shells opens shells in stack containers. Required with EnableShell.
 	Shells ShellStarter
@@ -74,7 +74,7 @@ type Server struct {
 	// read-only; the removal runs in a worker job). If nil, there is no
 	// preview.
 	Cleanup jobs.CleanupLister
-	// CleanupImageMinAge is STACKVAULT_CLEANUP_IMAGE_MIN_AGE (preview rules).
+	// CleanupImageMinAge is STACKBELAY_CLEANUP_IMAGE_MIN_AGE (preview rules).
 	CleanupImageMinAge time.Duration
 	// RepoSnapshots lists the snapshots of a repository that is not saved
 	// yet, for "Import stack" (read-only restic). If nil, imports are not
@@ -89,7 +89,7 @@ type Server struct {
 	// OwnStack is the stack the manager itself belongs to ("" if none).
 	// It cannot be stopped from the UI: nobody could start it again there.
 	OwnStack string
-	// Hostname is this host's restic --host (STACKVAULT_HOSTNAME). Only
+	// Hostname is this host's restic --host (STACKBELAY_HOSTNAME). Only
 	// snapshots of a stack made on this host are listed and restorable.
 	// Empty: snapshots of all hosts.
 	Hostname string

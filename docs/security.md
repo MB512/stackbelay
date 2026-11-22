@@ -7,7 +7,7 @@ not to make that safe, but to ensure a compromised or malicious *web user*
 cannot turn the app into a root shell.
 
 Administrators are trusted with root-equivalent power: they can edit compose
-files and, if the operator enables it (`STACKVAULT_ENABLE_SHELL`), open
+files and, if the operator enables it (`STACKBELAY_ENABLE_SHELL`), open
 shells in containers, including StackVault's own container with the Docker
 socket. Protecting admin accounts (strong passwords, few admins, TLS) is
 therefore part of protecting the host.
@@ -79,8 +79,8 @@ attackers reaching the UI, a leaked database file.
    and the "Calculate" of a stack's size on disk: a walk that stats files
    and follows no symlinks).
 4. **Secrets at rest.** Repo passwords and backend credentials are encrypted
-   with AES-256-GCM using the secret key (`STACKVAULT_SECRET_KEY`,
-   `STACKVAULT_SECRET_KEY_FILE`, or by default `<data>/secret.key`, mode
+   with AES-256-GCM using the secret key (`STACKBELAY_SECRET_KEY`,
+   `STACKBELAY_SECRET_KEY_FILE`, or by default `<data>/secret.key`, mode
    0600, generated only on a fresh install; see "Secret key" in
    architecture.md). The key is not stored in the DB; a `key_check` row in
    `meta` lets the manager refuse to start with a key that does not match,
@@ -108,13 +108,13 @@ attackers reaching the UI, a leaked database file.
    format); random 256-bit session tokens, stored as SHA-256 only; cookie
    `__Host-stackvault_session` with `HttpOnly`, `Secure`, `SameSite=Lax`
    (browser-session cookie, sliding server-side expiry
-   `STACKVAULT_SESSION_TTL`; the Status tab's automatic refresh does not
+   `STACKBELAY_SESSION_TTL`; the Status tab's automatic refresh does not
    extend it); a new session id on every login; logout and
    password change end sessions (password change: all other sessions).
    Login rate limiting per username: 5 free failures, then exponential
    lockout up to 15 minutes (in memory). Unknown usernames cost the same
    time as wrong passwords. Login is refused over plain HTTP (no TLS and no
-   `X-Forwarded-Proto: https`) unless `STACKVAULT_ALLOW_INSECURE_HTTP=true`.
+   `X-Forwarded-Proto: https`) unless `STACKBELAY_ALLOW_INSECURE_HTTP=true`.
    Passwords: 12 to 256 characters.
    **Initial admin:** without an active admin, user `admin` is created with
    a random password (100 bits), printed as a banner in the container log.
@@ -136,7 +136,7 @@ attackers reaching the UI, a leaked database file.
    restore, permission, schedule and repository changes. No secrets in entries.
 10. **TLS.** The app speaks plain HTTP and is meant to run behind a reverse
     proxy that terminates TLS; the README says so prominently. Login over
-    plain HTTP is refused unless `STACKVAULT_ALLOW_INSECURE_HTTP=true`.
+    plain HTTP is refused unless `STACKBELAY_ALLOW_INSECURE_HTTP=true`.
 11. **Restore safety.** Every restore runs in place (issue #33) and
     overwrites the stack directory; its way back is the `pre-restore`
     safety snapshot taken before, which nobody can skip (only an automatic
@@ -151,12 +151,12 @@ attackers reaching the UI, a leaked database file.
     source, `/data/secret.key` is in that backup too, so a restore of the
     manager's stack brings back a matching key and database; the backup is
     protected by the restic repository password. Users who want the key in
-    no backup at all set `STACKVAULT_SECRET_KEY_FILE` to a file outside
+    no backup at all set `STACKBELAY_SECRET_KEY_FILE` to a file outside
     `STACKS_ROOT` (optional hardening, documented in the README). Either
     way the README tells users to keep a copy of the key elsewhere.
 
 13. **Container shell.** Off unless the operator sets
-    `STACKVAULT_ENABLE_SHELL=true`; then the links and routes exist for admins
+    `STACKBELAY_ENABLE_SHELL=true`; then the links and routes exist for admins
     only (otherwise they do not exist at all). A session needs an admin
     session, the CSRF token and a same-origin WebSocket upgrade, and targets
     only a running container from the stack's own container list (after the

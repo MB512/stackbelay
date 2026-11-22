@@ -64,7 +64,7 @@ type SelfInfo struct {
 }
 
 // dockerEnv are the variables the docker CLI inherits from the manager. The
-// manager's own secrets (e.g. STACKVAULT_SECRET_KEY) must not reach it.
+// manager's own secrets (e.g. STACKBELAY_SECRET_KEY) must not reach it.
 var dockerEnv = []string{
 	"PATH", "HOME", "TMPDIR",
 	"DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_CONFIG", "DOCKER_TLS_VERIFY", "DOCKER_CERT_PATH", "DOCKER_API_VERSION",

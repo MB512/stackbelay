@@ -46,8 +46,8 @@ func TestNewTemplate(t *testing.T) {
 	if cs.Mounts[2] != (docker.Mount{Type: "volume", Source: "stackvault_data", Target: "/job", SubPath: "jobs/01ABCDEFGHJKMNPQRSTVWXYZ01"}) {
 		t.Fatalf("job mount: %+v", cs.Mounts[2])
 	}
-	if cs.Env["STACKVAULT_JOB_TIMEOUT"] != "72h0m0s" || cs.Env["STACKVAULT_DOWNTIME_TIMEOUT"] != "1h30m0s" {
-		t.Fatalf("timeout env: %q %q", cs.Env["STACKVAULT_JOB_TIMEOUT"], cs.Env["STACKVAULT_DOWNTIME_TIMEOUT"])
+	if cs.Env["STACKBELAY_JOB_TIMEOUT"] != "72h0m0s" || cs.Env["STACKBELAY_DOWNTIME_TIMEOUT"] != "1h30m0s" {
+		t.Fatalf("timeout env: %q %q", cs.Env["STACKBELAY_JOB_TIMEOUT"], cs.Env["STACKBELAY_DOWNTIME_TIMEOUT"])
 	}
 
 	// Errors: stacks root not at the same path, data not mounted, no image.
