@@ -196,7 +196,7 @@ func TestLoginPasswordChangeLogout(t *testing.T) {
 	r = e.login(e.client, "admin", e.adminPW)
 	expect(t, r, http.StatusSeeOther, "/")
 	cookie := r.header.Get("Set-Cookie")
-	for _, attr := range []string{"__Host-stackvault_session=", "Path=/", "HttpOnly", "Secure", "SameSite=Lax"} {
+	for _, attr := range []string{"__Host-stackbelay_session=", "Path=/", "HttpOnly", "Secure", "SameSite=Lax"} {
 		if !strings.Contains(cookie, attr) {
 			t.Errorf("session cookie lacks %q: %s", attr, cookie)
 		}
@@ -280,7 +280,7 @@ func TestInsecureModeWorksOverHTTP(t *testing.T) {
 	e := newEnv(t, false, false)
 	r := e.login(e.client, "admin", e.adminPW)
 	expect(t, r, http.StatusSeeOther, "/")
-	if c := r.header.Get("Set-Cookie"); !strings.HasPrefix(c, "stackvault_session=") || strings.Contains(c, "Secure") {
+	if c := r.header.Get("Set-Cookie"); !strings.HasPrefix(c, "stackbelay_session=") || strings.Contains(c, "Secure") {
 		t.Fatalf("insecure cookie: %s", c)
 	}
 	expect(t, e.get("/"), http.StatusSeeOther, "/account/password")

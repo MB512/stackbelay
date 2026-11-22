@@ -132,7 +132,7 @@ func replaceFile(path string, content []byte) error {
 	if !info.Mode().IsRegular() {
 		return errors.New("not a regular file")
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".stackvault-*")
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".stackbelay-*")
 	if err != nil {
 		return err
 	}

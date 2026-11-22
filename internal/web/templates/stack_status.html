@@ -89,7 +89,7 @@
        a statusLive. */}}
 {{define "status-live"}}
 <div id="status-live" hx-get="/stacks/{{.StackName}}/status/live" hx-trigger="every 10s"
-     hx-swap="outerHTML" hx-headers='{"X-Stackvault-Poll": "1"}'>
+     hx-swap="outerHTML" hx-headers='{"X-Stackbelay-Poll": "1"}'>
   {{- with .CheckMessage}}<p class="error" role="alert">{{.}}</p>{{end}}
   {{- with .Check}}
   {{- if .Error}}<p class="error">Update check {{when .At}}: {{.Error}}</p>

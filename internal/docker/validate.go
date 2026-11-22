@@ -23,7 +23,7 @@ var ErrInvalidCompose = errors.New("invalid compose file")
 // file name used in error messages instead of the temporary path. A
 // rejected file returns an error wrapping ErrInvalidCompose.
 func (c *CLI) ValidateCompose(ctx context.Context, dir, name string, content []byte) error {
-	tmp, err := os.CreateTemp("", "stackvault-compose-*"+filepath.Ext(name))
+	tmp, err := os.CreateTemp("", "stackbelay-compose-*"+filepath.Ext(name))
 	if err != nil {
 		return fmt.Errorf("validating compose file: %w", err)
 	}

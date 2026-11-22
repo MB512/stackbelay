@@ -9,7 +9,7 @@
        from extending the session. Dot is an adminJobsLive. */}}
 {{define "admin-jobs-live"}}
 <div id="admin-jobs-live" hx-get="/admin/jobs/live" hx-trigger="every 5s"
-     hx-swap="outerHTML" hx-headers='{"X-Stackvault-Poll": "1"}'>
+     hx-swap="outerHTML" hx-headers='{"X-Stackbelay-Poll": "1"}'>
   <section>
     <h2>Queue</h2>
     {{- if .Active}}

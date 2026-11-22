@@ -44,7 +44,7 @@ exit 0
 
 	err := c.ValidateCompose(ctx, stack, "compose.yml", []byte("bad: 1\n"))
 	if !errors.Is(err, ErrInvalidCompose) || !strings.Contains(err.Error(), "validating compose.yml: services.app") ||
-		strings.Contains(err.Error(), "stackvault-compose-") {
+		strings.Contains(err.Error(), "stackbelay-compose-") {
 		t.Fatalf("err = %v", err)
 	}
 	entries, _ := os.ReadDir(stack)

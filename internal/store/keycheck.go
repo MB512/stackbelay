@@ -12,7 +12,10 @@ import (
 // the data in the database.
 var ErrKeyMismatch = errors.New("the secret key does not match this database")
 
-// Plaintext and associated data of the "key_check" row in meta.
+// Plaintext and associated data of the "key_check" row in meta. They keep
+// the old name StackVault on purpose (issue #44): they are part of the
+// stored ciphertext, changing them would make the key check fail on every
+// existing database. They are never shown to users.
 var (
 	keyCheckPlain = []byte("stackvault key check")
 	keyCheckAAD   = []byte("stackvault:key-check")

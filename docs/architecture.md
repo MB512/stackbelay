@@ -1005,7 +1005,7 @@ it (shown disabled while the container is not running).
 Containers and jobs are one fragment (`status-live`) that HTMX reloads
 every 10 seconds from `GET /stacks/{name}/status/live`, so a running job
 and the containers it stops and starts show up without reloading the page.
-These polls carry the header `X-Stackvault-Poll` and do **not** extend the
+These polls carry the header `X-Stackbelay-Poll` and do **not** extend the
 session (`loadSession`): an open tab alone does not keep a login alive. An
 HTMX request without a valid session gets `401` with `HX-Redirect: /login`,
 so HTMX loads the login page instead of swapping it into the fragment.
@@ -1022,7 +1022,7 @@ schedules; see "Host cleanup") and "Audit log" (`/admin/audit`, read-only,
 admin-only too (404 for others). The Jobs tab lists the running and queued jobs
 of all stacks (running first, each oldest first) and the 50 newest jobs;
 like the Status tab it is one fragment that HTMX reloads every 5 seconds
-(`GET /admin/jobs/live`, with `X-Stackvault-Poll`). The account link in the
+(`GET /admin/jobs/live`, with `X-Stackbelay-Poll`). The account link in the
 header reads "Profile" (the username is its tooltip).
 
 Stacks a user may not view answer 404 (not 403), so stack names are not

@@ -117,7 +117,13 @@
 
 	// Line wrapping. The choice is remembered in this browser only; storage
 	// may be unavailable (private mode), which is fine.
-	var wrapKey = "stackvault.logs.wrap";
+	// Reads a remembered choice; choices remembered before StackVault was
+	// renamed to StackBelay (issue #44) are under the old key.
+	function remembered(key) {
+		var v = window.localStorage.getItem(key);
+		return v !== null ? v : window.localStorage.getItem(key.replace(/^stackbelay\./, "stackvault."));
+	}
+	var wrapKey = "stackbelay.logs.wrap";
 	var wrap = document.getElementById("log-wrap");
 	function setWrap(on) {
 		wrap.checked = on;
@@ -127,7 +133,7 @@
 		} catch (e) { /* not remembered */ }
 	}
 	try {
-		if (window.localStorage.getItem(wrapKey) === "0") {
+		if (remembered(wrapKey) === "0") {
 			setWrap(false);
 		}
 	} catch (e) { /* default: wrap */ }
@@ -135,7 +141,7 @@
 
 	// ANSI colors of the applications (issue #29), like line wrapping:
 	// remembered in this browser only.
-	var colorsKey = "stackvault.logs.colors";
+	var colorsKey = "stackbelay.logs.colors";
 	var colorsBox = document.getElementById("log-colors");
 	function setColors(on) {
 		colorsBox.checked = on;
@@ -145,7 +151,7 @@
 		} catch (e) { /* not remembered */ }
 	}
 	try {
-		if (window.localStorage.getItem(colorsKey) === "0") {
+		if (remembered(colorsKey) === "0") {
 			setColors(false);
 		}
 	} catch (e) { /* default: colors */ }

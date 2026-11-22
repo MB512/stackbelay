@@ -106,7 +106,7 @@ attackers reaching the UI, a leaked database file.
    specs, logs or the database.
 6. **Authentication.** argon2id password hashes (m=64 MiB, t=3, p=2, PHC
    format); random 256-bit session tokens, stored as SHA-256 only; cookie
-   `__Host-stackvault_session` with `HttpOnly`, `Secure`, `SameSite=Lax`
+   `__Host-stackbelay_session` with `HttpOnly`, `Secure`, `SameSite=Lax`
    (browser-session cookie, sliding server-side expiry
    `STACKBELAY_SESSION_TTL`; the Status tab's automatic refresh does not
    extend it); a new session id on every login; logout and

@@ -21,7 +21,7 @@ type ContainerLister interface {
 // pollHeader marks the periodic refresh of the Status tab. Such requests do
 // not extend the session (see loadSession): an open tab alone must not keep
 // a login alive forever.
-const pollHeader = "X-Stackvault-Poll"
+const pollHeader = "X-Stackbelay-Poll"
 
 // statusTab is the data of the "Status" tab, the home of a stack.
 type statusTab struct {

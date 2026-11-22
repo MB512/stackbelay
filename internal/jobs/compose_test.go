@@ -71,7 +71,7 @@ func TestComposeApply(t *testing.T) {
 	}
 	entries, _ := os.ReadDir(e.stack.Dir)
 	for _, en := range entries {
-		if strings.Contains(en.Name(), ".stackvault-") {
+		if strings.Contains(en.Name(), ".stackbelay-") {
 			t.Errorf("temporary file left: %s", en.Name())
 		}
 	}

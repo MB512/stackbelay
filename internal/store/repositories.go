@@ -51,7 +51,9 @@ type repoSecret struct {
 }
 
 // repoAAD binds a repository secret to its stack, so a ciphertext copied
-// to another row does not decrypt.
+// to another row does not decrypt. It keeps the old name StackVault on
+// purpose (issue #44): changing it would make every stored credential
+// unreadable.
 func repoAAD(stackID int64) []byte {
 	return []byte("stackvault:repository:stack=" + strconv.FormatInt(stackID, 10))
 }

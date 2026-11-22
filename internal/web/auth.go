@@ -16,8 +16,10 @@ import (
 // enforce Secure, Path=/ and no Domain attribute (the cookie cannot be set
 // or overwritten by other hosts or subdomains).
 const (
-	cookieSecure   = "__Host-stackvault_session"
-	cookieInsecure = "stackvault_session"
+	// Renamed with StackBelay (issue #44): sessions of 0.4 and older end
+	// with the update, everybody logs in once more.
+	cookieSecure   = "__Host-stackbelay_session"
+	cookieInsecure = "stackbelay_session"
 )
 
 // maxFormBytes limits request bodies of form posts. The compose editor
