@@ -326,6 +326,45 @@ func TestDispatchSurvivesManagerRestart(t *testing.T) {
 	}
 }
 
+// A worker started by StackVault 0.4 or older (container name
+// stackvault-job-<id>, issue #44) that is still running after the update,
+// e.g. the job that updated the manager's own stack, is found under its
+// old name: it is not failed as lost, can be cancelled, and is finished
+// and removed when it exits.
+func TestWorkerWithLegacyContainerName(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	j := e.submit("web", jobs.TypeBackup, store.JobOptions{})
+	e.d.Step(ctx)
+	e.docker.set(ContainerName(j.ID), docker.ContainerState{})
+	legacy := LegacyContainerName(j.ID)
+	e.docker.set(legacy, docker.ContainerState{Exists: true, Status: "running"})
+
+	restarted := e.newDispatcher()
+	restarted.Step(ctx)
+	if got := e.job(j.ID).State; got != jobs.StateRunning {
+		t.Fatalf("worker with the old name: %s", got)
+	}
+	if err := restarted.Cancel(ctx, j.ID); err != nil {
+		t.Fatal(err)
+	}
+	if len(e.docker.signals) != 1 || e.docker.signals[0] != legacy+" SIGTERM" {
+		t.Fatalf("signals: %v", e.docker.signals)
+	}
+
+	if err := jobs.WriteStatus(filepath.Join(e.jobsDir, j.ID), jobs.Status{ID: j.ID, State: jobs.StateSucceeded, Snapshot: "bbbbbbbb22222222"}); err != nil {
+		t.Fatal(err)
+	}
+	e.docker.set(legacy, docker.ContainerState{Exists: true, Status: "exited"})
+	restarted.Step(ctx)
+	if got := e.job(j.ID); got.State != jobs.StateSucceeded || got.Snapshot != "bbbbbbbb22222222" {
+		t.Fatalf("job: %+v", got)
+	}
+	if !slices.Contains(e.docker.removed, legacy) {
+		t.Fatalf("old worker container not removed: %v", e.docker.removed)
+	}
+}
+
 // A manager that stopped after removing the container but before recording
 // the result finishes the job on the next check.
 func TestFinishAfterContainerAlreadyRemoved(t *testing.T) {

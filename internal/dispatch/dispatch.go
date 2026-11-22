@@ -122,7 +122,11 @@ func (d *Dispatcher) Cancel(ctx context.Context, id string) error {
 	case jobs.StateRunning:
 		// SIGTERM only, never SIGKILL: the worker must get the chance to
 		// restart the stack it stopped.
-		return d.Docker.SignalContainer(ctx, ContainerName(id), "SIGTERM")
+		name, _, err := d.workerContainer(ctx, id)
+		if err != nil {
+			return err
+		}
+		return d.Docker.SignalContainer(ctx, name, "SIGTERM")
 	default:
 		return ErrNotCancellable
 	}
@@ -226,7 +230,7 @@ func (d *Dispatcher) reconcileDir(ctx context.Context, id string, importing bool
 	// A worker that is still running (it may have just written its final
 	// status) is left to the regular check, which finishes the job once the
 	// container has exited and then removes it.
-	cs, err := d.Docker.InspectContainer(ctx, ContainerName(id))
+	name, cs, err := d.workerContainer(ctx, id)
 	if err != nil {
 		log.Warn("reconciling jobs: inspecting worker container", "error", err)
 		return
@@ -240,7 +244,7 @@ func (d *Dispatcher) reconcileDir(ctx context.Context, id string, importing bool
 	case err == nil:
 		if !importing && !known.State.Final() && final {
 			log.Info("reconciling jobs: finishing job from its job files", "state", status.State)
-			d.removeContainer(ctx, ContainerName(id))
+			d.removeContainer(ctx, name)
 			d.finishWithStatus(ctx, known, status)
 		}
 		return
@@ -294,7 +298,7 @@ func (d *Dispatcher) reconcileDir(ctx context.Context, id string, importing bool
 	case cs.Running():
 		j.State, j.FinishedAt, j.Snapshot, j.Error, j.Result = jobs.StateRunning, time.Time{}, "", "", store.JobResult{}
 	case cs.Exists:
-		d.removeContainer(ctx, ContainerName(id))
+		d.removeContainer(ctx, name)
 	}
 	if err := d.Store.ImportJob(ctx, j, spec.Requester); err != nil {
 		log.Warn("reconciling jobs: importing job", "error", err)
@@ -489,8 +493,7 @@ func (d *Dispatcher) cleanupSpec(ctx context.Context, spec *jobs.Spec, log *slog
 // is still "running" and the next check finishes it. The other order could
 // leave a container behind for a job that is never checked again.
 func (d *Dispatcher) check(ctx context.Context, j store.Job) {
-	name := ContainerName(j.ID)
-	cs, err := d.Docker.InspectContainer(ctx, name)
+	name, cs, err := d.workerContainer(ctx, j.ID)
 	if err != nil {
 		d.Logger.Warn("inspecting worker container", "job_id", j.ID, "error", err)
 		return // Docker unreachable: try again later
@@ -517,6 +520,26 @@ func (d *Dispatcher) check(ctx context.Context, j store.Job) {
 	}
 	d.Logger.Error("job lost", "job_id", j.ID, "stack", j.StackName, "reason", msg)
 	d.finish(ctx, j, jobs.StateFailed, "", msg, store.JobResult{})
+}
+
+// workerContainer inspects the worker container of job id under its name
+// or, if no container has that name, under LegacyContainerName. It returns
+// the name of the container found, or ContainerName if there is none.
+func (d *Dispatcher) workerContainer(ctx context.Context, id string) (string, docker.ContainerState, error) {
+	name := ContainerName(id)
+	cs, err := d.Docker.InspectContainer(ctx, name)
+	if err != nil || cs.Exists {
+		return name, cs, err
+	}
+	legacy := LegacyContainerName(id)
+	lcs, err := d.Docker.InspectContainer(ctx, legacy)
+	if err != nil {
+		return name, cs, err
+	}
+	if lcs.Exists {
+		return legacy, lcs, nil
+	}
+	return name, cs, nil
 }
 
 // finalStatus returns the worker's final status, if it wrote one. err is

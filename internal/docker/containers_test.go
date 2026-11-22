@@ -8,14 +8,14 @@ import (
 
 func TestRunArgs(t *testing.T) {
 	spec := ContainerSpec{
-		Name:   "stackvault-job-01ABC",
+		Name:   "stackbelay-job-01ABC",
 		Image:  "sha256:abc",
-		Labels: map[string]string{"stackvault.worker": "true", "stackvault.job": "01ABC"},
+		Labels: map[string]string{"stackbelay.worker": "true", "stackbelay.job": "01ABC"},
 		Mounts: []Mount{
 			{Type: "bind", Source: "/home/docker", Target: "/home/docker"},
 			{Type: "bind", Source: "/var/run/docker.sock", Target: "/var/run/docker.sock"},
 			{Type: "volume", Source: "stackvault_data", Target: "/job", SubPath: "jobs/01ABC"},
-			{Type: "volume", Source: "stackvault-restic-cache", Target: "/cache", ReadOnly: false},
+			{Type: "volume", Source: "stackbelay-restic-cache", Target: "/cache", ReadOnly: false},
 		},
 		Env:           map[string]string{"RESTIC_PASSWORD": "s3cret", "RESTIC_REPOSITORY": "/r"},
 		Cmd:           []string{"/app/worker", "run", "/job"},
@@ -25,12 +25,12 @@ func TestRunArgs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"run", "--detach", "--name", "stackvault-job-01ABC",
-		"--label", "stackvault.job=01ABC", "--label", "stackvault.worker=true",
+	want := []string{"run", "--detach", "--name", "stackbelay-job-01ABC",
+		"--label", "stackbelay.job=01ABC", "--label", "stackbelay.worker=true",
 		"--mount", "type=bind,source=/home/docker,target=/home/docker",
 		"--mount", "type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock",
 		"--mount", "type=volume,source=stackvault_data,target=/job,volume-subpath=jobs/01ABC",
-		"--mount", "type=volume,source=stackvault-restic-cache,target=/cache",
+		"--mount", "type=volume,source=stackbelay-restic-cache,target=/cache",
 		"--env", "RESTIC_PASSWORD", "--env", "RESTIC_REPOSITORY",
 		"--no-healthcheck",
 		"sha256:abc", "/app/worker", "run", "/job"}

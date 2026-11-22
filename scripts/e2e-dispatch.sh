@@ -43,7 +43,7 @@ cleanup() {
 	docker compose --project-name "$STACK" down --remove-orphans >/dev/null 2>&1 || true
 	# Only the workers of this test's jobs, never other jobs on this host.
 	for job in "$WORK"/data/jobs/*/; do
-		[[ -d "$job" ]] && docker rm -f "stackvault-job-$(basename "$job" | tr 'A-Z' 'a-z')" >/dev/null 2>&1
+		[[ -d "$job" ]] && docker rm -f "stackbelay-job-$(basename "$job" | tr 'A-Z' 'a-z')" >/dev/null 2>&1
 	done
 	true
 	# The worker runs as root: remove its files through a container.
@@ -245,7 +245,7 @@ step "cleanup and secrets"
 sleep 3
 LEFT=0
 for job in "$WORK"/data/jobs/*/; do
-	docker container inspect "stackvault-job-$(basename "$job" | tr 'A-Z' 'a-z')" >/dev/null 2>&1 && LEFT=$((LEFT + 1))
+	docker container inspect "stackbelay-job-$(basename "$job" | tr 'A-Z' 'a-z')" >/dev/null 2>&1 && LEFT=$((LEFT + 1))
 done
 [[ "$LEFT" == 0 ]] || fail "$LEFT worker container(s) left"
 pass "worker containers removed"

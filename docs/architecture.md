@@ -51,7 +51,7 @@ Worker (started by manager):
 - Restic cache volume (shared, named volume).
 - Run as root (needed to preserve ownership/permissions on backup and restore).
 
-Workers carry a label `stackvault.worker=true` and are NOT created through
+Workers carry a label `stackbelay.worker=true` and are NOT created through
 compose, so they are never affected by stopping a stack.
 
 ## Manager configuration
@@ -234,12 +234,12 @@ an append-only repository a client cannot remove a stale lock.
 Worker container template (fixed, nothing from user input):
 
 ```
-docker run --detach --name stackvault-job-<id>
-  --label stackvault.worker=true --label stackvault.job=<ID>
+docker run --detach --name stackbelay-job-<id>
+  --label stackbelay.worker=true --label stackbelay.job=<ID>
   --mount type=bind,source=$STACKS_ROOT,target=$STACKS_ROOT
   --mount type=bind,source=<host docker socket>,target=/var/run/docker.sock
   --mount <host jobs dir>/<ID> -> /job   (bind, or volume with volume-subpath)
-  --mount type=volume,source=stackvault-restic-cache,target=/cache
+  --mount type=volume,source=stackbelay-restic-cache,target=/cache
   [--mount <manager's /root/.docker or /root/.docker/config.json>,readonly]
   --env STACKS_ROOT --env STACKBELAY_HOSTNAME --env RESTIC_CACHE_DIR
   --env STACKBELAY_JOB_TIMEOUT --env STACKBELAY_DOWNTIME_TIMEOUT [--env STACKBELAY_LOG_LEVEL]
@@ -260,6 +260,13 @@ container (development) paths are used as they are and
 `STACKBELAY_WORKER_IMAGE` is required. The docker CLI gets an allow-listed
 environment (`PATH`, `HOME`, `DOCKER_*`) plus the job's credentials, which
 `--env NAME` forwards by name.
+
+StackVault 0.4 and older named the workers `stackvault-job-<id>`, labelled
+them `stackvault.*` and used the cache volume `stackvault-restic-cache`
+(issue #44). A worker started before the update can still run afterwards
+(it may be the job that updated StackBelay's own stack), so the dispatcher
+looks a job's container up under the old name if no container has the new
+one. The old cache volume is no longer used; the new one starts empty.
 
 **Orphans** (issue #26): `docker.CLI.Services` lists the services of the
 compose file and the project's containers; a container whose service is

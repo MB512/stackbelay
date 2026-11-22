@@ -25,19 +25,26 @@ const (
 	// workerCacheDir holds the restic cache (a named volume shared by all
 	// workers, so repeated backups do not download the index each time).
 	workerCacheDir = "/cache"
-	// CacheVolume is the name of the restic cache volume.
-	CacheVolume = "stackvault-restic-cache"
+	// CacheVolume is the name of the restic cache volume. StackVault 0.4
+	// and older used "stackvault-restic-cache" (issue #44); after the
+	// update the cache starts empty once, the old volume is no longer used.
+	CacheVolume = "stackbelay-restic-cache"
 	// dockerSocket is the Docker socket path, on the host and in containers.
 	dockerSocket = "/var/run/docker.sock"
 	// WorkerBinary is the worker executable in the image.
 	WorkerBinary = "/app/worker"
 	// LabelWorker marks worker containers; LabelJob holds the job id.
-	LabelWorker = "stackvault.worker"
-	LabelJob    = "stackvault.job"
+	LabelWorker = "stackbelay.worker"
+	LabelJob    = "stackbelay.job"
 )
 
 // ContainerName returns the name of a job's worker container.
-func ContainerName(jobID string) string { return "stackvault-job-" + strings.ToLower(jobID) }
+func ContainerName(jobID string) string { return "stackbelay-job-" + strings.ToLower(jobID) }
+
+// LegacyContainerName returns the name that StackVault 0.4 and older gave
+// a job's worker container (issue #44). Such a worker can outlive the
+// update: it may be the job that updated the manager's own stack.
+func LegacyContainerName(jobID string) string { return "stackvault-job-" + strings.ToLower(jobID) }
 
 // Template describes how worker containers are built. Nothing in it comes
 // from user input; per job only the job id and the repository change.

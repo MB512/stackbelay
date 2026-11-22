@@ -46,7 +46,7 @@ cleanup() {
 	fi
 	compose down >/dev/null 2>&1 || true
 	for id in $(job_ids); do
-		docker rm -f "stackvault-job-$(tr 'A-Z' 'a-z' <<<"$id")" >/dev/null 2>&1 || true
+		docker rm -f "stackbelay-job-$(tr 'A-Z' 'a-z' <<<"$id")" >/dev/null 2>&1 || true
 	done
 	docker run --rm -v "$(dirname "$WORK"):/p" busybox:1.36 rm -rf "/p/$(basename "$WORK")" >/dev/null 2>&1 || rm -rf "$WORK"
 }
@@ -151,7 +151,7 @@ sleep 5
 IDS="$(job_ids)"
 [[ "$(wc -w <<<"$IDS")" -ge 2 ]] || fail "expected at least 2 job directories, found: $IDS"
 for id in $IDS; do
-	docker container inspect "stackvault-job-$(tr 'A-Z' 'a-z' <<<"$id")" >/dev/null 2>&1 &&
+	docker container inspect "stackbelay-job-$(tr 'A-Z' 'a-z' <<<"$id")" >/dev/null 2>&1 &&
 		fail "worker container of $id left"
 done
 pass "worker containers removed ($(wc -w <<<"$IDS") jobs checked)"
