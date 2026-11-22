@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/MB512/stackvault/internal/jobs"
+	"github.com/MB512/stackbelay/internal/jobs"
 )
 
 // Stack is a stack record. Names come from discovery (internal/stacks) or,

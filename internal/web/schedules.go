@@ -10,10 +10,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/MB512/stackvault/internal/auth"
-	"github.com/MB512/stackvault/internal/jobs"
-	"github.com/MB512/stackvault/internal/scheduler"
-	"github.com/MB512/stackvault/internal/store"
+	"github.com/MB512/stackbelay/internal/auth"
+	"github.com/MB512/stackbelay/internal/jobs"
+	"github.com/MB512/stackbelay/internal/scheduler"
+	"github.com/MB512/stackbelay/internal/store"
 )
 
 // ScheduleReloader reloads the scheduler after a schedule was changed

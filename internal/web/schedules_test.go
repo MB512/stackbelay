@@ -8,8 +8,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/MB512/stackvault/internal/jobs"
-	"github.com/MB512/stackvault/internal/store"
+	"github.com/MB512/stackbelay/internal/jobs"
+	"github.com/MB512/stackbelay/internal/store"
 )
 
 // fakeReloader counts scheduler reloads.

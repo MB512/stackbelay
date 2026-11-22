@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/MB512/stackvault/internal/restic"
-	"github.com/MB512/stackvault/internal/secrets"
-	"github.com/MB512/stackvault/internal/store"
+	"github.com/MB512/stackbelay/internal/restic"
+	"github.com/MB512/stackbelay/internal/secrets"
+	"github.com/MB512/stackbelay/internal/store"
 )
 
 // fakeRestic implements restic.Runner. Embedding the interface satisfies all

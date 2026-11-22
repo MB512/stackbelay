@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/MB512/stackvault/internal/jobs"
+	"github.com/MB512/stackbelay/internal/jobs"
 )
 
 // TestHostJobsMigration applies migrations up to 0010 by hand, fills the

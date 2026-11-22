@@ -16,8 +16,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/MB512/stackvault/internal/jobs"
-	"github.com/MB512/stackvault/internal/store"
+	"github.com/MB512/stackbelay/internal/jobs"
+	"github.com/MB512/stackbelay/internal/store"
 )
 
 // logLine is one parsed line of a job log (JSON lines written by slog).

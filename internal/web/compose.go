@@ -13,11 +13,11 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/MB512/stackvault/internal/auth"
-	"github.com/MB512/stackvault/internal/docker"
-	"github.com/MB512/stackvault/internal/jobs"
-	"github.com/MB512/stackvault/internal/stacks"
-	"github.com/MB512/stackvault/internal/store"
+	"github.com/MB512/stackbelay/internal/auth"
+	"github.com/MB512/stackbelay/internal/docker"
+	"github.com/MB512/stackbelay/internal/jobs"
+	"github.com/MB512/stackbelay/internal/stacks"
+	"github.com/MB512/stackbelay/internal/store"
 )
 
 // ComposeValidator checks an edited compose file without changing the

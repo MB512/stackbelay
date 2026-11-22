@@ -16,9 +16,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/MB512/stackvault/internal/auth"
-	"github.com/MB512/stackvault/internal/secrets"
-	"github.com/MB512/stackvault/internal/store"
+	"github.com/MB512/stackbelay/internal/auth"
+	"github.com/MB512/stackbelay/internal/secrets"
+	"github.com/MB512/stackbelay/internal/store"
 )
 
 type testEnv struct {

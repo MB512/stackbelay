@@ -12,10 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/MB512/stackvault/internal/docker"
-	"github.com/MB512/stackvault/internal/jobs"
-	"github.com/MB512/stackvault/internal/restic"
-	"github.com/MB512/stackvault/internal/stacks"
+	"github.com/MB512/stackbelay/internal/docker"
+	"github.com/MB512/stackbelay/internal/jobs"
+	"github.com/MB512/stackbelay/internal/restic"
+	"github.com/MB512/stackbelay/internal/stacks"
 )
 
 // Fixed parts of the worker container template.

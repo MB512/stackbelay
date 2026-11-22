@@ -13,9 +13,9 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/MB512/stackvault/internal/auth"
-	"github.com/MB512/stackvault/internal/docker"
-	"github.com/MB512/stackvault/internal/store"
+	"github.com/MB512/stackbelay/internal/auth"
+	"github.com/MB512/stackbelay/internal/docker"
+	"github.com/MB512/stackbelay/internal/store"
 )
 
 // ShellStarter lists a stack's containers and opens shells in them

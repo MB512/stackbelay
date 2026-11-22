@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"slices"
 
-	"github.com/MB512/stackvault/internal/auth"
-	"github.com/MB512/stackvault/internal/store"
+	"github.com/MB512/stackbelay/internal/auth"
+	"github.com/MB512/stackbelay/internal/store"
 )
 
 // Restore from another host (issue #1): a stack lists and restores the

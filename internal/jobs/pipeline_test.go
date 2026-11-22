@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/MB512/stackvault/internal/docker"
-	"github.com/MB512/stackvault/internal/restic"
-	"github.com/MB512/stackvault/internal/stacks"
+	"github.com/MB512/stackbelay/internal/docker"
+	"github.com/MB512/stackbelay/internal/restic"
+	"github.com/MB512/stackbelay/internal/stacks"
 )
 
 var fixedNow = time.Date(2026, 11, 13, 10, 0, 0, 0, time.UTC)

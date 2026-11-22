@@ -10,8 +10,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/MB512/stackvault/internal/docker"
-	"github.com/MB512/stackvault/internal/restic"
+	"github.com/MB512/stackbelay/internal/docker"
+	"github.com/MB512/stackbelay/internal/restic"
 )
 
 var errBoom = errors.New("boom")

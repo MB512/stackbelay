@@ -7,7 +7,7 @@ import (
 	"io"
 	"log/slog"
 
-	"github.com/MB512/stackvault/internal/store"
+	"github.com/MB512/stackbelay/internal/store"
 )
 
 // InitialAdmin is the username of the bootstrap admin account.

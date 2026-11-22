@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/MB512/stackvault/internal/restic"
+	"github.com/MB512/stackbelay/internal/restic"
 )
 
 // Worker is the configuration of the worker binary.

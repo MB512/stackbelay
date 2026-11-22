@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/MB512/stackvault/internal/docker"
-	"github.com/MB512/stackvault/internal/store"
+	"github.com/MB512/stackbelay/internal/docker"
+	"github.com/MB512/stackbelay/internal/store"
 )
 
 // fakeLogs implements StackLogs with fixed lines.

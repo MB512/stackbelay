@@ -9,7 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/MB512/stackvault/internal/stacks"
+	"github.com/MB512/stackbelay/internal/stacks"
 )
 
 // Import is the first restore of a stack from another host (issue #1, see

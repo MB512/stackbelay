@@ -63,7 +63,7 @@ already trust until it has proven itself on your hosts. Upgrading from 0.3
 
 Not supported: retention, Windows, Kubernetes. Planned features, bugs and
 design discussions are tracked in
-[GitHub issues](https://github.com/MB512/stackvault/issues).
+[GitHub issues](https://github.com/MB512/stackbelay/issues).
 
 ## Requirements
 

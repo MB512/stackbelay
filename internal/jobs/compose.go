@@ -11,8 +11,8 @@ import (
 	"slices"
 	"syscall"
 
-	"github.com/MB512/stackvault/internal/docker"
-	"github.com/MB512/stackvault/internal/stacks"
+	"github.com/MB512/stackbelay/internal/docker"
+	"github.com/MB512/stackbelay/internal/stacks"
 )
 
 // MaxComposeBytes is the largest compose file the editor accepts.

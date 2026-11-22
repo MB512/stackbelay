@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/MB512/stackvault/internal/config"
-	"github.com/MB512/stackvault/internal/secrets"
-	"github.com/MB512/stackvault/internal/store"
+	"github.com/MB512/stackbelay/internal/config"
+	"github.com/MB512/stackbelay/internal/secrets"
+	"github.com/MB512/stackbelay/internal/store"
 )
 
 // openOnce opens and closes the store like a manager start and stop.

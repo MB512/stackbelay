@@ -37,12 +37,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/MB512/stackvault/internal/buildinfo"
-	"github.com/MB512/stackvault/internal/config"
-	"github.com/MB512/stackvault/internal/docker"
-	"github.com/MB512/stackvault/internal/jobs"
-	"github.com/MB512/stackvault/internal/restic"
-	"github.com/MB512/stackvault/internal/stacks"
+	"github.com/MB512/stackbelay/internal/buildinfo"
+	"github.com/MB512/stackbelay/internal/config"
+	"github.com/MB512/stackbelay/internal/docker"
+	"github.com/MB512/stackbelay/internal/jobs"
+	"github.com/MB512/stackbelay/internal/restic"
+	"github.com/MB512/stackbelay/internal/stacks"
 )
 
 const usage = `usage:

@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/MB512/stackvault/internal/jobs"
-	"github.com/MB512/stackvault/internal/scheduler"
-	"github.com/MB512/stackvault/internal/store"
+	"github.com/MB512/stackbelay/internal/jobs"
+	"github.com/MB512/stackbelay/internal/scheduler"
+	"github.com/MB512/stackbelay/internal/store"
 )
 
 // The stack list (issue #37): per stack a Backup group (scheduling,

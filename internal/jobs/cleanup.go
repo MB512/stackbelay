@@ -6,8 +6,8 @@ import (
 	"slices"
 	"time"
 
-	"github.com/MB512/stackvault/internal/docker"
-	"github.com/MB512/stackvault/internal/stacks"
+	"github.com/MB512/stackbelay/internal/docker"
+	"github.com/MB512/stackbelay/internal/stacks"
 )
 
 // Host cleanup (issue #19, see "Host cleanup" in docs/architecture.md).

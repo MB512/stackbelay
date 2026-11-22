@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/MB512/stackvault/internal/stacks"
+	"github.com/MB512/stackbelay/internal/stacks"
 )
 
 func restoreOpts() RestoreOptions { return RestoreOptions{SnapshotID: snapID[:8]} }

@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/MB512/stackvault/internal/restic"
+	"github.com/MB512/stackbelay/internal/restic"
 )
 
 // ProgressFile is the name of the progress file in a job directory. The

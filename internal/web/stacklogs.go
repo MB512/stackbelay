@@ -10,10 +10,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/MB512/stackvault/internal/auth"
-	"github.com/MB512/stackvault/internal/docker"
-	"github.com/MB512/stackvault/internal/stacks"
-	"github.com/MB512/stackvault/internal/store"
+	"github.com/MB512/stackbelay/internal/auth"
+	"github.com/MB512/stackbelay/internal/docker"
+	"github.com/MB512/stackbelay/internal/stacks"
+	"github.com/MB512/stackbelay/internal/store"
 )
 
 // StackLogs reads the container logs of a stack (*docker.CLI). Both

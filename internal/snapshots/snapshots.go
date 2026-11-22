@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/MB512/stackvault/internal/restic"
-	"github.com/MB512/stackvault/internal/store"
+	"github.com/MB512/stackbelay/internal/restic"
+	"github.com/MB512/stackbelay/internal/store"
 )
 
 // Cache reads and refreshes cached snapshot lists.

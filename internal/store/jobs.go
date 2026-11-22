@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/MB512/stackvault/internal/jobs"
+	"github.com/MB512/stackbelay/internal/jobs"
 )
 
 // Job triggers.

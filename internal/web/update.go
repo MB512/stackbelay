@@ -8,10 +8,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/MB512/stackvault/internal/auth"
-	"github.com/MB512/stackvault/internal/docker"
-	"github.com/MB512/stackvault/internal/jobs"
-	"github.com/MB512/stackvault/internal/store"
+	"github.com/MB512/stackbelay/internal/auth"
+	"github.com/MB512/stackbelay/internal/docker"
+	"github.com/MB512/stackbelay/internal/jobs"
+	"github.com/MB512/stackbelay/internal/store"
 )
 
 // UpdateChecker compares a stack's running images with the registry

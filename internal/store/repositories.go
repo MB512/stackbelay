@@ -12,7 +12,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/MB512/stackvault/internal/restic"
+	"github.com/MB512/stackbelay/internal/restic"
 )
 
 // Repository is the restic repository of one stack, with decrypted

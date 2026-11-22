@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/MB512/stackvault/internal/buildinfo"
-	"github.com/MB512/stackvault/internal/docker"
-	"github.com/MB512/stackvault/internal/store"
+	"github.com/MB512/stackbelay/internal/buildinfo"
+	"github.com/MB512/stackbelay/internal/docker"
+	"github.com/MB512/stackbelay/internal/store"
 )
 
 //go:embed templates/*.html

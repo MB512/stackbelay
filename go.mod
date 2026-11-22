@@ -1,4 +1,4 @@
-module github.com/MB512/stackvault
+module github.com/MB512/stackbelay
 
 go 1.26.0
 

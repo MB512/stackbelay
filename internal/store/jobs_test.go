@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/MB512/stackvault/internal/jobs"
+	"github.com/MB512/stackbelay/internal/jobs"
 )
 
 func newJob(t *testing.T, s *Store, id string, stackID int64, typ jobs.Type, at time.Time) Job {

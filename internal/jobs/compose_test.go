@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/MB512/stackvault/internal/docker"
+	"github.com/MB512/stackbelay/internal/docker"
 )
 
 const newCompose = "services:\n  app:\n    image: nginx:1.27\n"

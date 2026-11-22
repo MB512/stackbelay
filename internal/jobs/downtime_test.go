@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/MB512/stackvault/internal/docker"
+	"github.com/MB512/stackbelay/internal/docker"
 )
 
 // fakeGate records Acquire in the call list and returns err.

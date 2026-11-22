@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/MB512/stackvault/internal/secrets"
-	"github.com/MB512/stackvault/internal/store"
+	"github.com/MB512/stackbelay/internal/secrets"
+	"github.com/MB512/stackbelay/internal/store"
 )
 
 func openStore(t *testing.T) *store.Store {

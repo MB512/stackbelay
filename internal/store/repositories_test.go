@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/MB512/stackvault/internal/restic"
-	"github.com/MB512/stackvault/internal/secrets"
+	"github.com/MB512/stackbelay/internal/restic"
+	"github.com/MB512/stackbelay/internal/secrets"
 )
 
 func stackID(t *testing.T, s *Store, name string) int64 {

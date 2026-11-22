@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/MB512/stackvault/internal/docker"
+	"github.com/MB512/stackbelay/internal/docker"
 )
 
 func TestUpdate(t *testing.T) {

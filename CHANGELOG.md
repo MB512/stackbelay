@@ -304,7 +304,7 @@ may want to move it into the data directory for the simpler backup and
 restore: stop StackVault, copy the key file to `data/secret.key` (mode
 0600), remove the variable and the key's volume line from `compose.yml`,
 start it again and run a backup of the StackVault stack. Step by step:
-[Upgrading from 0.1](https://github.com/MB512/stackvault#upgrading-from-01-move-the-secret-key-into-the-data-directory).
+[Upgrading from 0.1](https://github.com/MB512/stackbelay#upgrading-from-01-move-the-secret-key-into-the-data-directory).
 StackVault now checks the key against the database at startup and refuses
 to start if it does not match, and it never generates a new key next to an
 existing database.
@@ -402,8 +402,8 @@ README).
 
 First release.
 
-[Unreleased]: https://github.com/MB512/stackvault/compare/v0.4.0...HEAD
-[0.4.0]: https://github.com/MB512/stackvault/compare/v0.3.0...v0.4.0
-[0.3.0]: https://github.com/MB512/stackvault/compare/v0.2.0...v0.3.0
-[0.2.0]: https://github.com/MB512/stackvault/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/MB512/stackvault/releases/tag/v0.1.0
+[Unreleased]: https://github.com/MB512/stackbelay/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/MB512/stackbelay/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/MB512/stackbelay/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/MB512/stackbelay/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/MB512/stackbelay/releases/tag/v0.1.0

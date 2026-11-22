@@ -10,10 +10,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/MB512/stackvault/internal/jobs"
-	"github.com/MB512/stackvault/internal/scheduler"
-	"github.com/MB512/stackvault/internal/stacks"
-	"github.com/MB512/stackvault/internal/store"
+	"github.com/MB512/stackbelay/internal/jobs"
+	"github.com/MB512/stackbelay/internal/scheduler"
+	"github.com/MB512/stackbelay/internal/stacks"
+	"github.com/MB512/stackbelay/internal/store"
 )
 
 // The admin "Host" tab (issue #19): the host cleanup with a preview, a

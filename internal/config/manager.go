@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/MB512/stackvault/internal/secrets"
+	"github.com/MB512/stackbelay/internal/secrets"
 )
 
 // Manager is the configuration of the manager binary.

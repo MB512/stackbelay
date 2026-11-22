@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/MB512/stackvault/internal/restic"
+	"github.com/MB512/stackbelay/internal/restic"
 )
 
 // CachedSnapshot is a snapshot from the cache.

@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/MB512/stackvault/internal/jobs"
-	"github.com/MB512/stackvault/internal/restic"
+	"github.com/MB512/stackbelay/internal/jobs"
+	"github.com/MB512/stackbelay/internal/restic"
 )
 
 const testJobID = "01JCZ8G3T4S5V6W7X8Y9Z0ABCD"

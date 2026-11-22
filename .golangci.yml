@@ -55,4 +55,4 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - github.com/MB512/stackvault
+        - github.com/MB512/stackbelay

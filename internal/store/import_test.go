@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/MB512/stackvault/internal/jobs"
-	"github.com/MB512/stackvault/internal/restic"
+	"github.com/MB512/stackbelay/internal/jobs"
+	"github.com/MB512/stackbelay/internal/restic"
 )
 
 func TestImportedStack(t *testing.T) {

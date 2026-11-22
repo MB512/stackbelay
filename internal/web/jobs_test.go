@@ -11,11 +11,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/MB512/stackvault/internal/dispatch"
-	"github.com/MB512/stackvault/internal/jobs"
-	"github.com/MB512/stackvault/internal/restic"
-	"github.com/MB512/stackvault/internal/stacks"
-	"github.com/MB512/stackvault/internal/store"
+	"github.com/MB512/stackbelay/internal/dispatch"
+	"github.com/MB512/stackbelay/internal/jobs"
+	"github.com/MB512/stackbelay/internal/restic"
+	"github.com/MB512/stackbelay/internal/stacks"
+	"github.com/MB512/stackbelay/internal/store"
 )
 
 // fakeQueue stores jobs like the dispatcher but never runs them.

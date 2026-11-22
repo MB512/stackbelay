@@ -19,18 +19,18 @@ import (
 	"time"
 	_ "time/tzdata" // embeds the time zone database: TZ (schedules) works without /usr/share/zoneinfo
 
-	"github.com/MB512/stackvault/internal/auth"
-	"github.com/MB512/stackvault/internal/buildinfo"
-	"github.com/MB512/stackvault/internal/config"
-	"github.com/MB512/stackvault/internal/dispatch"
-	"github.com/MB512/stackvault/internal/docker"
-	"github.com/MB512/stackvault/internal/restic"
-	"github.com/MB512/stackvault/internal/scheduler"
-	"github.com/MB512/stackvault/internal/secrets"
-	"github.com/MB512/stackvault/internal/snapshots"
-	"github.com/MB512/stackvault/internal/stacks"
-	"github.com/MB512/stackvault/internal/store"
-	"github.com/MB512/stackvault/internal/web"
+	"github.com/MB512/stackbelay/internal/auth"
+	"github.com/MB512/stackbelay/internal/buildinfo"
+	"github.com/MB512/stackbelay/internal/config"
+	"github.com/MB512/stackbelay/internal/dispatch"
+	"github.com/MB512/stackbelay/internal/docker"
+	"github.com/MB512/stackbelay/internal/restic"
+	"github.com/MB512/stackbelay/internal/scheduler"
+	"github.com/MB512/stackbelay/internal/secrets"
+	"github.com/MB512/stackbelay/internal/snapshots"
+	"github.com/MB512/stackbelay/internal/stacks"
+	"github.com/MB512/stackbelay/internal/store"
+	"github.com/MB512/stackbelay/internal/web"
 )
 
 func main() {

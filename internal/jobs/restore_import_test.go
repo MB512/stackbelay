@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/MB512/stackvault/internal/stacks"
+	"github.com/MB512/stackbelay/internal/stacks"
 )
 
 // importEnv is restoreEnv with a snapshot from another host and an empty

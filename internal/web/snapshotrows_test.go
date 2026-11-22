@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/MB512/stackvault/internal/restic"
-	"github.com/MB512/stackvault/internal/store"
+	"github.com/MB512/stackbelay/internal/restic"
+	"github.com/MB512/stackbelay/internal/store"
 )
 
 func snap(id, tag string, added uint64, dur time.Duration) store.CachedSnapshot {

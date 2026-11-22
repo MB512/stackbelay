@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/MB512/stackvault/internal/jobs"
+	"github.com/MB512/stackbelay/internal/jobs"
 )
 
 func TestSchedules(t *testing.T) {

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/MB512/stackvault/internal/docker"
+	"github.com/MB512/stackbelay/internal/docker"
 )
 
 // Issue #26: compose refuses to start, recreate or pull an orphan (a

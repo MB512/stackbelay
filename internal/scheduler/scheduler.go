@@ -15,8 +15,8 @@ import (
 
 	"github.com/robfig/cron/v3"
 
-	"github.com/MB512/stackvault/internal/jobs"
-	"github.com/MB512/stackvault/internal/store"
+	"github.com/MB512/stackbelay/internal/jobs"
+	"github.com/MB512/stackbelay/internal/store"
 )
 
 // MaxExprLen is the maximum length of a cron expression.

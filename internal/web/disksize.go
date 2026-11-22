@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/MB512/stackvault/internal/auth"
-	"github.com/MB512/stackvault/internal/store"
+	"github.com/MB512/stackbelay/internal/auth"
+	"github.com/MB512/stackbelay/internal/store"
 )
 
 // Stack size on disk (issue #9): on request ("Calculate" on the Backups

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/MB512/stackvault/internal/secrets"
+	"github.com/MB512/stackbelay/internal/secrets"
 )
 
 // testBox returns a secrets box with a fixed test key.

@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/MB512/stackvault/internal/docker"
-	"github.com/MB512/stackvault/internal/restic"
+	"github.com/MB512/stackbelay/internal/docker"
+	"github.com/MB512/stackbelay/internal/restic"
 )
 
 func TestNewTemplate(t *testing.T) {

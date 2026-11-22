@@ -1,6 +1,6 @@
 package auth
 
-import "github.com/MB512/stackvault/internal/store"
+import "github.com/MB512/stackbelay/internal/store"
 
 // Action is something a user can do on a stack.
 type Action int

@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/MB512/stackvault/internal/restic"
-	"github.com/MB512/stackvault/internal/store"
+	"github.com/MB512/stackbelay/internal/restic"
+	"github.com/MB512/stackbelay/internal/store"
 )
 
 // fakeRefresher stands in for snapshots.Cache: it "finds" the configured

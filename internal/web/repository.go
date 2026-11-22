@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/MB512/stackvault/internal/auth"
-	"github.com/MB512/stackvault/internal/restic"
-	"github.com/MB512/stackvault/internal/store"
+	"github.com/MB512/stackbelay/internal/auth"
+	"github.com/MB512/stackbelay/internal/restic"
+	"github.com/MB512/stackbelay/internal/store"
 )
 
 // SnapshotRefresher refreshes the snapshot cache of a stack by asking

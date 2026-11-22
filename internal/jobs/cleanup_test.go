@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/MB512/stackvault/internal/docker"
-	"github.com/MB512/stackvault/internal/stacks"
+	"github.com/MB512/stackbelay/internal/docker"
+	"github.com/MB512/stackbelay/internal/stacks"
 )
 
 func imageID(c byte) string { return "sha256:" + strings.Repeat(string(c), 64) }

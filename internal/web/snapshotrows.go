@@ -4,8 +4,8 @@ import (
 	"slices"
 	"time"
 
-	"github.com/MB512/stackvault/internal/jobs"
-	"github.com/MB512/stackvault/internal/store"
+	"github.com/MB512/stackbelay/internal/jobs"
+	"github.com/MB512/stackbelay/internal/store"
 )
 
 // snapshotRow is one line of the snapshot list on the Backups tab

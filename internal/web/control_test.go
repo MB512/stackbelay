@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/MB512/stackvault/internal/jobs"
-	"github.com/MB512/stackvault/internal/store"
+	"github.com/MB512/stackbelay/internal/jobs"
+	"github.com/MB512/stackbelay/internal/store"
 )
 
 func TestControlJobs(t *testing.T) {

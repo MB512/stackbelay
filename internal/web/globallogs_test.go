@@ -9,7 +9,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/MB512/stackvault/internal/store"
+	"github.com/MB512/stackbelay/internal/store"
 )
 
 func TestGlobalLogs(t *testing.T) {

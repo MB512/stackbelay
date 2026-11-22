@@ -36,7 +36,7 @@ Restart must ALWAYS happen (defer), even on failure. See `docs/architecture.md`.
 
 ## Tech decisions (do not change without discussion)
 
-- Go 1.26+ (required by `modernc.org/sqlite`), module `github.com/MB512/stackvault`
+- Go 1.26+ (required by `modernc.org/sqlite`), module `github.com/MB512/stackbelay`
 - Router: `go-chi/chi`; templates: `html/template`; UI: HTMX
 - DB: SQLite via `modernc.org/sqlite` (pure Go, no CGO), embedded SQL migrations
 - Scheduler: `robfig/cron/v3`
@@ -127,7 +127,7 @@ Run `go vet` and `go test ./... -race` before every commit.
 ## Planning and decisions
 
 Plans, features, bugs and discussions about architecture live in
-[GitHub issues](https://github.com/MB512/stackvault/issues), not in the repo.
+[GitHub issues](https://github.com/MB512/stackbelay/issues), not in the repo.
 Repo files (code, `docs/`, README) describe the current state only: no
 milestones, TODO lists, "planned"/"open" sections or roadmaps. Design
 decisions are recorded in `docs/` as the outcome of the issue discussion

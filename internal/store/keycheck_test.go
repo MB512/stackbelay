@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/MB512/stackvault/internal/secrets"
+	"github.com/MB512/stackbelay/internal/secrets"
 )
 
 func boxWithKey(t *testing.T, key string) *secrets.Box {

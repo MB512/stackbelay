@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/MB512/stackvault/internal/restic"
+	"github.com/MB512/stackbelay/internal/restic"
 )
 
 // fakeProgress records the phases and details a pipeline reports.

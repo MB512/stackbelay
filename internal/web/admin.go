@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/MB512/stackvault/internal/store"
+	"github.com/MB512/stackbelay/internal/store"
 )
 
 // adminRecentJobs is the number of jobs of all stacks on the admin Jobs tab.

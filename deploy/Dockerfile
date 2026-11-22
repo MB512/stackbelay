@@ -17,7 +17,7 @@ RUN go mod download
 COPY cmd ./cmd
 COPY internal ./internal
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath \
-      -ldflags "-s -w -X github.com/MB512/stackvault/internal/buildinfo.Version=${VERSION}" \
+      -ldflags "-s -w -X github.com/MB512/stackbelay/internal/buildinfo.Version=${VERSION}" \
       -o /out/ ./cmd/manager ./cmd/worker
 
 # docker CLI with the compose plugin (Alpine based); restic from Alpine.
@@ -30,7 +30,7 @@ ENV STACKVAULT_DATA_DIR=/data
 EXPOSE 8080
 LABEL org.opencontainers.image.title="StackVault" \
       org.opencontainers.image.description="Backs up Docker Compose stacks to restic repositories" \
-      org.opencontainers.image.source="https://github.com/MB512/stackvault" \
+      org.opencontainers.image.source="https://github.com/MB512/stackbelay" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.version="${VERSION}"
 # The base image's entrypoint (docker-entrypoint.sh) is not wanted: workers

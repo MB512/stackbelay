@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/MB512/stackvault/internal/secrets"
+	"github.com/MB512/stackbelay/internal/secrets"
 
 	// Registers the pure-Go "sqlite" driver with database/sql. A blank
 	// import runs only the package's registration, similar to referencing an

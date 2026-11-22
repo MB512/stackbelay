@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/MB512/stackvault/internal/stacks"
+	"github.com/MB512/stackbelay/internal/stacks"
 )
 
 // Stop stops all containers of the stack (compose stop), without backup.

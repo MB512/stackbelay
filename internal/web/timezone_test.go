@@ -7,8 +7,8 @@ import (
 	"time"
 	_ "time/tzdata" // the zone database, independent of the test machine
 
-	"github.com/MB512/stackvault/internal/docker"
-	"github.com/MB512/stackvault/internal/restic"
+	"github.com/MB512/stackbelay/internal/docker"
+	"github.com/MB512/stackbelay/internal/restic"
 )
 
 // All times are shown in the manager's time zone: snapshots, jobs, the
