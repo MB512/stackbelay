@@ -12,13 +12,12 @@ import (
 // the data in the database.
 var ErrKeyMismatch = errors.New("the secret key does not match this database")
 
-// Plaintext and associated data of the "key_check" row in meta. They keep
-// the old name StackVault on purpose (issue #44): they are part of the
-// stored ciphertext, changing them would make the key check fail on every
-// existing database. They are never shown to users.
+// Plaintext and associated data of the "key_check" row in meta. They are
+// part of the stored ciphertext and contain no product name, so a rename
+// never touches them again (issue #44).
 var (
-	keyCheckPlain = []byte("stackvault key check")
-	keyCheckAAD   = []byte("stackvault:key-check")
+	keyCheckPlain = []byte("key check")
+	keyCheckAAD   = []byte("key-check")
 )
 
 // checkKey verifies that the store's secrets box opens this database. A
@@ -32,10 +31,13 @@ func (s *Store) checkKey(ctx context.Context) error {
 	switch {
 	case err == nil:
 		pt, err := s.box.Open(sealed, keyCheckAAD)
-		if err != nil || !bytes.Equal(pt, keyCheckPlain) {
-			return ErrKeyMismatch
+		if err == nil && bytes.Equal(pt, keyCheckPlain) {
+			return nil
 		}
-		return nil
+		if s.isLegacyKeyCheck(sealed) {
+			return s.reencryptLegacy(ctx)
+		}
+		return ErrKeyMismatch
 	case !errors.Is(err, sql.ErrNoRows):
 		return fmt.Errorf("reading key check: %w", err)
 	}
@@ -47,7 +49,10 @@ func (s *Store) checkKey(ctx context.Context) error {
 	switch {
 	case err == nil:
 		if _, err := s.box.Open(secret, repoAAD(stackID)); err != nil {
-			return ErrKeyMismatch
+			if _, err := s.box.Open(secret, legacyRepoAAD(stackID)); err != nil {
+				return ErrKeyMismatch
+			}
+			return s.reencryptLegacy(ctx) // also writes the key check row
 		}
 	case !errors.Is(err, sql.ErrNoRows):
 		return fmt.Errorf("reading repository for key check: %w", err)

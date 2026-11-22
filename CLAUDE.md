@@ -5,8 +5,8 @@ Self-hosted web app (Go) that backs up Docker Compose stacks from a host to
 per-stack repositories, cron schedules plus manual runs. Open source (GitHub).
 Called StackVault up to 0.4 (issue #44): persisted names from that time
 (`STACKVAULT_*` variables, `stackvault.db`, metadata header, restore marker,
-worker container names, the encryption associated data) are still accepted or
-kept on purpose; each spot has a comment. Do not remove them without a
+worker container names, the old encryption associated data) are still
+accepted or converted on purpose; each spot has a comment. Do not remove them without a
 migration.
 
 Read `docs/architecture.md`, `docs/data-model.md` and `docs/security.md`

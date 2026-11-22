@@ -105,13 +105,20 @@ new key would silently make the stored credentials unreadable. A key file
 readable by group or others is accepted with a warning.
 
 **Key check.** After the migrations, `store.Open` verifies the key against
-the `meta` row `key_check` (the text `stackvault key check` sealed with
-associated data `stackvault:key-check`). If it does not decrypt, startup is
+the `meta` row `key_check` (the text `key check` sealed with associated
+data `key-check`). If it does not decrypt, startup is
 refused with "the secret key does not match this database". A database
 from 0.1 has no such row: if it has a repository, that secret must decrypt
 with its own associated data and the row is written; if it fails, startup is
 refused. Without repositories nothing was encrypted yet and the row is
 written right away.
+
+StackVault 0.4 and older used associated data with the product name in it
+(issue #44). If the key check or, for a 0.1 database, the repository secret
+opens only with the old values, the key is right: `store.Open` then seals
+the key check and every repository secret again with the new values, in one
+transaction (`internal/store/legacyaad.go`). A wrong key opens neither and
+nothing is written. A secret that opens with neither value is left as it is.
 
 **Backups.** With the data directory inside the manager's stack (as in
 `deploy/compose.example.yml`), `secret.key` is part of that stack's

@@ -51,11 +51,10 @@ type repoSecret struct {
 }
 
 // repoAAD binds a repository secret to its stack, so a ciphertext copied
-// to another row does not decrypt. It keeps the old name StackVault on
-// purpose (issue #44): changing it would make every stored credential
-// unreadable.
+// to another row does not decrypt. It contains no product name, so a
+// rename never touches it again (issue #44).
 func repoAAD(stackID int64) []byte {
-	return []byte("stackvault:repository:stack=" + strconv.FormatInt(stackID, 10))
+	return []byte("repository:stack=" + strconv.FormatInt(stackID, 10))
 }
 
 // SetRepository creates or replaces the repository of a stack. If the

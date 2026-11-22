@@ -144,17 +144,21 @@ CREATE TABLE audit_log (
 - Secrets key: 32 bytes, base64, from `STACKBELAY_SECRET_KEY`,
   `STACKBELAY_SECRET_KEY_FILE` or `<data>/secret.key` (generated on a fresh
   install only). Losing it means losing access to stored repo credentials.
-- `meta.key_check`: AES-256-GCM of `stackvault key check` with associated
-  data `stackvault:key-check`. Checked by `store.Open`; a key that does not
-  open it is refused (`store.ErrKeyMismatch`). Written on first open, for a
-  0.1 database only after an existing repository secret decrypted.
+- `meta.key_check`: AES-256-GCM of `key check` with associated data
+  `key-check`. Checked by `store.Open`; a key that does not open it is
+  refused (`store.ErrKeyMismatch`). Written on first open, for a 0.1
+  database only after an existing repository secret decrypted.
+- The associated data contains no product name. StackVault 0.4 and older
+  prefixed it with `stackvault` (`stackvault key check`,
+  `stackvault:key-check`, `stackvault:repository:stack=<stack_id>`);
+  `store.Open` converts such data once the key is proven (issue #44).
 - Migrations: numbered SQL files (`internal/store/migrations/NNNN_name.sql`)
   embedded via `embed`, applied at startup, each in its own transaction, and
   recorded in `schema_migrations`. Never edit an applied migration; add a new
   one. A database with a newer schema than the binary is refused.
 - `repositories.secret_enc`: AES-256-GCM (`internal/secrets`) of the JSON
   `{"password": "...", "env": {"RESTIC_REST_USERNAME": "...", ...}}`, with
-  associated data `stackvault:repository:stack=<stack_id>`. Env keys must be
+  associated data `repository:stack=<stack_id>`. Env keys must be
   in `restic.BackendEnvVars`. `location` is stored in plain text and must not
   contain a password (`rest:https://user:pw@...` is refused, and so is a URL
   that does not parse cleanly but contains `@`, e.g. an unescaped `/` or `#`

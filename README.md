@@ -147,7 +147,8 @@ keep working; data, repositories and snapshots are unchanged. To update:
 What happens on the first start:
 
 - The database file `data/stackvault.db` is renamed to `data/stackbelay.db`.
-  Stored repository passwords stay readable with the same key.
+  Stored repository passwords stay readable with the same key; they are
+  encrypted again in a format without the product name.
 - Everybody is logged out once (new session cookie name).
 - Workers use a new restic cache volume, `stackbelay-restic-cache`; the
   first backup per repository downloads the index again. The old volume
@@ -156,9 +157,11 @@ What happens on the first start:
 - Snapshots made by StackVault restore unchanged, and a restore that did
   not complete before the update is continued as before.
 
-Going back to StackVault 0.4 afterwards needs the database file renamed
-back to `stackvault.db`, and its restore does not read the metadata of
-backups made by StackBelay.
+Going back to StackVault 0.4 afterwards is not possible with the converted
+database: 0.4 cannot read the re-encrypted repository passwords. Keep a
+copy of `data/stackvault.db` from before the update if you might need to go
+back. 0.4's restore also does not read the metadata of backups made by
+StackBelay.
 
 ### Upgrading from 0.1: move the secret key into the data directory
 

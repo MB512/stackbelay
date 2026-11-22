@@ -12,8 +12,10 @@ All notable changes to StackBelay (called StackVault up to 0.4). The format is b
 `ghcr.io/mb512/stackbelay` (the old image gets no new versions) and rename
 the environment variables from `STACKVAULT_*` to `STACKBELAY_*`; the old
 names still work with a warning in the log. On the first start the
-database file is renamed to `stackbelay.db`, everybody is logged out once
-and workers start with an empty restic cache (new volume
+database file is renamed to `stackbelay.db` and the stored repository
+passwords are encrypted again without the product name (StackVault 0.4
+cannot read them afterwards). Everybody is logged out once and workers
+start with an empty restic cache (new volume
 `stackbelay-restic-cache`; `stackvault-restic-cache` can be removed).
 Snapshots made by StackVault restore unchanged. See "Upgrading from
 StackVault 0.4" in the README.
