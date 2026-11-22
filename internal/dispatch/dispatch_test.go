@@ -139,7 +139,7 @@ func (e *env) newDispatcher() *Dispatcher {
 		Store: e.st, Docker: e.docker, JobsDir: e.jobsDir, Snapshots: e.refresh, MaxRunning: 2, Now: e.now,
 		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Template: Template{Image: "stackbelay:test", StacksRoot: "/home/docker", Socket: "/var/run/docker.sock",
-			Hostname: "host-a", Jobs: docker.Mount{Type: "bind", Source: "/srv/stackvault/data/jobs"}},
+			Hostname: "host-a", Jobs: docker.Mount{Type: "bind", Source: "/srv/stackbelay/data/jobs"}},
 	}
 }
 
@@ -206,7 +206,7 @@ func TestDispatchLifecycle(t *testing.T) {
 		cs.Env["STACKBELAY_HOSTNAME"] != "host-a" || strings.Join(cs.Cmd, " ") != "/app/worker run /job" {
 		t.Fatalf("container spec: %+v", cs)
 	}
-	if cs.Mounts[2] != (docker.Mount{Type: "bind", Source: "/srv/stackvault/data/jobs/" + b1.ID, Target: "/job"}) {
+	if cs.Mounts[2] != (docker.Mount{Type: "bind", Source: "/srv/stackbelay/data/jobs/" + b1.ID, Target: "/job"}) {
 		t.Fatalf("job mount: %+v", cs.Mounts[2])
 	}
 	spec, err := jobs.ReadSpec(filepath.Join(e.jobsDir, b1.ID))

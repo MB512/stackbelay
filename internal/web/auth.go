@@ -194,7 +194,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if s.SecureCookies && !isHTTPS(r) {
-		fail(http.StatusBadRequest, "Login requires HTTPS. Run StackVault behind a TLS reverse proxy "+
+		fail(http.StatusBadRequest, "Login requires HTTPS. Run StackBelay behind a TLS reverse proxy "+
 			"(or set STACKBELAY_ALLOW_INSECURE_HTTP=true for testing).")
 		return
 	}

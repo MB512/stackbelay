@@ -3,7 +3,7 @@
 # Release image: manager and worker in one image (the manager starts its
 # workers from its own image). Build from the repository root:
 #
-#   docker build -f deploy/Dockerfile --build-arg VERSION=v0.1.0 -t stackvault .
+#   docker build -f deploy/Dockerfile --build-arg VERSION=v0.1.0 -t stackbelay .
 #
 # Multi-platform builds (linux/amd64, linux/arm64) cross-compile the Go
 # binaries on the build platform; only the small final stage runs per platform.

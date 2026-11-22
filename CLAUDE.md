@@ -1,8 +1,13 @@
-# StackVault (working title)
+# StackBelay
 
 Self-hosted web app (Go) that backs up Docker Compose stacks from a host to
 [restic](https://restic.net) repositories. Multi-user, per-stack permissions,
 per-stack repositories, cron schedules plus manual runs. Open source (GitHub).
+Called StackVault up to 0.4 (issue #44): persisted names from that time
+(`STACKVAULT_*` variables, `stackvault.db`, metadata header, restore marker,
+worker container names, the encryption associated data) are still accepted or
+kept on purpose; each spot has a comment. Do not remove them without a
+migration.
 
 Read `docs/architecture.md`, `docs/data-model.md` and `docs/security.md`
 before changing anything structural. Keep them in sync with the code.
@@ -150,4 +155,5 @@ create and read operations (`init`, `backup`, `restore`, `snapshots`, `ls`,
 restic reports that no repository exists at the location (restic refuses to
 init over an existing one); it lets admins start e.g. a new repository per
 year to keep repositories small. Pruning is done by the repository owner on
-the server side.
+the server side, e.g. with the companion project
+[BelayPoint](https://github.com/MB512/belaypoint) (rest-server manager).

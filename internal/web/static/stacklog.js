@@ -117,7 +117,7 @@
 
 	// Line wrapping. The choice is remembered in this browser only; storage
 	// may be unavailable (private mode), which is fine.
-	// Reads a remembered choice; choices remembered before StackVault was
+	// Reads a remembered choice; choices remembered before StackBelay was
 	// renamed to StackBelay (issue #44) are under the old key.
 	function remembered(key) {
 		var v = window.localStorage.getItem(key);

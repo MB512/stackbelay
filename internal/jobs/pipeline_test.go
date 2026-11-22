@@ -246,7 +246,7 @@ func restoreEnv(t *testing.T) *env {
 	e.restic.restoreFiles = map[string]string{
 		"compose.yml": "services:\n  app: {}\n",
 		"data.txt":    "restored",
-		MetadataFile:  "# stackvault-metadata v1\ncreated_at\t2026-11-01T00:00:00Z\nstack\tweb\napp\trunning\t-\t-\t-\t-\ndb\texited\t-\t-\t-\t-\n",
+		MetadataFile:  "# stackbelay-metadata v1\ncreated_at\t2026-11-01T00:00:00Z\nstack\tweb\napp\trunning\t-\t-\t-\t-\ndb\texited\t-\t-\t-\t-\n",
 	}
 	e.restic.node = restic.Node{
 		Type: "dir", Mode: fs.ModeDir | 0o750,
@@ -307,7 +307,7 @@ func TestRestoreStartVariants(t *testing.T) {
 	}{
 		{"no metadata: start all", RestoreOptions{}, nil, "docker.Up <all>"},
 		{"invalid metadata: start all", RestoreOptions{}, ptr("garbage"), "docker.Up <all>"},
-		{"nothing was running", RestoreOptions{}, ptr("# stackvault-metadata v1\ncreated_at\t2026-11-01T00:00:00Z\nstack\tweb\napp\texited\t-\t-\t-\t-\n"), ""},
+		{"nothing was running", RestoreOptions{}, ptr("# stackbelay-metadata v1\ncreated_at\t2026-11-01T00:00:00Z\nstack\tweb\napp\texited\t-\t-\t-\t-\n"), ""},
 		{"no start requested", RestoreOptions{NoStart: true}, ptr(""), ""},
 		{"rollback: no safety snapshot", RestoreOptions{skipSafetySnapshot: true}, ptr(""), "docker.Up app"},
 	}

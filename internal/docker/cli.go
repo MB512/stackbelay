@@ -194,12 +194,12 @@ func (c *CLI) imageInfo(ctx context.Context, dir, imageID string) (imageInfo, er
 }
 
 // ErrLegacyCompose means that containers of the stack were created by the
-// Python docker-compose v1. They lack the labels StackVault relies on (see
+// Python docker-compose v1. They lack the labels StackBelay relies on (see
 // checkProjectOwner), so it refuses to manage the stack until it is
 // recreated with "docker compose up".
 var ErrLegacyCompose = errors.New("created by docker-compose v1")
 
-// projectConfig is the part of "compose config --format json" StackVault
+// projectConfig is the part of "compose config --format json" StackBelay
 // needs.
 type projectConfig struct {
 	Name     string

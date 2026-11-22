@@ -18,7 +18,7 @@ func importEnv(t *testing.T) (*env, stacks.Stack) {
 	e := restoreEnv(t)
 	e.restic.snapshots[0].Hostname = "old-host"
 	digest := "nginx@sha256:" + strings.Repeat("ab", 32)
-	e.restic.restoreFiles[MetadataFile] = "# stackvault-metadata v1\ncreated_at\t2026-11-01T00:00:00Z\nstack\tweb\n" +
+	e.restic.restoreFiles[MetadataFile] = "# stackbelay-metadata v1\ncreated_at\t2026-11-01T00:00:00Z\nstack\tweb\n" +
 		"app\trunning\tnginx:1\t" + digest + "\t-\t-\ndb\texited\t-\t-\t-\t-\n"
 	e.docker.missingImages = []string{digest}
 	target, err := stacks.ImportTarget(t.TempDir(), "web")

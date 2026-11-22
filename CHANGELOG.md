@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to StackVault. The format is based on
+All notable changes to StackBelay (called StackVault up to 0.4). The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versions follow
 [Semantic Versioning](https://semver.org/).
 
@@ -8,17 +8,27 @@ All notable changes to StackVault. The format is based on
 
 ### Upgrading
 
-Nothing to change in the compose file. The database is migrated at
+**StackVault is now StackBelay** (#44). Change the image to
+`ghcr.io/mb512/stackbelay` (the old image gets no new versions) and rename
+the environment variables from `STACKVAULT_*` to `STACKBELAY_*`; the old
+names still work with a warning in the log. On the first start the
+database file is renamed to `stackbelay.db`, everybody is logged out once
+and workers start with an empty restic cache (new volume
+`stackbelay-restic-cache`; `stackvault-restic-cache` can be removed).
+Snapshots made by StackVault restore unchanged. See "Upgrading from
+StackVault 0.4" in the README.
+
+Otherwise nothing to change in the compose file. The database is migrated at
 startup (0014 and 0015 drop schedule options that no longer exist, 0016
 the stack-level enabled flag: the schedules of a disabled stack are
 disabled instead; 0017 records which stacks were on disk once). If you
-set `STACKVAULT_MAX_JOBS=1`, consider removing it: the new default 3 lets
+set `STACKBELAY_MAX_JOBS=1`, consider removing it: the new default 3 lets
 the pre-stop snapshots and restores of several stacks run at the same
-time, while `STACKVAULT_MAX_DOWNTIMES` (default 1) still stops only one
+time, while `STACKBELAY_MAX_DOWNTIMES` (default 1) still stops only one
 stack at a time. `<stack>.restore-tmp` and `<stack>.old-<time>`
 directories left by older versions can be deleted by hand. Logs of jobs
 older than 90 days are deleted on the first start; set
-`STACKVAULT_JOB_LOG_RETENTION=0` beforehand to keep them.
+`STACKBELAY_JOB_LOG_RETENTION=0` beforehand to keep them.
 
 ### Added
 
@@ -32,7 +42,7 @@ older than 90 days are deleted on the first start; set
   private images; see "Private registries" in the README.
 - **Old job logs are deleted** (#16): the job directories (log, status)
   of jobs that finished more than 90 days ago are removed
-  (`STACKVAULT_JOB_LOG_RETENTION`, `0` keeps them); the jobs stay in the
+  (`STACKBELAY_JOB_LOG_RETENTION`, `0` keeps them); the jobs stay in the
   lists.
 - **restic's messages in the job log** (#42): retries (e.g. of a slow or
   failing repository server), lock messages and per-file errors appear
@@ -78,12 +88,12 @@ older than 90 days are deleted on the first start; set
   pre-stop snapshot is admin-only and warns that it may not be consistent.
 - **Downtime slots** (#36): only the part of a backup, update or compose
   apply that keeps a stack stopped is limited by the new
-  `STACKVAULT_MAX_DOWNTIMES` (default 1). The pre-stop snapshot before it
+  `STACKBELAY_MAX_DOWNTIMES` (default 1). The pre-stop snapshot before it
   and restores need no slot, so a long backup or restore no longer holds up
-  the other stacks. `STACKVAULT_MAX_JOBS` now defaults to 3 and limits all
+  the other stacks. `STACKBELAY_MAX_JOBS` now defaults to 3 and limits all
   running jobs (disk and network load), restores included: the exception
   for restores into a stopped stack is gone.
-- **Downtime timeout** (#36): `STACKVAULT_DOWNTIME_TIMEOUT` (default 1h)
+- **Downtime timeout** (#36): `STACKBELAY_DOWNTIME_TIMEOUT` (default 1h)
   bounds stop -> final snapshot; when it runs out, the final snapshot is
   aborted, the stack started again and the job fails.
 - **No more "Disable stack"** (#37): schedules are enabled or disabled on
@@ -103,7 +113,7 @@ older than 90 days are deleted on the first start; set
   another host that is not restored yet stays visible, marked "not
   restored yet". Migration 0017 adds `stacks.seen_present`.
 - **Job timeout** raised from 6 h to 48 h and configurable on the manager
-  with `STACKVAULT_JOB_TIMEOUT` (e.g. `72h`; #32). Before, the variable was
+  with `STACKBELAY_JOB_TIMEOUT` (e.g. `72h`; #32). Before, the variable was
   only read by the worker and the manager did not pass it on, so large
   restores were always stopped after 6 h.
 

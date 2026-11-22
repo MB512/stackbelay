@@ -101,7 +101,7 @@ func TestControlOwnStack(t *testing.T) {
 	e, _, _ := setupJobsEnv(t)
 	e.server.OwnStack = "web"
 	r := e.get("/stacks/web")
-	if !strings.Contains(r.body, `disabled title="This is StackVault&#39;s own stack`) ||
+	if !strings.Contains(r.body, `disabled title="This is StackBelay&#39;s own stack`) ||
 		!strings.Contains(r.body, `action="/stacks/web/restart"`) {
 		t.Fatalf("Status tab of the own stack:\n%s", r.body)
 	}
@@ -112,7 +112,7 @@ func TestControlOwnStack(t *testing.T) {
 			t.Fatalf("%s of the own stack: %d", a, r.status)
 		}
 	}
-	if n := strings.Count(e.get("/stacks/web").body, `disabled title="This is StackVault&#39;s own stack`); n != 2 {
+	if n := strings.Count(e.get("/stacks/web").body, `disabled title="This is StackBelay&#39;s own stack`); n != 2 {
 		t.Errorf("%d disabled buttons on the own stack, want 2 (Stop, Down)", n)
 	}
 	if r := e.post("/stacks/web/up", url.Values{"csrf_token": {token}}); r.status != http.StatusSeeOther {

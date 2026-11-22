@@ -176,7 +176,7 @@ docker compose --project-directory "$DIR" logs app | grep -q edited || fail "app
 pass "file replaced, previous kept, app runs the new configuration"
 
 step "5. compose-apply with a missing image: rollback"
-sed 's/busybox:1.36/busybox:stackvault-does-not-exist/' "$DIR/compose.yml" >"$WORK/compose.bad"
+sed 's/busybox:1.36/busybox:stackbelay-does-not-exist/' "$DIR/compose.yml" >"$WORK/compose.bad"
 cp "$DIR/compose.yml" "$WORK/compose.before5"
 compose_job "$WORK/job5" "$WORK/compose.bad"
 if env "${REPO_ENV[@]}" bin/worker run "$WORK/job5" 2>/dev/null; then fail "compose-apply with a missing image succeeded"; fi

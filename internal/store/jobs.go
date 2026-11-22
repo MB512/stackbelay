@@ -45,7 +45,7 @@ type JobOptions struct {
 type JobResult struct {
 	PreStopSnapshot string `json:"pre_stop_snapshot,omitempty"`
 	SafetySnapshot  string `json:"safety_snapshot,omitempty"`
-	// PreviousDir: the previous stack directory a restore of StackVault
+	// PreviousDir: the previous stack directory a restore of StackBelay
 	// 0.4 or older kept (shown for old jobs only).
 	PreviousDir string `json:"previous_dir,omitempty"`
 	RolledBack  bool   `json:"rolled_back,omitempty"` // update: failed and restored to the job's snapshot

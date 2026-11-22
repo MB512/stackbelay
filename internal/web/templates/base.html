@@ -8,7 +8,7 @@
   {{- /* HTMX must not inject inline styles (blocked by the CSP), evaluate
          code from attributes, or run scripts from responses. */}}
   <meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false,"allowScriptTags":false,"selfRequestsOnly":true}'>
-  <title>{{.Title}} · StackVault</title>
+  <title>{{.Title}} · StackBelay</title>
   <link rel="icon" href="{{asset "favicon.svg"}}" type="image/svg+xml">
   <link rel="icon" href="{{asset "favicon.ico"}}" sizes="32x32">
   <link rel="apple-touch-icon" href="{{asset "apple-touch-icon.png"}}">
@@ -19,7 +19,7 @@
 </head>
 <body>
   <header>
-    <a class="brand" href="/">StackVault</a>
+    <a class="brand" href="/">StackBelay</a>
     {{- with .User}}
     <nav>
       <a href="/">Stacks</a>
@@ -42,7 +42,7 @@
     {{- if .Info}}<p class="info" role="status">{{.Info}}</p>{{end}}
     {{template "content" .}}
   </main>
-  {{- if .User}}<footer class="hint">StackVault {{version}}</footer>{{end}}
+  {{- if .User}}<footer class="hint">StackBelay {{version}}</footer>{{end}}
 </body>
 </html>
 {{- end}}

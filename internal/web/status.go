@@ -173,5 +173,5 @@ func (s *Server) startControl(t jobs.Type) http.HandlerFunc {
 
 // ownStackStopReason explains why the manager's own stack has no Stop and
 // no Down.
-const ownStackStopReason = "This is StackVault's own stack: stopping it or taking it down would also stop this " +
+const ownStackStopReason = "This is StackBelay's own stack: stopping it or taking it down would also stop this " +
 	"web interface, and nobody could start it again from here. Use Restart or Up instead."

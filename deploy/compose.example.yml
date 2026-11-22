@@ -1,15 +1,15 @@
-# Example: StackVault as a stack of its own, so it can back up (and restore)
+# Example: StackBelay as a stack of its own, so it can back up (and restore)
 # itself like any other stack.
 #
 # Layout on the host (STACKS_ROOT = /home/docker in this example):
 #
-#   /home/docker/stackvault/compose.yml   <- this file
-#   /home/docker/stackvault/data/         <- database and job files (part of
-#                                            the stackvault stack's backups),
+#   /home/docker/stackbelay/compose.yml   <- this file
+#   /home/docker/stackbelay/data/         <- database and job files (part of
+#                                            the stackbelay stack's backups),
 #                                            incl. the generated secret.key
 #   /home/docker/<other stacks>/compose.yml
 #
-# On the first start StackVault generates data/secret.key, the key that
+# On the first start StackBelay generates data/secret.key, the key that
 # encrypts the stored repository passwords. Keep a copy somewhere safe:
 # without it the repository passwords cannot be decrypted.
 #
@@ -17,19 +17,19 @@
 # STACKS_ROOT and enable the two commented STACKBELAY_SECRET_KEY_FILE lines
 # below (on an existing installation, move data/secret.key there):
 #
-#   sudo install -d -m 700 /etc/stackvault
-#   openssl rand -base64 32 | sudo tee /etc/stackvault/secret.key >/dev/null
-#   sudo chmod 600 /etc/stackvault/secret.key
+#   sudo install -d -m 700 /etc/stackbelay
+#   openssl rand -base64 32 | sudo tee /etc/stackbelay/secret.key >/dev/null
+#   sudo chmod 600 /etc/stackbelay/secret.key
 #
 # The initial admin password is printed to the log on the first start:
 #
-#   docker compose logs stackvault | grep "INITIAL ADMIN PASSWORD"
+#   docker compose logs stackbelay | grep "INITIAL ADMIN PASSWORD"
 #
-# StackVault speaks plain HTTP. Put a TLS reverse proxy in front of it; the
+# StackBelay speaks plain HTTP. Put a TLS reverse proxy in front of it; the
 # port is therefore published on 127.0.0.1 only.
 
 services:
-  stackvault:
+  stackbelay:
     image: ghcr.io/mb512/stackbelay:0.4
     restart: unless-stopped
     environment:
@@ -38,7 +38,7 @@ services:
       # Name of this Docker host, recorded as restic --host in every snapshot.
       STACKBELAY_HOSTNAME: myhost
       # Optional, see above:
-      # STACKBELAY_SECRET_KEY_FILE: /run/secrets/stackvault.key
+      # STACKBELAY_SECRET_KEY_FILE: /run/secrets/stackbelay.key
       # Time zone of the backup schedules.
       TZ: Europe/Berlin
       # Only for a first test without a TLS proxy:
@@ -55,7 +55,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./data:/data
       # Optional, see above:
-      # - /etc/stackvault/secret.key:/run/secrets/stackvault.key:ro
+      # - /etc/stackbelay/secret.key:/run/secrets/stackbelay.key:ro
       # Optional: registry credentials for private images (README,
       # "Private registries"); passed read-only to the workers.
-      # - /etc/stackvault/docker:/root/.docker:ro
+      # - /etc/stackbelay/docker:/root/.docker:ro

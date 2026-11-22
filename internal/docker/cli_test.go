@@ -86,15 +86,15 @@ func TestHealthStatus(t *testing.T) {
 }
 
 func TestProjectOwner(t *testing.T) {
-	cfg, err := parseProjectConfig([]byte(`{"name":"stackvault","services":{"web":{},"db":{"image":"x"}}}`))
-	if err != nil || cfg.Name != "stackvault" || !slices.Equal(cfg.Services, []string{"db", "web"}) {
+	cfg, err := parseProjectConfig([]byte(`{"name":"stackbelay","services":{"web":{},"db":{"image":"x"}}}`))
+	if err != nil || cfg.Name != "stackbelay" || !slices.Equal(cfg.Services, []string{"db", "web"}) {
 		t.Fatalf("parseProjectConfig: %+v %v", cfg, err)
 	}
 	if _, err := parseProjectConfig([]byte(`{"services":{}}`)); err == nil {
 		t.Fatal("missing name accepted")
 	}
 
-	const dir = "/home/docker/stackvault"
+	const dir = "/home/docker/stackbelay"
 	tests := []struct {
 		name        string
 		out         string
@@ -102,13 +102,13 @@ func TestProjectOwner(t *testing.T) {
 		wantLegacy  []string
 	}{
 		{"none", "", nil, nil},
-		{"own (trailing slash, no version)", "stackvault-manager-1\t/home/docker/stackvault\t2.29.1\nstackvault-db-1\t/home/docker/stackvault/\n", nil, nil},
-		{"other directory", "stackvault-manager-1\t/tmp/test/stacks/stackvault\t2.29.1\n",
-			[]string{"stackvault-manager-1 (/tmp/test/stacks/stackvault)"}, nil},
-		{"started without compose labels", "stackvault-x\t\t\n", []string{"stackvault-x ()"}, nil},
-		{"docker-compose v1", "stackvault_web_1\t\t1.25.0\nstackvault_db_1\t\t1.25.0\n", nil,
-			[]string{"stackvault_web_1", "stackvault_db_1"}},
-		{"docker-compose v1 from this directory is fine", "stackvault_web_1\t/home/docker/stackvault\t1.29.2\n", nil, nil},
+		{"own (trailing slash, no version)", "stackbelay-manager-1\t/home/docker/stackbelay\t2.29.1\nstackbelay-db-1\t/home/docker/stackbelay/\n", nil, nil},
+		{"other directory", "stackbelay-manager-1\t/tmp/test/stacks/stackbelay\t2.29.1\n",
+			[]string{"stackbelay-manager-1 (/tmp/test/stacks/stackbelay)"}, nil},
+		{"started without compose labels", "stackbelay-x\t\t\n", []string{"stackbelay-x ()"}, nil},
+		{"docker-compose v1", "stackbelay_web_1\t\t1.25.0\nstackbelay_db_1\t\t1.25.0\n", nil,
+			[]string{"stackbelay_web_1", "stackbelay_db_1"}},
+		{"docker-compose v1 from this directory is fine", "stackbelay_web_1\t/home/docker/stackbelay\t1.29.2\n", nil, nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -119,7 +119,7 @@ func TestProjectOwner(t *testing.T) {
 		})
 	}
 
-	for in, want := range map[string]string{"stackvault": "stackvault", "my-app": "myapp", "My_App2": "myapp2"} {
+	for in, want := range map[string]string{"stackbelay": "stackbelay", "my-app": "myapp", "My_App2": "myapp2"} {
 		if got := legacyProjectName(in); got != want {
 			t.Errorf("legacyProjectName(%q) = %q, want %q", in, got, want)
 		}

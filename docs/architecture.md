@@ -120,7 +120,7 @@ password, which is not stored on the host in plain text and must be known to
 restore anyway. Restoring the manager's stack restores the matching key and
 database together. To keep the key out of every backup, use
 `STACKBELAY_SECRET_KEY_FILE` with a file outside `STACKS_ROOT` (e.g.
-`/etc/stackvault/secret.key`). Workers never receive the key: it is not in
+`/etc/stackbelay/secret.key`). Workers never receive the key: it is not in
 their environment, and their only data-dir mount is their own job directory.
 
 ## Job handoff

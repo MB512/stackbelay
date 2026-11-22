@@ -14,7 +14,7 @@ func TestRunArgs(t *testing.T) {
 		Mounts: []Mount{
 			{Type: "bind", Source: "/home/docker", Target: "/home/docker"},
 			{Type: "bind", Source: "/var/run/docker.sock", Target: "/var/run/docker.sock"},
-			{Type: "volume", Source: "stackvault_data", Target: "/job", SubPath: "jobs/01ABC"},
+			{Type: "volume", Source: "stackbelay_data", Target: "/job", SubPath: "jobs/01ABC"},
 			{Type: "volume", Source: "stackbelay-restic-cache", Target: "/cache", ReadOnly: false},
 		},
 		Env:           map[string]string{"RESTIC_PASSWORD": "s3cret", "RESTIC_REPOSITORY": "/r"},
@@ -29,7 +29,7 @@ func TestRunArgs(t *testing.T) {
 		"--label", "stackbelay.job=01ABC", "--label", "stackbelay.worker=true",
 		"--mount", "type=bind,source=/home/docker,target=/home/docker",
 		"--mount", "type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock",
-		"--mount", "type=volume,source=stackvault_data,target=/job,volume-subpath=jobs/01ABC",
+		"--mount", "type=volume,source=stackbelay_data,target=/job,volume-subpath=jobs/01ABC",
 		"--mount", "type=volume,source=stackbelay-restic-cache,target=/cache",
 		"--env", "RESTIC_PASSWORD", "--env", "RESTIC_REPOSITORY",
 		"--no-healthcheck",
@@ -68,18 +68,18 @@ func TestRunArgsRejects(t *testing.T) {
 }
 
 func TestParseSelf(t *testing.T) {
-	out := []byte(`{"Image":"sha256:feed","Config":{"Labels":{"com.docker.compose.project.working_dir":"/srv/stacks/stackvault"}},"Mounts":[
+	out := []byte(`{"Image":"sha256:feed","Config":{"Labels":{"com.docker.compose.project.working_dir":"/srv/stacks/stackbelay"}},"Mounts":[
 		{"Type":"bind","Source":"/home/docker","Destination":"/home/docker","RW":true},
-		{"Type":"volume","Name":"stackvault_data","Source":"/var/lib/docker/volumes/stackvault_data/_data","Destination":"/data","RW":true},
+		{"Type":"volume","Name":"stackbelay_data","Source":"/var/lib/docker/volumes/stackbelay_data/_data","Destination":"/data","RW":true},
 		{"Type":"bind","Source":"/var/run/docker.sock","Destination":"/var/run/docker.sock","RW":false},
 		{"Type":"tmpfs","Destination":"/tmp"}]}`)
 	info, err := parseSelf(out)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := SelfInfo{ImageID: "sha256:feed", ComposeWorkingDir: "/srv/stacks/stackvault", Mounts: []Mount{
+	want := SelfInfo{ImageID: "sha256:feed", ComposeWorkingDir: "/srv/stacks/stackbelay", Mounts: []Mount{
 		{Type: "bind", Source: "/home/docker", Target: "/home/docker"},
-		{Type: "volume", Source: "stackvault_data", Target: "/data"},
+		{Type: "volume", Source: "stackbelay_data", Target: "/data"},
 		{Type: "bind", Source: "/var/run/docker.sock", Target: "/var/run/docker.sock", ReadOnly: true},
 	}}
 	if !reflect.DeepEqual(info, want) {

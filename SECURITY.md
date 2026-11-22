@@ -17,7 +17,7 @@ Only the latest release receives security fixes.
 
 ## Scope
 
-StackVault controls Docker through the Docker socket, which is root-equivalent
+StackBelay controls Docker through the Docker socket, which is root-equivalent
 on the host. The threat model and the rules the code follows are described in
 [`docs/security.md`](docs/security.md). Findings where an authenticated web
 user can do more than their rights allow (other stacks, commands, files,

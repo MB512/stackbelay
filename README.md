@@ -1,11 +1,15 @@
-# StackVault
+# StackBelay
+
+> Never climb without a belay. Never update without a backup.
 
 Self-hosted web app that backs up Docker Compose stacks to
-[restic](https://restic.net) repositories, and restores them.
+[restic](https://restic.net) repositories, and restores them. StackBelay
+was called StackVault up to version 0.4 (see
+[Upgrading from StackVault 0.4](#upgrading-from-stackvault-04)).
 
 A *stack* is a directory with a compose file (`compose.yaml`,
 `compose.yml`, `docker-compose.yml` or `docker-compose.yaml`) under one
-stacks root (e.g. `/home/docker/<stack>/compose.yml`). StackVault backs up the whole
+stacks root (e.g. `/home/docker/<stack>/compose.yml`). StackBelay backs up the whole
 directory, including bind-mounted data inside it, with the stack stopped,
 so the backup is consistent without database-specific dumps.
 
@@ -56,10 +60,12 @@ already trust until it has proven itself on your hosts. Upgrading from 0.3
 - **Live job logs** in the browser, job history; admin pages with the job
   queue of all stacks and the audit log.
 - Backup and restore run in a separate, short-lived **worker container**.
-  StackVault can therefore back up and restore **its own stack**.
+  StackBelay can therefore back up and restore **its own stack**.
 - Only creating and reading restic operations: works with
   [rest-server](https://github.com/restic/rest-server) in **append-only**
-  mode. Retention (`forget`/`prune`) is left to the repository owner.
+  mode. Retention (`forget`/`prune`) is left to the repository owner, e.g.
+  with its companion [BelayPoint](https://github.com/MB512/belaypoint), which
+  manages the rest-server and runs `forget`/`prune`/`check` there.
 
 Not supported: retention, Windows, Kubernetes. Planned features, bugs and
 design discussions are tracked in
@@ -82,24 +88,24 @@ design discussions are tracked in
 1. Create the stack directory:
 
    ```sh
-   mkdir -p /home/docker/stackvault && cd /home/docker/stackvault
+   mkdir -p /home/docker/stackbelay && cd /home/docker/stackbelay
    ```
 
 2. Copy [`deploy/compose.example.yml`](deploy/compose.example.yml) to
-   `/home/docker/stackvault/compose.yml` and adjust `STACKS_ROOT`, the
+   `/home/docker/stackbelay/compose.yml` and adjust `STACKS_ROOT`, the
    matching volume, `STACKBELAY_HOSTNAME` and `TZ`.
 
 3. Start it and read the initial admin password from the log:
 
    ```sh
    docker compose up -d
-   docker compose logs stackvault | grep "INITIAL ADMIN PASSWORD"
+   docker compose logs stackbelay | grep "INITIAL ADMIN PASSWORD"
    ```
 
-   On the first start StackVault also generates the secret key that
+   On the first start StackBelay also generates the secret key that
    encrypts the stored repository passwords: `data/secret.key` (mode 0600).
    **Keep a copy somewhere safe**, outside this host. Without it the stored
-   repository passwords cannot be decrypted, and StackVault refuses to start
+   repository passwords cannot be decrypted, and StackBelay refuses to start
    with a database whose key is missing or wrong instead of creating a new
    one.
 
@@ -110,33 +116,61 @@ design discussions are tracked in
 
 ### Optional: keep the key out of the backups
 
-`data/secret.key` lies inside the StackVault stack, so it is part of that
+`data/secret.key` lies inside the StackBelay stack, so it is part of that
 stack's own backups (protected by its restic repository password). That
-makes restoring StackVault itself simple. To keep the key in no backup at
+makes restoring StackBelay itself simple. To keep the key in no backup at
 all, store it outside `STACKS_ROOT` and point `STACKBELAY_SECRET_KEY_FILE`
 at it:
 
 ```sh
-sudo install -d -m 700 /etc/stackvault
-openssl rand -base64 32 | sudo tee /etc/stackvault/secret.key >/dev/null
-sudo chmod 600 /etc/stackvault/secret.key
+sudo install -d -m 700 /etc/stackbelay
+openssl rand -base64 32 | sudo tee /etc/stackbelay/secret.key >/dev/null
+sudo chmod 600 /etc/stackbelay/secret.key
 ```
 
 On an existing installation, move the generated key there instead
-(`sudo mv data/secret.key /etc/stackvault/secret.key`) — a new key would not
+(`sudo mv data/secret.key /etc/stackbelay/secret.key`) — a new key would not
 match the database. Then enable the commented lines in the compose file.
+
+### Upgrading from StackVault 0.4
+
+StackVault was renamed to StackBelay (issue #44). Existing installations
+keep working; data, repositories and snapshots are unchanged. To update:
+
+- Change the image from `ghcr.io/mb512/stackvault` to
+  `ghcr.io/mb512/stackbelay`. The old image gets no new versions.
+- Rename the environment variables from `STACKVAULT_*` to `STACKBELAY_*`.
+  The old names still work for now, with a warning in the log.
+- The stack directory and the compose service may keep their names (e.g.
+  `/home/docker/stackvault`); nothing depends on them.
+
+What happens on the first start:
+
+- The database file `data/stackvault.db` is renamed to `data/stackbelay.db`.
+  Stored repository passwords stay readable with the same key.
+- Everybody is logged out once (new session cookie name).
+- Workers use a new restic cache volume, `stackbelay-restic-cache`; the
+  first backup per repository downloads the index again. The old volume
+  `stackvault-restic-cache` can be removed with
+  `docker volume rm stackvault-restic-cache`.
+- Snapshots made by StackVault restore unchanged, and a restore that did
+  not complete before the update is continued as before.
+
+Going back to StackVault 0.4 afterwards needs the database file renamed
+back to `stackvault.db`, and its restore does not read the metadata of
+backups made by StackBelay.
 
 ### Upgrading from 0.1: move the secret key into the data directory
 
 0.1 required the secret key outside the stack (`STACKBELAY_SECRET_KEY_FILE`,
 usually `/etc/stackvault/secret.key`). That still works unchanged. Since 0.2
-the default place is `data/secret.key` inside the StackVault stack, so the
-stack's own backup contains everything needed to run StackVault again:
-database **and** key. Restoring StackVault on a new host is then just a
+the default place is `data/secret.key` inside the StackBelay stack, so the
+stack's own backup contains everything needed to run StackBelay again:
+database **and** key. Restoring StackBelay on a new host is then just a
 restore of its stack. To switch an existing installation:
 
 ```sh
-cd /home/docker/stackvault             # the StackVault stack directory
+cd /home/docker/stackvault             # the StackBelay stack directory
 docker compose down
 sudo install -m 600 /etc/stackvault/secret.key data/secret.key
 # with STACKBELAY_SECRET_KEY (the key itself in the environment) instead:
@@ -145,12 +179,12 @@ sudo install -m 600 /etc/stackvault/secret.key data/secret.key
 
 Then remove `STACKBELAY_SECRET_KEY_FILE` (or `STACKBELAY_SECRET_KEY`) and
 the key's volume line from `compose.yml`, set the image to `0.4`, and start
-it again (`docker compose up -d`). StackVault checks the key against the
+it again (`docker compose up -d`). StackBelay checks the key against the
 database at startup and refuses to start if it does not match, so a wrong
-copy cannot damage anything. Run a backup of the StackVault stack
+copy cannot damage anything. Run a backup of the StackBelay stack
 afterwards, and keep `/etc/stackvault/secret.key` until that backup exists.
 
-Trade-off: whoever gets a copy of the StackVault stack's backup (and its
+Trade-off: whoever gets a copy of the StackBelay stack's backup (and its
 repository password) now also has the key that decrypts the stored
 repository passwords. To keep the 0.1 behaviour, change nothing.
 
@@ -173,8 +207,8 @@ The manager passes the same mount, read-only, to every worker container.
 The file must contain the credentials itself (`"auths"`, as written by
 `docker login` without a credential helper): credential helpers such as
 `credsStore: desktop` or `pass` do not exist inside the containers. Create
-it e.g. with `DOCKER_CONFIG=/etc/stackvault/docker docker login
-registry.example.com` and mount `/etc/stackvault/docker` at
+it e.g. with `DOCKER_CONFIG=/etc/stackbelay/docker docker login
+registry.example.com` and mount `/etc/stackbelay/docker` at
 `/root/.docker`.
 
 Tags: `<major>.<minor>.<patch>`, `<major>.<minor>` and `latest` for
@@ -212,7 +246,7 @@ is used, so rename them at your next change.
 ## Security
 
 The manager needs the Docker socket, which is equivalent to root on the
-host. StackVault is designed so that web users cannot turn that into
+host. StackBelay is designed so that web users cannot turn that into
 arbitrary commands: only predefined jobs on discovered stacks, workers from
 a fixed template, no shell, CSRF protection, per-stack rights and an audit
 log. Repository credentials are encrypted at rest and never passed on
@@ -238,7 +272,7 @@ golangci-lint run
 docker build -f deploy/Dockerfile -t stackbelay:dev .
 scripts/e2e-local.sh      # worker pipeline against the local Docker daemon
 scripts/e2e-dispatch.sh   # manager + worker containers through the web UI
-scripts/e2e-self.sh       # StackVault backs up and restores itself
+scripts/e2e-self.sh       # StackBelay backs up and restores itself
 scripts/e2e-update.sh     # update and compose-apply jobs: success, rollback, no backup
 ```
 

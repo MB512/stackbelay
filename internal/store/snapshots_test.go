@@ -95,7 +95,7 @@ func TestStackSnapshotsFilter(t *testing.T) {
 		mk("bbbbbbbb22222222", 2, "host-b", "/other/web"),     // our stack, other host
 		mk("cccccccc33333333", 3, "host-a", "/s/db"),          // other stack, shared repository
 		mk("dddddddd44444444", 4, "host-a", "/s/myweb"),       // ends in "web", but is not "web"
-		mk("eeeeeeee55555555", 5, "host-a", "/s/web", "/etc"), // two paths: not made by StackVault
+		mk("eeeeeeee55555555", 5, "host-a", "/s/web", "/etc"), // two paths: not made by StackBelay
 	}
 	if err := s.ReplaceSnapshots(ctx, repo, snaps, t0); err != nil {
 		t.Fatal(err)

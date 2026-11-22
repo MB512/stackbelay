@@ -3,7 +3,7 @@
 # ghcr.io/mb512/stackbelay with the tags <major>.<minor>.<patch>,
 # <major>.<minor> and latest.
 #
-#   git tag -a v0.1.0 -m "StackVault 0.1.0" && git push origin v0.1.0
+#   git tag -a v0.1.0 -m "StackBelay 0.1.0" && git push origin v0.1.0
 name: release
 
 on:

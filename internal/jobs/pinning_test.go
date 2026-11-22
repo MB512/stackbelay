@@ -13,7 +13,7 @@ import (
 const dbDigest = "postgres@sha256:ef56ef56ef56ef56ef56ef56ef56ef56ef56ef56ef56ef56ef56ef56ef56ef56"
 
 // pinMetadata has a pinnable app and db and a locally built tool.
-const pinMetadata = "# stackvault-metadata v1\ncreated_at\t2026-11-01T00:00:00Z\nstack\tweb\n" +
+const pinMetadata = "# stackbelay-metadata v1\ncreated_at\t2026-11-01T00:00:00Z\nstack\tweb\n" +
 	"app\trunning\tnextcloud:29\t" + testDigest + "\t-\t-\n" +
 	"db\trunning\tpostgres:16\t" + dbDigest + "\t-\t-\n" +
 	"tool\trunning\t-\t-\t-\t-\n"

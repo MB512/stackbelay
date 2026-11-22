@@ -18,8 +18,8 @@ cd "$(dirname "$0")/.."
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/stackbelay-e2e-self.XXXXXX")"
 ROOT="$WORK/stacks"
 # The stack name is the directory name and, as for every stack, also the
-# compose project name (StackVault runs compose like a user in that
-# directory). It must not collide with a real StackVault stack on this host.
+# compose project name (StackBelay runs compose like a user in that
+# directory). It must not collide with a real StackBelay stack on this host.
 NAME=e2eself-manager
 SELF="$ROOT/$NAME"
 REPO="$ROOT/_repo/$NAME" # not a stack (no compose file)

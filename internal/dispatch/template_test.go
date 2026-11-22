@@ -17,33 +17,33 @@ func TestNewTemplate(t *testing.T) {
 
 	// /data as a bind mount from the stack folder.
 	tpl, err := NewTemplate(cfg, &docker.SelfInfo{ImageID: "sha256:self", Mounts: []docker.Mount{
-		stacksMount, socket, {Type: "bind", Source: "/home/docker/stackvault/data", Target: "/data"},
+		stacksMount, socket, {Type: "bind", Source: "/home/docker/stackbelay/data", Target: "/data"},
 	}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if tpl.Image != "sha256:self" || tpl.Socket != "/run/user/1000/docker.sock" ||
-		tpl.Jobs != (docker.Mount{Type: "bind", Source: "/home/docker/stackvault/data/jobs"}) {
+		tpl.Jobs != (docker.Mount{Type: "bind", Source: "/home/docker/stackbelay/data/jobs"}) {
 		t.Fatalf("bind: %+v", tpl)
 	}
 
 	// /data as a named volume; an explicit worker image wins.
 	cfg.WorkerImage = "ghcr.io/x/stackbelay:1"
 	tpl, err = NewTemplate(cfg, &docker.SelfInfo{ImageID: "sha256:self", Mounts: []docker.Mount{
-		stacksMount, {Type: "volume", Source: "stackvault_data", Target: "/data"},
+		stacksMount, {Type: "volume", Source: "stackbelay_data", Target: "/data"},
 	}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if tpl.Image != "ghcr.io/x/stackbelay:1" || tpl.Socket != "/var/run/docker.sock" ||
-		tpl.Jobs != (docker.Mount{Type: "volume", Source: "stackvault_data", SubPath: "jobs"}) {
+		tpl.Jobs != (docker.Mount{Type: "volume", Source: "stackbelay_data", SubPath: "jobs"}) {
 		t.Fatalf("volume: %+v", tpl)
 	}
 	cs, err := tpl.Spec("01ABCDEFGHJKMNPQRSTVWXYZ01", restic.Repo{Location: "/r", Env: []string{"RESTIC_PASSWORD=pw"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cs.Mounts[2] != (docker.Mount{Type: "volume", Source: "stackvault_data", Target: "/job", SubPath: "jobs/01ABCDEFGHJKMNPQRSTVWXYZ01"}) {
+	if cs.Mounts[2] != (docker.Mount{Type: "volume", Source: "stackbelay_data", Target: "/job", SubPath: "jobs/01ABCDEFGHJKMNPQRSTVWXYZ01"}) {
 		t.Fatalf("job mount: %+v", cs.Mounts[2])
 	}
 	if cs.Env["STACKBELAY_JOB_TIMEOUT"] != "72h0m0s" || cs.Env["STACKBELAY_DOWNTIME_TIMEOUT"] != "1h30m0s" {
@@ -93,14 +93,14 @@ func TestSpecRejectsUnknownRepoVariables(t *testing.T) {
 }
 
 func TestJobsDirInStack(t *testing.T) {
-	tpl := Template{StacksRoot: "/home/docker", Jobs: docker.Mount{Type: "bind", Source: "/home/docker/stackvault/data/jobs"}}
-	for stack, want := range map[string]string{"stackvault": "data/jobs", "web": "", "stack": ""} {
+	tpl := Template{StacksRoot: "/home/docker", Jobs: docker.Mount{Type: "bind", Source: "/home/docker/stackbelay/data/jobs"}}
+	for stack, want := range map[string]string{"stackbelay": "data/jobs", "web": "", "stack": ""} {
 		if got := tpl.JobsDirInStack(stack); got != want {
 			t.Errorf("JobsDirInStack(%q) = %q, want %q", stack, got, want)
 		}
 	}
-	tpl.Jobs = docker.Mount{Type: "volume", Source: "stackvault_data", SubPath: "jobs"}
-	if got := tpl.JobsDirInStack("stackvault"); got != "" {
+	tpl.Jobs = docker.Mount{Type: "volume", Source: "stackbelay_data", SubPath: "jobs"}
+	if got := tpl.JobsDirInStack("stackbelay"); got != "" {
 		t.Errorf("volume: %q", got)
 	}
 }
@@ -109,12 +109,12 @@ func TestOwnStack(t *testing.T) {
 	for _, tt := range []struct {
 		root, dir, want string
 	}{
-		{"/home/docker", "/home/docker/stackvault", "stackvault"},
-		{"/home/docker/", "/home/docker/stackvault/", "stackvault"},
+		{"/home/docker", "/home/docker/stackbelay", "stackbelay"},
+		{"/home/docker/", "/home/docker/stackbelay/", "stackbelay"},
 		{"/home/docker", "/home/docker/a/b", ""},     // not directly under STACKS_ROOT
-		{"/home/docker", "/srv/stackvault", ""},      // elsewhere
+		{"/home/docker", "/srv/stackbelay", ""},      // elsewhere
 		{"/home/docker", "/home/docker/.hidden", ""}, // not a valid stack name
-		{"/home/docker", "stackvault", ""},           // relative
+		{"/home/docker", "stackbelay", ""},           // relative
 		{"/home/docker", "", ""},                     // not started by compose
 	} {
 		if got := ownStack(tt.root, tt.dir); got != tt.want {

@@ -8,7 +8,7 @@ cannot turn the app into a root shell.
 
 Administrators are trusted with root-equivalent power: they can edit compose
 files and, if the operator enables it (`STACKBELAY_ENABLE_SHELL`), open
-shells in containers, including StackVault's own container with the Docker
+shells in containers, including StackBelay's own container with the Docker
 socket. Protecting admin accounts (strong passwords, few admins, TLS) is
 therefore part of protecting the host.
 
@@ -100,7 +100,7 @@ attackers reaching the UI, a leaked database file.
    `AZURE_ACCOUNT_SAS`, `GOOGLE_ACCESS_TOKEN`). User names, key ids, regions
    and paths are not secret and not redacted (redacting a user name "demo"
    would also hide the stack name "demo-web").
-   Registry credentials (issue #14) are not stored by StackVault: the
+   Registry credentials (issue #14) are not stored by StackBelay: the
    operator mounts a docker client configuration into the manager, which
    passes that mount read-only to the workers; it never appears in job
    specs, logs or the database.

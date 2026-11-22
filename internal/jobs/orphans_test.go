@@ -129,7 +129,7 @@ func TestOrphansAreLeftAlone(t *testing.T) {
 // restore does not try to start it.
 func TestRestoreSkipsRecordedOrphan(t *testing.T) {
 	e := restoreEnv(t)
-	e.restic.restoreFiles[MetadataFile] = "# stackvault-metadata v1\ncreated_at\t2026-11-01T00:00:00Z\nstack\tweb\n" +
+	e.restic.restoreFiles[MetadataFile] = "# stackbelay-metadata v1\ncreated_at\t2026-11-01T00:00:00Z\nstack\tweb\n" +
 		"app\trunning\t-\t-\t-\t-\nshell\trunning\t-\t-\t-\t-\n"
 	if _, err := e.p.Restore(context.Background(), e.stack, RestoreOptions{SnapshotID: snapID[:8]}); err != nil {
 		t.Fatal(err)

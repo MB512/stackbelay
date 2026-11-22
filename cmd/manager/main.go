@@ -1,4 +1,4 @@
-// Command manager runs the StackVault web UI, the scheduler and job
+// Command manager runs the StackBelay web UI, the scheduler and job
 // creation. It never runs backups itself; it starts worker containers.
 //
 // Configuration is read from the environment (see internal/config).
