@@ -5,6 +5,7 @@ import (
 	"context"
 	"io"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -99,7 +100,7 @@ func TestRunServesAndShutsDown(t *testing.T) {
 		!strings.Contains(out, `INITIAL ADMIN PASSWORD (user "admin")`) {
 		t.Fatalf("unexpected log:\n%s", out)
 	}
-	if _, err := os.Stat(filepath.Join(data, "stackvault.db")); err != nil {
+	if _, err := os.Stat(filepath.Join(data, "stackbelay.db")); err != nil {
 		t.Fatalf("database not created: %v", err)
 	}
 }
@@ -110,4 +111,57 @@ func TestRunConfigError(t *testing.T) {
 	if code != 2 || !strings.Contains(out.String(), "STACKS_ROOT") {
 		t.Fatalf("code %d, output %q", code, out.String())
 	}
+}
+
+func TestRenameLegacyDB(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	write := func(t *testing.T, path, content string) {
+		t.Helper()
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	read := func(path string) string {
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return "<missing>"
+		}
+		return string(b)
+	}
+
+	t.Run("only the old file", func(t *testing.T) {
+		dir := t.TempDir()
+		oldPath, newPath := filepath.Join(dir, "stackvault.db"), filepath.Join(dir, "stackbelay.db")
+		write(t, oldPath, "db")
+		write(t, oldPath+"-wal", "wal")
+		if err := renameLegacyDB(oldPath, newPath, log); err != nil {
+			t.Fatal(err)
+		}
+		if read(newPath) != "db" || read(newPath+"-wal") != "wal" ||
+			read(oldPath) != "<missing>" || read(oldPath+"-wal") != "<missing>" {
+			t.Fatal("database and write-ahead log not renamed")
+		}
+	})
+	t.Run("both files", func(t *testing.T) {
+		dir := t.TempDir()
+		oldPath, newPath := filepath.Join(dir, "stackvault.db"), filepath.Join(dir, "stackbelay.db")
+		write(t, oldPath, "old")
+		write(t, newPath, "new")
+		if err := renameLegacyDB(oldPath, newPath, log); err != nil {
+			t.Fatal(err)
+		}
+		if read(newPath) != "new" || read(oldPath) != "old" {
+			t.Fatal("files changed")
+		}
+	})
+	t.Run("no old file", func(t *testing.T) {
+		dir := t.TempDir()
+		newPath := filepath.Join(dir, "stackbelay.db")
+		if err := renameLegacyDB(filepath.Join(dir, "stackvault.db"), newPath, log); err != nil {
+			t.Fatal(err)
+		}
+		if read(newPath) != "<missing>" {
+			t.Fatal("new file created")
+		}
+	})
 }

@@ -73,7 +73,11 @@ type Manager struct {
 func (m Manager) SecretKeyPath() string { return filepath.Join(m.DataDir, secrets.KeyFileName) }
 
 // DBPath is the SQLite database file.
-func (m Manager) DBPath() string { return filepath.Join(m.DataDir, "stackvault.db") }
+func (m Manager) DBPath() string { return filepath.Join(m.DataDir, "stackbelay.db") }
+
+// LegacyDBPath is the database file of StackVault 0.4 and older (issue
+// #44). The manager renames it to DBPath on startup.
+func (m Manager) LegacyDBPath() string { return filepath.Join(m.DataDir, "stackvault.db") }
 
 // JobsDir holds one directory per job (spec, status, log).
 func (m Manager) JobsDir() string { return filepath.Join(m.DataDir, "jobs") }

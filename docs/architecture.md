@@ -95,8 +95,10 @@ The key encrypts repository credentials in the database (AES-256-GCM, see
 
 The format is the same everywhere: base64 of 32 bytes, surrounding
 whitespace ignored. The data-dir key file is **generated only on a fresh
-install**: no key source set, `secret.key` missing **and** `stackvault.db`
-missing. It is created with `O_EXCL` and mode 0600, file and directory are
+install**: no key source set, `secret.key` missing **and** `stackbelay.db`
+missing. Before this check the manager renames the database file of 0.4 and
+older (`stackvault.db`, with its SQLite side files) to `stackbelay.db` if
+only the old file exists (issue #44). It is created with `O_EXCL` and mode 0600, file and directory are
 fsynced before the key is used, and the path (never the key) is logged once.
 If the database exists but no key is found, the manager refuses to start: a
 new key would silently make the stored credentials unreadable. A key file
