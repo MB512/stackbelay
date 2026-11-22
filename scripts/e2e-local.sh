@@ -139,7 +139,7 @@ compgen -G "$DIR.*" >/dev/null && fail "a sibling directory was created: $(ls -d
 pass "restored in place (extra file deleted, same directory, no sibling directories)"
 [[ "$(stat -c %a "$DIR")" == 750 ]] || fail "stack dir mode not restored: $(stat -c %a "$DIR")"
 pass "stack directory mode restored (750)"
-[[ ! -e "$DIR/.stackvault-restore-incomplete" ]] || fail "incomplete-restore marker left after a complete restore"
+[[ ! -e "$DIR/.stackbelay-restore-incomplete" ]] || fail "incomplete-restore marker left after a complete restore"
 [[ -n "$SAFETY" ]] && restic snapshots --json --tag pre-restore | grep -q "$SAFETY" || fail "no pre-restore snapshot"
 pass "pre-restore safety snapshot $SAFETY"
 [[ "$(state app)" == running ]] || fail "app not running after restore"
@@ -155,7 +155,7 @@ step "an incomplete restore blocks other jobs and is continued by the next resto
 # What a restore that stopped half-way leaves behind (timeout, network error).
 echo v3 >"$DIR/data/value.txt"
 docker compose --project-directory "$DIR" stop >/dev/null 2>&1
-: >"$DIR/.stackvault-restore-incomplete"
+: >"$DIR/.stackbelay-restore-incomplete"
 if ./bin/worker backup "$STACK" 2>"$WORK/blocked.log"; then fail "backup of a partly restored stack succeeded"; fi
 grep -q 'did not complete' "$WORK/blocked.log" || { cat "$WORK/blocked.log"; fail "unexpected error for the blocked backup"; }
 if ./bin/worker start "$STACK" 2>"$WORK/blocked.log"; then fail "start of a partly restored stack succeeded"; fi
@@ -163,7 +163,7 @@ if ./bin/worker start "$STACK" 2>"$WORK/blocked.log"; then fail "start of a part
 pass "backup and start refused while the restore is incomplete"
 ./bin/worker restore "$STACK" "${SNAP:0:8}" 2>"$WORK/continue.log" || { cat "$WORK/continue.log"; fail "continuing restore failed"; }
 [[ -z "$(log_field "$WORK/continue.log" "job succeeded" safety_snapshot)" ]] || fail "safety snapshot of a partly restored directory"
-[[ "$(cat "$DIR/data/value.txt")" == v1 && ! -e "$DIR/.stackvault-restore-incomplete" ]] || fail "restore not continued"
+[[ "$(cat "$DIR/data/value.txt")" == v1 && ! -e "$DIR/.stackbelay-restore-incomplete" ]] || fail "restore not continued"
 [[ "$(state app)" == running ]] || fail "app not running after the continued restore"
 pass "restore continued (no safety snapshot, marker removed, app running)"
 

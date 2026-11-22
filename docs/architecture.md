@@ -350,10 +350,11 @@ where it stopped when it is run again.
    (its final snapshot was taken minutes before) and when the last
    restore did not complete (see below: it would only save a partly
    restored directory).
-4. **Restore**: create the marker file `.stackvault-restore-incomplete`
-   in the stack directory, then
+4. **Restore**: create the marker file `.stackbelay-restore-incomplete`
+   in the stack directory (the marker `.stackvault-restore-incomplete` of
+   0.4 and older counts as well and is removed with it, issue #44), then
    `restic restore <snap>:<snapshot path> --target <root>/<stack> --delete
-   --overwrite if-changed --exclude /.stackvault-restore-incomplete
+   --overwrite if-changed --exclude /.stackbelay-restore-incomplete
    [--exclude /<carry_over_jobs>]` (restic >= 0.17). Files with the same
    size and modification time as in the snapshot count as unchanged and
    are neither read nor written; the others are verified and rewritten

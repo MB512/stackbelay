@@ -212,26 +212,31 @@ func TestRestoreSnapshotWithoutComposeFile(t *testing.T) {
 // A restore into a directory whose last restore did not complete continues
 // it: no safety snapshot of the partly restored directory, and the marker
 // is removed once the restore completes.
+// The marker of StackVault 0.4 and older counts too (issue #44).
 func TestRestoreContinuesIncompleteRestore(t *testing.T) {
-	e := restoreEnv(t)
-	if err := os.WriteFile(filepath.Join(e.stack.Dir, stacks.IncompleteMarker), nil, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	res, err := e.p.Restore(context.Background(), e.stack, restoreOpts())
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, c := range e.calls.list() {
-		if strings.Contains(c, TagPreRestore) {
-			t.Fatalf("safety snapshot of a partly restored directory: %v", e.calls.list())
-		}
-	}
-	if res.SafetySnapshot != "" {
-		t.Errorf("result %+v", res)
-	}
-	assertMarker(t, e.stack.Dir, false)
-	if got := readData(t, e.stack.Dir); got != "restored" {
-		t.Errorf("stack dir has %q", got)
+	for _, marker := range []string{stacks.IncompleteMarker, stacks.LegacyIncompleteMarker} {
+		t.Run(marker, func(t *testing.T) {
+			e := restoreEnv(t)
+			if err := os.WriteFile(filepath.Join(e.stack.Dir, marker), nil, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			res, err := e.p.Restore(context.Background(), e.stack, restoreOpts())
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, c := range e.calls.list() {
+				if strings.Contains(c, TagPreRestore) {
+					t.Fatalf("safety snapshot of a partly restored directory: %v", e.calls.list())
+				}
+			}
+			if res.SafetySnapshot != "" {
+				t.Errorf("result %+v", res)
+			}
+			assertMarker(t, e.stack.Dir, false)
+			if got := readData(t, e.stack.Dir); got != "restored" {
+				t.Errorf("stack dir has %q", got)
+			}
+		})
 	}
 }
 

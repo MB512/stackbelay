@@ -139,15 +139,15 @@ func TestCLIRestoreInPlace(t *testing.T) {
 	write("data/new-file", "created after the snapshot")
 	write("data/jobs/J1/log.txt", "current log")
 	write("data/jobs/J2/status.json", "{}")
-	write(".stackvault-restore-incomplete", "")
-	if err := c.Restore(ctx, repo, id, stack, stack, []string{"data/jobs", ".stackvault-restore-incomplete"}); err != nil {
+	write(".stackbelay-restore-incomplete", "")
+	if err := c.Restore(ctx, repo, id, stack, stack, []string{"data/jobs", ".stackbelay-restore-incomplete"}); err != nil {
 		t.Fatal(err)
 	}
 	for rel, want := range map[string]string{
 		"data/db":                        "v1",
 		"data/jobs/J1/log.txt":           "current log", // excluded: untouched
 		"data/jobs/J2/status.json":       "{}",          // excluded: not deleted
-		".stackvault-restore-incomplete": "",            // excluded file: not deleted
+		".stackbelay-restore-incomplete": "",            // excluded file: not deleted
 	} {
 		if got, err := os.ReadFile(filepath.Join(stack, rel)); err != nil || string(got) != want {
 			t.Errorf("%s: %q, %v; want %q", rel, got, err, want)

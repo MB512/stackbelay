@@ -281,6 +281,10 @@ func (p *Pipeline) applyDirMetadata(ctx context.Context, log *slog.Logger, snaps
 	if err := os.Remove(marker); err != nil {
 		return fmt.Errorf("marking the restore as complete: %w", err)
 	}
+	// Left by an incomplete restore of StackVault 0.4 or older (issue #44).
+	if err := os.Remove(filepath.Join(dir, stacks.LegacyIncompleteMarker)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("marking the restore as complete: %w", err)
+	}
 	if err := os.Chtimes(dir, node.ModTime, node.ModTime); err != nil {
 		log.Warn("could not restore mtime of stack directory", "error", err)
 	}

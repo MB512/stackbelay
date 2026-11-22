@@ -123,7 +123,7 @@ has_msg "$WORK/update2.log" "rolled back to the state before the update" || { ca
 has_msg "$WORK/update2.log" "image pinned" || fail "rollback did not pin the previous image"
 [[ "$(stat -c %i "$DIR")" == "$inode" ]] || fail "stack directory replaced instead of restored in place"
 compgen -G "$ROOT/$STACK.*" >/dev/null && fail "a sibling directory was created by the rollback"
-[[ ! -e "$DIR/.stackvault-restore-incomplete" ]] || fail "incomplete-restore marker left after the rollback"
+[[ ! -e "$DIR/.stackbelay-restore-incomplete" ]] || fail "incomplete-restore marker left after the rollback"
 pass "rolled back in place (data v2, image pinned, same directory)"
 
 step "3. update without backup fails: no rollback"

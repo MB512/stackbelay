@@ -145,7 +145,7 @@ S="$(job_state "$BACKUP")"
 [[ "$S" == succeeded ]] || fail "self-backup shown as '$S' after the restore"
 pass "self-backup still shown as succeeded"
 compgen -G "$ROOT/$NAME.*" >/dev/null && fail "a sibling directory was created"
-[[ ! -e "$ROOT/$NAME/.stackvault-restore-incomplete" ]] || fail "incomplete-restore marker left"
+[[ ! -e "$ROOT/$NAME/.stackbelay-restore-incomplete" ]] || fail "incomplete-restore marker left"
 pass "restored in place (no sibling directories, no marker)"
 sleep 5
 IDS="$(job_ids)"

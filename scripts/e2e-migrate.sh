@@ -85,7 +85,7 @@ step "host B imports the stack (first restore creates the directory, not started
 on_b restore --import --no-start --limit-download 102400 "$STACK" "${SNAP1:0:8}" 2>"$WORK/import.log" ||
 	{ cat "$WORK/import.log"; fail "import failed"; }
 [[ "$(cat "$DIR_B/data/value.txt")" == v1 ]] || fail "imported data wrong"
-[[ ! -e "$DIR_B/.stackvault-restore-incomplete" ]] || fail "incomplete-restore marker left after a complete import"
+[[ ! -e "$DIR_B/.stackbelay-restore-incomplete" ]] || fail "incomplete-restore marker left after a complete import"
 grep -q '"msg":"stopping stack"' "$WORK/import.log" && fail "an import stopped something"
 grep -q 'pre-restore' "$WORK/import.log" && fail "an import took a safety snapshot"
 [[ -z "$(docker compose --project-name "$PROJECT" ps --quiet)" ]] || fail "imported stack was started"

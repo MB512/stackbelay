@@ -30,7 +30,7 @@ attackers reaching the UI, a leaked database file.
    The first restore of an imported stack creates its directory only via
    `stacks.ImportTarget` (valid name; no directory, or a real directory,
    not a symlink, left by an incomplete import with the marker
-   `.stackvault-restore-incomplete`; `mkdir` never replaces anything that
+   `.stackbelay-restore-incomplete`; `mkdir` never replaces anything that
    appeared in the meantime). Between the two steps of an import the repository
    credentials stay in the manager's memory (15 minutes, bound to the
    admin's user id, used once), never in the page. Snapshot IDs
@@ -142,7 +142,7 @@ attackers reaching the UI, a leaked database file.
     safety snapshot taken before, which nobody can skip (only an automatic
     rollback restores without one: its snapshot was taken just before). A
     restore that fails half-way leaves the stack stopped and marked as
-    incomplete (`.stackvault-restore-incomplete`) instead of starting a partly
+    incomplete (`.stackbelay-restore-incomplete`) instead of starting a partly
     restored one; until a restore completes, no backup, update, compose
     change or start runs on it, so partly restored data is neither started
     nor recorded as a valid snapshot.
