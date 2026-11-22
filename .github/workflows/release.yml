@@ -1,6 +1,6 @@
 # Release: pushing a tag "v<major>.<minor>.<patch>" runs the checks, then
 # builds the image for linux/amd64 and linux/arm64 and pushes it to
-# ghcr.io/mb512/stackvault with the tags <major>.<minor>.<patch>,
+# ghcr.io/mb512/stackbelay with the tags <major>.<minor>.<patch>,
 # <major>.<minor> and latest.
 #
 #   git tag -a v0.1.0 -m "StackVault 0.1.0" && git push origin v0.1.0
@@ -35,7 +35,7 @@ jobs:
       - id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/mb512/stackvault
+          images: ghcr.io/mb512/stackbelay
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}

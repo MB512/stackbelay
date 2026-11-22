@@ -15,7 +15,7 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/stackvault-e2e-migrate.XXXXXX")"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/stackbelay-e2e-migrate.XXXXXX")"
 ROOT_A="$WORK/host-a/stacks"
 ROOT_B="$WORK/host-b/srv" # another path: only the stack name must match
 STACK=e2e-move

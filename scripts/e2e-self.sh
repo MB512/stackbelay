@@ -15,7 +15,7 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/stackvault-e2e-self.XXXXXX")"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/stackbelay-e2e-self.XXXXXX")"
 ROOT="$WORK/stacks"
 # The stack name is the directory name and, as for every stack, also the
 # compose project name (StackVault runs compose like a user in that
@@ -23,7 +23,7 @@ ROOT="$WORK/stacks"
 NAME=e2eself-manager
 SELF="$ROOT/$NAME"
 REPO="$ROOT/_repo/$NAME" # not a stack (no compose file)
-IMAGE=stackvault-e2e:latest
+IMAGE=stackbelay-e2e:latest
 PORT="${PORT:-18100}"
 B="http://127.0.0.1:$PORT"
 JAR="$WORK/cookies"

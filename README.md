@@ -154,7 +154,7 @@ Trade-off: whoever gets a copy of the StackVault stack's backup (and its
 repository password) now also has the key that decrypts the stored
 repository passwords. To keep the 0.1 behaviour, change nothing.
 
-The image is `ghcr.io/mb512/stackvault` (linux/amd64, linux/arm64). It
+The image is `ghcr.io/mb512/stackbelay` (linux/amd64, linux/arm64). It
 contains the manager (web UI, scheduler) and the worker; the manager starts
 its workers from its own image.
 
@@ -232,7 +232,7 @@ go build ./...
 go vet ./...
 go test ./... -race
 golangci-lint run
-docker build -f deploy/Dockerfile -t stackvault:dev .
+docker build -f deploy/Dockerfile -t stackbelay:dev .
 scripts/e2e-local.sh      # worker pipeline against the local Docker daemon
 scripts/e2e-dispatch.sh   # manager + worker containers through the web UI
 scripts/e2e-self.sh       # StackVault backs up and restores itself

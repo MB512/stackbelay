@@ -28,14 +28,14 @@ func TestNewTemplate(t *testing.T) {
 	}
 
 	// /data as a named volume; an explicit worker image wins.
-	cfg.WorkerImage = "ghcr.io/x/stackvault:1"
+	cfg.WorkerImage = "ghcr.io/x/stackbelay:1"
 	tpl, err = NewTemplate(cfg, &docker.SelfInfo{ImageID: "sha256:self", Mounts: []docker.Mount{
 		stacksMount, {Type: "volume", Source: "stackvault_data", Target: "/data"},
 	}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tpl.Image != "ghcr.io/x/stackvault:1" || tpl.Socket != "/var/run/docker.sock" ||
+	if tpl.Image != "ghcr.io/x/stackbelay:1" || tpl.Socket != "/var/run/docker.sock" ||
 		tpl.Jobs != (docker.Mount{Type: "volume", Source: "stackvault_data", SubPath: "jobs"}) {
 		t.Fatalf("volume: %+v", tpl)
 	}

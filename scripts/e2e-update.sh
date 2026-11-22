@@ -23,7 +23,7 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/stackvault-e2e-update.XXXXXX")"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/stackbelay-e2e-update.XXXXXX")"
 ROOT="$WORK/stacks"
 STACK=e2e-update
 DIR="$ROOT/$STACK"

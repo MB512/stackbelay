@@ -28,7 +28,7 @@ RUN apk add --no-cache restic \
 COPY --from=build /out/manager /out/worker /app/
 ENV STACKVAULT_DATA_DIR=/data
 EXPOSE 8080
-LABEL org.opencontainers.image.title="StackVault" \
+LABEL org.opencontainers.image.title="StackBelay" \
       org.opencontainers.image.description="Backs up Docker Compose stacks to restic repositories" \
       org.opencontainers.image.source="https://github.com/MB512/stackbelay" \
       org.opencontainers.image.licenses="MIT" \

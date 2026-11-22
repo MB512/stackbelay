@@ -15,12 +15,12 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/stackvault-e2e-dispatch.XXXXXX")"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/stackbelay-e2e-dispatch.XXXXXX")"
 ROOT="$WORK/stacks"
 STACK=e2edispatch
 DIR="$ROOT/$STACK"
 REPO="$ROOT/_repo/$STACK" # not a stack (no compose file); visible to manager and worker
-IMAGE=stackvault-e2e:latest
+IMAGE=stackbelay-e2e:latest
 PORT="${PORT:-18090}"
 B="http://127.0.0.1:$PORT"
 JAR="$WORK/cookies"

@@ -138,7 +138,7 @@ func (e *env) newDispatcher() *Dispatcher {
 	return &Dispatcher{
 		Store: e.st, Docker: e.docker, JobsDir: e.jobsDir, Snapshots: e.refresh, MaxRunning: 2, Now: e.now,
 		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
-		Template: Template{Image: "stackvault:test", StacksRoot: "/home/docker", Socket: "/var/run/docker.sock",
+		Template: Template{Image: "stackbelay:test", StacksRoot: "/home/docker", Socket: "/var/run/docker.sock",
 			Hostname: "host-a", Jobs: docker.Mount{Type: "bind", Source: "/srv/stackvault/data/jobs"}},
 	}
 }
@@ -200,7 +200,7 @@ func TestDispatchLifecycle(t *testing.T) {
 
 	// The worker container follows the template; credentials only as env.
 	cs := e.docker.started[0]
-	if cs.Name != ContainerName(b1.ID) || cs.Image != "stackvault:test" || cs.Labels[LabelJob] != b1.ID ||
+	if cs.Name != ContainerName(b1.ID) || cs.Image != "stackbelay:test" || cs.Labels[LabelJob] != b1.ID ||
 		cs.Env["RESTIC_REPOSITORY"] != "rest:https://backup.example/web" || cs.Env["RESTIC_PASSWORD"] != "repo-pw-web" ||
 		cs.Env["RESTIC_REST_PASSWORD"] != "rest-pw-web" || cs.Env["STACKS_ROOT"] != "/home/docker" ||
 		cs.Env["STACKVAULT_HOSTNAME"] != "host-a" || strings.Join(cs.Cmd, " ") != "/app/worker run /job" {

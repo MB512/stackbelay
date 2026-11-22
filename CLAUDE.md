@@ -74,7 +74,7 @@ go build ./...
 go vet ./...
 go test ./... -race
 golangci-lint run
-docker build -f deploy/Dockerfile -t stackvault:dev .
+docker build -f deploy/Dockerfile -t stackbelay:dev .
 ```
 
 Run `go vet` and `go test ./... -race` before every commit.

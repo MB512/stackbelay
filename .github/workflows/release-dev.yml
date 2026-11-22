@@ -1,7 +1,7 @@
 # Dev build: started by hand only (GitHub "Actions" tab -> release-dev ->
 # "Run workflow", or `gh workflow run release-dev.yml`). Runs the checks,
 # then builds the image for linux/amd64 and linux/arm64 from the chosen
-# branch (default master) and pushes it to ghcr.io/mb512/stackvault:dev.
+# branch (default master) and pushes it to ghcr.io/mb512/stackbelay:dev.
 #
 # The "dev" tag floats: every run moves it to the newest build. No git tag,
 # no version number, no GitHub release. The binaries report the version
@@ -43,7 +43,7 @@ jobs:
       - id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/mb512/stackvault
+          images: ghcr.io/mb512/stackbelay
           tags: |
             type=raw,value=dev
           labels: |
