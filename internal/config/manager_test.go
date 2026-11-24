@@ -26,8 +26,8 @@ func TestLoadManagerDefaults(t *testing.T) {
 		c.DowntimeTimeout != time.Hour || c.JobLogRetention != 90*24*time.Hour {
 		t.Fatalf("unexpected config %+v", c)
 	}
-	if c.DBPath() != "/data/stackbelay.db" || c.LegacyDBPath() != "/data/stackvault.db" || c.JobsDir() != "/data/jobs" {
-		t.Fatalf("paths: %s %s %s", c.DBPath(), c.LegacyDBPath(), c.JobsDir())
+	if c.DBPath() != "/data/stackbelay.db" || c.JobsDir() != "/data/jobs" {
+		t.Fatalf("paths: %s %s", c.DBPath(), c.JobsDir())
 	}
 }
 

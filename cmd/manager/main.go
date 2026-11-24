@@ -205,11 +205,6 @@ func openStore(ctx context.Context, cfg config.Manager, log *slog.Logger) (*stor
 	if err := os.MkdirAll(cfg.JobsDir(), 0o700); err != nil {
 		return nil, fmt.Errorf("creating data directories: %w", err)
 	}
-	// Before secretKey: it decides from the database file whether this is
-	// a fresh install.
-	if err := renameLegacyDB(cfg.LegacyDBPath(), cfg.DBPath(), log); err != nil {
-		return nil, err
-	}
 	key, err := secretKey(cfg, log)
 	if err != nil {
 		return nil, err
@@ -226,46 +221,6 @@ func openStore(ctx context.Context, cfg config.Manager, log *slog.Logger) (*stor
 		return nil, fmt.Errorf("opening database %s: %w", cfg.DBPath(), err)
 	}
 	return st, nil
-}
-
-// sqliteSidecars are the files SQLite keeps next to a database file.
-var sqliteSidecars = []string{"-wal", "-shm", "-journal"}
-
-// renameLegacyDB renames the database file of StackVault 0.4 and older
-// (stackvault.db) to its new name (issue #44), if only the old file
-// exists. The write-ahead log and the other SQLite side files are renamed
-// first, so a crash in between leaves a state the next start completes.
-// If both files exist, the new one is used and the old one is left alone.
-func renameLegacyDB(oldPath, newPath string, log *slog.Logger) error {
-	_, err := os.Lstat(oldPath)
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("checking the old database file: %w", err)
-	}
-	_, err = os.Lstat(newPath)
-	if err == nil {
-		log.Warn("both the old and the new database file exist; using the new one, the old one is not used",
-			"old", oldPath, "new", newPath)
-		return nil
-	}
-	if !errors.Is(err, fs.ErrNotExist) {
-		return fmt.Errorf("checking the database file: %w", err)
-	}
-	for _, suffix := range sqliteSidecars {
-		if _, err := os.Lstat(oldPath + suffix); err != nil {
-			continue
-		}
-		if err := os.Rename(oldPath+suffix, newPath+suffix); err != nil {
-			return fmt.Errorf("renaming the old database file: %w", err)
-		}
-	}
-	if err := os.Rename(oldPath, newPath); err != nil {
-		return fmt.Errorf("renaming the old database file: %w", err)
-	}
-	log.Info("renamed the database file (StackVault was renamed to StackBelay)", "old", oldPath, "new", newPath)
-	return nil
 }
 
 // secretKey returns the key that encrypts repository credentials: from
