@@ -17,9 +17,10 @@ const MetadataFile = "metadata.txt"
 
 const (
 	metadataHeader = "# stackbelay-metadata v1"
-	// metadataHeaderLegacy is written by StackVault 0.4 and older (issue
-	// #44); snapshots made by them keep it, so the parser accepts it too.
-	// The format is the same.
+	// metadataHeaderLegacy was written under StackVault, the project's
+	// early working title (issue #44). Snapshots in append-only
+	// repositories keep it for good, so the parser accepts it too. The
+	// format is the same.
 	metadataHeaderLegacy = "# stackvault-metadata v1"
 	metadataColumns      = "# service\tstate\timage_ref\trepo_digest\timage_id\tcontainer_id"
 	metadataMaxBytes     = 1 << 20 // 1 MiB; a real file is a few KiB at most

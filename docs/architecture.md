@@ -96,9 +96,7 @@ The key encrypts repository credentials in the database (AES-256-GCM, see
 The format is the same everywhere: base64 of 32 bytes, surrounding
 whitespace ignored. The data-dir key file is **generated only on a fresh
 install**: no key source set, `secret.key` missing **and** `stackbelay.db`
-missing. Before this check the manager renames the database file of 0.4 and
-older (`stackvault.db`, with its SQLite side files) to `stackbelay.db` if
-only the old file exists (issue #44). It is created with `O_EXCL` and mode 0600, file and directory are
+missing. It is created with `O_EXCL` and mode 0600, file and directory are
 fsynced before the key is used, and the path (never the key) is logged once.
 If the database exists but no key is found, the manager refuses to start: a
 new key would silently make the stored credentials unreadable. A key file
@@ -108,17 +106,11 @@ readable by group or others is accepted with a warning.
 the `meta` row `key_check` (the text `key check` sealed with associated
 data `key-check`). If it does not decrypt, startup is
 refused with "the secret key does not match this database". A database
-from 0.1 has no such row: if it has a repository, that secret must decrypt
-with its own associated data and the row is written; if it fails, startup is
-refused. Without repositories nothing was encrypted yet and the row is
-written right away.
-
-StackVault 0.4 and older used associated data with the product name in it
-(issue #44). If the key check or, for a 0.1 database, the repository secret
-opens only with the old values, the key is right: `store.Open` then seals
-the key check and every repository secret again with the new values, in one
-transaction (`internal/store/legacyaad.go`). A wrong key opens neither and
-nothing is written. A secret that opens with neither value is left as it is.
+without that row (a new one) gets it written; if it already has a
+repository, that secret must decrypt with its own associated data first,
+otherwise startup is refused and nothing is written. The plaintext and the
+associated data contain no product name, so a rename of the project never
+touches the stored ciphertexts (issue #44).
 
 **Backups.** With the data directory inside the manager's stack (as in
 `deploy/compose.example.yml`), `secret.key` is part of that stack's
@@ -268,13 +260,6 @@ container (development) paths are used as they are and
 environment (`PATH`, `HOME`, `DOCKER_*`) plus the job's credentials, which
 `--env NAME` forwards by name.
 
-StackVault 0.4 and older named the workers `stackvault-job-<id>`, labelled
-them `stackvault.*` and used the cache volume `stackvault-restic-cache`
-(issue #44). A worker started before the update can still run afterwards
-(it may be the job that updated StackBelay's own stack), so the dispatcher
-looks a job's container up under the old name if no container has the new
-one. The old cache volume is no longer used; the new one starts empty.
-
 **Orphans** (issue #26): `docker.CLI.Services` lists the services of the
 compose file and the project's containers; a container whose service is
 no longer in the file (removed from it while its container existed) is
@@ -343,9 +328,10 @@ web        exited   -                    -                                sha256
   and to detect whether the exact image is still present locally.
 - Images built locally (`build:`) have no repo digest: write `-`.
 - Services without a container (never created) are recorded with `-`.
-- StackVault 0.4 and older wrote the header `# stackvault-metadata v1`
-  (issue #44). The format is the same; the restore accepts both headers,
-  so snapshots made before the rename restore unchanged.
+- Backups made under StackVault, the project's early working title, wrote
+  the header `# stackvault-metadata v1` (issue #44). The format is the
+  same; such snapshots stay in append-only repositories for good, so the
+  restore accepts both headers.
 
 ## Restore pipeline
 
@@ -365,8 +351,7 @@ where it stopped when it is run again.
    restore did not complete (see below: it would only save a partly
    restored directory).
 4. **Restore**: create the marker file `.stackbelay-restore-incomplete`
-   in the stack directory (the marker `.stackvault-restore-incomplete` of
-   0.4 and older counts as well and is removed with it, issue #44), then
+   in the stack directory, then
    `restic restore <snap>:<snapshot path> --target <root>/<stack> --delete
    --overwrite if-changed --exclude /.stackbelay-restore-incomplete
    [--exclude /<carry_over_jobs>]` (restic >= 0.17). Files with the same
@@ -417,11 +402,6 @@ is the way back to the state before it.
 
 Self-restore works for the same reason as self-backup. Mount the parent
 directory, never the stack folder itself.
-
-Up to StackVault 0.4 a restore went into `<stack>.restore-tmp` and swapped
-it in, keeping the previous directory as `<stack>.old-<time>`. Directories
-with these names are still never discovered as stacks (see "Stack
-discovery"); left-over ones can be deleted by hand.
 
 ## Restore from another host
 
@@ -1374,10 +1354,8 @@ Every direct subdirectory of `STACKS_ROOT` containing a compose file is a
 stack. Accepted names are those `docker compose` looks for, in its order:
 `compose.yaml`, `compose.yml`, `docker-compose.yml`, `docker-compose.yaml`;
 the first one that exists as a regular file (not a symlink) is the stack's
-main file (`stacks.MainFileNames()`). The directory name is the stack ID. Names ending
-in `.restore-tmp` or containing `.old-` are reserved (the staging and
-previous-version directories of restores up to StackVault 0.4) and are
-never discovered. Discovery is the source of stack names and paths; the
+main file (`stacks.MainFileNames()`). The directory name is the stack ID.
+Discovery is the source of stack names and paths; the
 only other source is an admin's "Import stack" from a repository's snapshot
 paths (see "Restore from another host").
 

@@ -3,11 +3,10 @@
 Self-hosted web app (Go) that backs up Docker Compose stacks from a host to
 [restic](https://restic.net) repositories. Multi-user, per-stack permissions,
 per-stack repositories, cron schedules plus manual runs. Open source (GitHub).
-Called StackVault up to 0.4 (issue #44): persisted names from that time
-(`STACKVAULT_*` variables, `stackvault.db`, metadata header, restore marker,
-worker container names, the old encryption associated data) are still
-accepted or converted on purpose; each spot has a comment. Do not remove them without a
-migration.
+StackVault was the project's early working title (issue #44). The only
+place it still appears is the metadata header `# stackvault-metadata v1`,
+which the restore keeps accepting for good: snapshots in append-only
+repositories carry it.
 
 Read `docs/architecture.md`, `docs/data-model.md` and `docs/security.md`
 before changing anything structural. Keep them in sync with the code.

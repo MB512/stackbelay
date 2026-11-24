@@ -146,12 +146,9 @@ CREATE TABLE audit_log (
   install only). Losing it means losing access to stored repo credentials.
 - `meta.key_check`: AES-256-GCM of `key check` with associated data
   `key-check`. Checked by `store.Open`; a key that does not open it is
-  refused (`store.ErrKeyMismatch`). Written on first open, for a 0.1
-  database only after an existing repository secret decrypted.
-- The associated data contains no product name. StackVault 0.4 and older
-  prefixed it with `stackvault` (`stackvault key check`,
-  `stackvault:key-check`, `stackvault:repository:stack=<stack_id>`);
-  `store.Open` converts such data once the key is proven (issue #44).
+  refused (`store.ErrKeyMismatch`). Written on first open; if the database
+  already has a repository, only after its secret decrypted.
+- The associated data contains no product name (issue #44).
 - Migrations: numbered SQL files (`internal/store/migrations/NNNN_name.sql`)
   embedded via `embed`, applied at startup, each in its own transaction, and
   recorded in `schema_migrations`. Never edit an applied migration; add a new
@@ -180,8 +177,7 @@ CREATE TABLE audit_log (
   `present = 0`, `seen_present = 0`, `source_host` = the host it is imported
   from. Its first restore creates the directory and sets `present = 1`.
 - Every running job counts against the limit of running jobs
-  (`STACKBELAY_MAX_JOBS`); the `options.background` exception of
-  StackVault 0.4 is gone (issue #36; old values are ignored). Downtime
+  (`STACKBELAY_MAX_JOBS`, issue #36). Downtime
   slots are not in the database but in the job directories (see
   "Downtime slots" in architecture.md).
 - Host jobs (issue #19, only `cleanup`) have `stack_id` NULL and run alone:
