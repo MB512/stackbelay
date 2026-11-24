@@ -554,8 +554,15 @@ Notes and limits (show them in the UI):
   can retry with `tags`.
 - Private registries: the worker needs registry credentials (mount a Docker
   `config.json` read-only into the worker if required).
-- Compose `up -d` later, run manually with only `compose.yml`, will detect an
-  image change and recreate containers with the tag version.
+- Pinning applies to this one start only (decided in issue #13). A later
+  `compose up -d` (by hand or the **Up** button) uses `compose.yml`, sees an
+  image change and recreates the containers with the tag: the image the
+  tag points to locally (pulled only if missing), exactly as after a plain
+  file restore. This is intended: the compose file stays the source of
+  truth, and no override file is written behind the user's back. The update
+  check marks pinned services, **Unpin now** and every update switch back to
+  the tags on purpose. To keep a version permanently, write the digest
+  into `compose.yml` (compose editor).
 - Multi-arch: the repo digest recorded from `docker image inspect` identifies
   the manifest that was pulled; pulling by it yields the same platform content.
 - Without `metadata.txt` (very old snapshots) a pinned restore fails before the start (the UI cannot know in advance without reading the snapshot).
