@@ -45,10 +45,7 @@ func (s *Store) checkKey(ctx context.Context) error {
 	switch {
 	case err == nil:
 		if _, err := s.box.Open(secret, repoAAD(repoID)); err != nil {
-			// Not converted yet (migration 0018, see convertRepositories).
-			if _, ok := s.openOwnerSecret(ctx, s.db, repoID, secret); !ok {
-				return ErrKeyMismatch
-			}
+			return ErrKeyMismatch
 		}
 	case !errors.Is(err, sql.ErrNoRows):
 		return fmt.Errorf("reading repository for key check: %w", err)

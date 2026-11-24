@@ -157,10 +157,7 @@ CREATE TABLE audit_log (
 - `repositories.secret_enc`: AES-256-GCM (`internal/secrets`) of the JSON
   `{"password": "...", "env": {"RESTIC_REST_USERNAME": "...", ...}}`, with
   associated data `repository:id=<repository id>` (a ciphertext copied to
-  another row does not decrypt). Up to migration 0018 repositories belonged
-  to one stack and used `repository:stack=<stack_id>`; `store.Open`
-  converts such rows once (`convertRepositories`, see "Repositories" in
-  architecture.md). Env keys must be
+  another row does not decrypt). Env keys must be
   in `restic.BackendEnvVars`. `location` is stored in plain text and must not
   contain a password (`rest:https://user:pw@...` is refused, and so is a URL
   that does not parse cleanly but contains `@`, e.g. an unescaped `/` or `#`

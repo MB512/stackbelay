@@ -77,10 +77,6 @@ func Open(ctx context.Context, dbPath string, box *secrets.Box) (*Store, error) 
 		_ = db.Close()
 		return nil, err
 	}
-	if err := s.convertRepositories(ctx); err != nil {
-		_ = db.Close()
-		return nil, err
-	}
 	return s, nil
 }
 

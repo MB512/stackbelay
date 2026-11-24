@@ -46,12 +46,6 @@ credentials per job (see "Job handoff"). A repository can only be deleted
 when no stack uses it; deleting it removes it and its snapshot cache from
 StackBelay, never anything in the repository itself.
 
-Migration 0018 turned the per-stack repositories of earlier versions into
-global ones. `store.Open` then converts them once (`convertRepositories`):
-it seals the secrets with the new associated data, merges repositories
-with the same location, password and backend variables, and names them
-after their location (made unique with " (2)", ...).
-
 ## Mounts
 
 Manager:
