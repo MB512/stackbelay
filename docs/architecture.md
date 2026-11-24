@@ -716,9 +716,9 @@ dispatcher passes no repository credentials to their worker.
   up`").
 - **Up** (`jobs.Pipeline.Up`): `docker compose up --detach`, as by hand:
   missing containers are created, those whose configuration or image
-  changed are recreated, the others are left alone (missing images are
-  pulled by compose). Then the health wait for all services (a warning
-  only: one-shot services exit).
+  changed are recreated, the others are left alone. Missing images are
+  pulled first, with progress (see "Job progress"). Then the health wait
+  for all services (a warning only: one-shot services exit).
 - **Down** (`jobs.Pipeline.Down`): after the project owner check, `docker
   compose down`: containers and networks are removed; volumes, images and
   the stack directory are kept (never `--volumes`). Up creates the
@@ -1126,6 +1126,19 @@ waits for its downtime slot shows the phase "waiting for a downtime slot".
   ("nginx:1.27 12.3 MiB of 20.1 MiB, alpine:3.20 done"). The single
   `docker pull` of a pinned restore (`EnsureImage`) only shows its phase
   ("getting image ..."): its plain-text output has no stable format.
+- Missing images before `compose up` (issue #28): Up and the start after
+  a restore (with tags, not pinned versions) first pull the images of the
+  services that are not present (`Pipeline.pullMissing`:
+  `ConfiguredImages`, then `Pull` with the progress above, phase "pulling
+  missing images"). Only missing images, so a tag never moves to a newer
+  image there; a failure is logged and `compose up` tries again.
+- Steps of `compose up`/`start` (issue #28): with `docker.CLI.Steps` set,
+  `Up`, `UpAll` and `Start` run `docker compose --progress json` and
+  report each step compose prints (`{"id":"Container web-app-1",
+  "status":"Done","text":"Started"}`: networks and containers created,
+  started, waiting, healthy). The worker shows the current step as the
+  detail of the phase and logs the finished ones (`compose: Started
+  object=Container web-app-1`), errors and warnings as warnings.
 - In the worker all of them feed `jobs.FileProgress`, which writes
   `progress.json` into the job directory: atomically (temporary file and
   rename, owner like the other job files), phases and details at once,

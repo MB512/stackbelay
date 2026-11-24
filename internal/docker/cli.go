@@ -31,6 +31,10 @@ type CLI struct {
 	// second); Pull then runs "compose --progress json pull" and reads its
 	// output while it runs.
 	Pulling func(PullStatus)
+	// Steps, if set, receives the steps of Up, UpAll and Start while they
+	// run (container created, started, healthy, ...); they then run
+	// "compose --progress json" (issue #28).
+	Steps func(ComposeStep)
 	// Now defaults to time.Now (tests override it).
 	Now func() time.Time
 }
@@ -376,8 +380,7 @@ func (c *CLI) Start(ctx context.Context, dir string, services []string) error {
 	if len(services) == 0 {
 		return nil // "compose start" without services would start everything
 	}
-	_, err := c.compose(ctx, dir, append([]string{"start", "--"}, services...)...)
-	return err
+	return c.composeSteps(ctx, dir, append([]string{"start", "--"}, services...)...)
 }
 
 // Up implements Client.
@@ -387,14 +390,12 @@ func (c *CLI) Up(ctx context.Context, dir string, composeFiles, services []strin
 		args = append(args, "--file", f)
 	}
 	args = append(args, "up", "--detach", "--force-recreate", "--")
-	_, err := c.compose(ctx, dir, append(args, services...)...)
-	return err
+	return c.composeSteps(ctx, dir, append(args, services...)...)
 }
 
 // UpAll implements Client.
 func (c *CLI) UpAll(ctx context.Context, dir string) error {
-	_, err := c.compose(ctx, dir, "up", "--detach")
-	return err
+	return c.composeSteps(ctx, dir, "up", "--detach")
 }
 
 // Down implements Client. Never with --volumes: named volumes hold data.

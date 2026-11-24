@@ -159,6 +159,23 @@ func run(args []string, getenv func(string) string, stderr io.Writer) int {
 			progress.Detail(s.Summary())
 		}
 	}
+	// Steps of compose up/start (issue #28): the current one as detail
+	// (only with a job directory), the finished ones in the job log.
+	var detail func(string)
+	if p.Progress != nil {
+		detail = p.Progress.Detail
+	}
+	dockerCLI.Steps = func(s docker.ComposeStep) {
+		if detail != nil {
+			detail(s.String())
+		}
+		switch s.Status {
+		case "Done":
+			log.Info("compose: "+s.Text, "object", s.Object)
+		case "Error", "Warning":
+			log.Warn("compose: "+s.Text, "object", s.Object, "status", s.Status)
+		}
+	}
 	err = execute(ctx, p, cfg, spec, jobDir, &status, log)
 
 	finished := time.Now().UTC()
