@@ -21,10 +21,13 @@ with a backup and automatic rollback. See the README for the setup.
   run side by side.
 - **Repositories** managed by admins in one place and shared by stacks
   (#39): a change applies to every stack that uses it; "Initialize
-  repository" for a new location, e.g. per year.
+  repository" for a new location, e.g. per year. The form has a type
+  (REST server, S3, other) with its own fields, shows values that are not
+  secret and masks stored secrets (#45).
 - **Restores** in place after a safety snapshot; an interrupted restore
   continues where it stopped. Optionally with the image versions from
-  backup time (pinned by digest).
+  backup time (pinned by digest), and optionally with the tag for a
+  service whose version the registry no longer has (#12).
 - **Moving stacks between hosts** through their repository (Import
   stack); the setup of a stack whose directory is gone can be forgotten
   so its name can be imported cleanly (#38).
