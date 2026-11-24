@@ -222,8 +222,11 @@ func TestPickRepoDigest(t *testing.T) {
 	}{
 		{"nextcloud:29", []string{"foo@sha256:" + h, "nextcloud@sha256:" + h}, "nextcloud@sha256:" + h},
 		{"ghcr.io/a/b:1.2", []string{"ghcr.io/a/b@sha256:" + h}, "ghcr.io/a/b@sha256:" + h},
-		{"docker.io/library/redis", []string{"redis@sha256:" + h}, "redis@sha256:" + h}, // fallback
-		{"localhost:5000/x:1", []string{"localhost:5000/x@sha256:" + h}, ""},            // ':' not allowed
+		{"docker.io/library/redis", []string{"redis@sha256:" + h}, "redis@sha256:" + h},
+		// Issue #40: the long form finds the short one, not the first digest.
+		{"docker.io/library/nginx:1", []string{"foo@sha256:" + h, "nginx@sha256:" + h}, "nginx@sha256:" + h},
+		{"nginx", []string{"foo@sha256:" + h}, "foo@sha256:" + h},            // fallback
+		{"localhost:5000/x:1", []string{"localhost:5000/x@sha256:" + h}, ""}, // ':' not allowed
 		{"built", nil, ""},
 	}
 	for _, tt := range tests {

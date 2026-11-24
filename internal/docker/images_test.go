@@ -101,6 +101,13 @@ func TestEvaluateUpdate(t *testing.T) {
 		{"pinned by a restore, newer exists", ServiceState{Name: "app", State: "running", ContainerID: "c1", ImageRef: "nextcloud@" + digestA}, cfg, local, true, remote(digestB), nil, UpdateAvailable, "pinned by digest by a restore", [2]string{}},
 		{"no digest", running, cfg, localImage{}, true, remote(digestB), nil, UpdateUnknown, "no registry digest", [2]string{}},
 		{"no container", ServiceState{Name: "app"}, cfg, localImage{}, false, remote(digestB), nil, UpdateUnknown, "no container", [2]string{}},
+		// Issue #40: the same reference spelled differently is no change.
+		{"tag left out", ServiceState{Name: "app", State: "running", ContainerID: "c1", ImageRef: "zabbix/zabbix-agent:latest"},
+			configuredService{Image: "zabbix/zabbix-agent"}, local, true, remote(digestA), nil, UpToDate, "", [2]string{"29.0.1", "29.0.2"}},
+		{"tag left out, newer exists", ServiceState{Name: "app", State: "running", ContainerID: "c1", ImageRef: "zabbix/zabbix-agent:latest"},
+			configuredService{Image: "docker.io/zabbix/zabbix-agent:latest"}, local, true, remote(digestB), nil, UpdateAvailable, "", [2]string{}},
+		// Another tag that points to the image the container already runs.
+		{"other tag, same image", running, configuredService{Image: "nextcloud:29.0"}, local, true, remote(digestA), nil, UpToDate, "started as nextcloud:29 (the same image)", [2]string{}},
 		{"stopped", ServiceState{Name: "app", State: "exited", ContainerID: "c1", ImageRef: "nextcloud:29"}, cfg, local, true, remote(digestB), nil, UpdateAvailable, "not running", [2]string{}},
 	}
 	for _, tt := range tests {
@@ -114,6 +121,9 @@ func TestEvaluateUpdate(t *testing.T) {
 			}
 			if got.Pinned != strings.HasPrefix(tt.name, "pinned by a restore") {
 				t.Errorf("pinned = %v", got.Pinned)
+			}
+			if tt.wantNote == "" && got.Note != "" {
+				t.Errorf("unexpected note %q", got.Note)
 			}
 			if got.Status == UpdateAvailable && got.Current.Digest == got.Available.Digest {
 				t.Errorf("same digest for an available update: %+v", got)

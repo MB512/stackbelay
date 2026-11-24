@@ -285,11 +285,18 @@ func evaluateUpdate(s ServiceState, cfg configuredService, local localImage, has
 		check.Available.Version, check.Available.Created = rc.Config.Labels[VersionLabel], rc.Created
 	}
 
+	// The container was started from another reference than the compose
+	// file names now. Spellings of the same reference compare equal
+	// (issue #40), and a running image that already has the registry's
+	// digest is up to date whatever it was started as.
+	otherRef := s.ImageRef != "" && !SameRef(s.ImageRef, cfg.Image) && !pinnedByRestore(s.ImageRef, cfg.Image)
 	switch {
 	case s.ContainerID == "":
 		check.Status, check.Note = UpdateUnknown, "no container yet"
-	case s.ImageRef != "" && s.ImageRef != cfg.Image && !pinnedByRestore(s.ImageRef, cfg.Image):
+	case otherRef && check.Current.Digest == "":
 		check.Status, check.Note = UpdateAvailable, "the compose file names another image than the container runs ("+s.ImageRef+")"
+	case otherRef:
+		check.Status, check.Note = UpToDate, "the container was started as "+s.ImageRef+" (the same image)"
 	case !hasLocal || len(local.RepoDigests) == 0:
 		check.Status, check.Note = UpdateUnknown, "the running image has no registry digest (built or loaded locally?)"
 	case check.Current.Digest != "":
@@ -436,9 +443,10 @@ func parseImagetools(out []byte) (remoteImage, error) {
 
 // pinnedByRestore reports whether a container runs running (a digest
 // reference) instead of the configured tag of the same repository, as a
-// restore or rollback with pinned image versions starts it.
+// restore or rollback with pinned image versions starts it. References
+// are compared normalized ("nginx" = "docker.io/library/nginx:latest").
 func pinnedByRestore(running, configured string) bool {
-	return running != configured && strings.Contains(running, "@") && repository(running) == repository(configured)
+	return !SameRef(running, configured) && strings.Contains(running, "@") && RefRepository(running) == RefRepository(configured)
 }
 
 // repository returns ref without tag and digest: "nextcloud:29" and

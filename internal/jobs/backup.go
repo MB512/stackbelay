@@ -10,7 +10,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/MB512/stackbelay/internal/docker"
 	"github.com/MB512/stackbelay/internal/restic"
@@ -178,16 +177,17 @@ func serviceRecord(log *slog.Logger, s docker.ServiceState) (ServiceRecord, bool
 }
 
 // pickRepoDigest chooses the repo digest that belongs to the configured image
-// reference. Only digests matching RepoDigestPattern are considered.
+// reference; repositories are compared normalized ("nginx" and
+// "docker.io/library/nginx" are the same, issue #40). Only digests matching
+// RepoDigestPattern are considered; without a match the first one is used.
 func pickRepoDigest(ref string, digests []string) string {
-	repo := refRepository(ref)
+	repo := docker.RefRepository(ref)
 	var fallback string
 	for _, d := range digests {
 		if !RepoDigestPattern.MatchString(d) {
 			continue
 		}
-		name, _, _ := strings.Cut(d, "@")
-		if name == repo {
+		if docker.RefRepository(d) == repo {
 			return d
 		}
 		if fallback == "" {
@@ -195,16 +195,6 @@ func pickRepoDigest(ref string, digests []string) string {
 		}
 	}
 	return fallback
-}
-
-// refRepository strips tag and digest from an image reference:
-// "nextcloud:29" -> "nextcloud", "ghcr.io/a/b:1@sha256:..." -> "ghcr.io/a/b".
-func refRepository(ref string) string {
-	ref, _, _ = strings.Cut(ref, "@")
-	if i := strings.LastIndex(ref, ":"); i > strings.LastIndex(ref, "/") {
-		ref = ref[:i]
-	}
-	return ref
 }
 
 func fileSHA256(path string) (string, error) {

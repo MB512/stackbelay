@@ -122,6 +122,18 @@ func TestUpdate(t *testing.T) {
 			wantRes:   ChangeResult{Unchanged: true},
 		},
 		{
+			// Issue #40: the compose file leaves out ":latest"; Docker
+			// reports the container with it. Same image: nothing to do.
+			name: "other spelling of the same image: nothing touched",
+			opts: UpdateOptions{Backup: true},
+			setup: func(e *env) {
+				e.docker.services[0].ImageRef = "docker.io/library/nextcloud:latest"
+				e.docker.images = map[string]docker.ConfiguredImage{"app": {Ref: "nextcloud", ID: testImageID}, "db": {Ref: "postgres:16"}}
+			},
+			wantCalls: []string{check, svcs, pull, cmp},
+			wantRes:   ChangeResult{Unchanged: true},
+		},
+		{
 			name: "a new image: full update",
 			opts: UpdateOptions{Backup: true},
 			setup: func(e *env) {

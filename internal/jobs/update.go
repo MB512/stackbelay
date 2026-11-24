@@ -76,7 +76,7 @@ func (p *Pipeline) newImages(ctx context.Context, log *slog.Logger, stack stacks
 		switch {
 		case img.ID != "" && img.ID != s.ImageID:
 			log.Info("new image", "service", s.Name, "image", img.Ref)
-		case s.ImageRef != "" && s.ImageRef != img.Ref:
+		case s.ImageRef != "" && !docker.SameRef(s.ImageRef, img.Ref): // "nginx" = "nginx:latest" (issue #40)
 			log.Info("the container runs another image reference than the compose file names (pinned by a restore?)",
 				"service", s.Name, "container_image", s.ImageRef, "compose_image", img.Ref)
 		default:

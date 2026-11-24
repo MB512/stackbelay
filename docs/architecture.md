@@ -666,6 +666,15 @@ argument lists:
    update, pulls newer images of the tags). The column shows running and available version: the version
    label if the image has one, else creation date and short digest.
 
+Image references are compared normalized (`docker.NormalizeRef`, issue
+#40): `nginx`, `nginx:latest` and `docker.io/library/nginx:latest` are the
+same image, as in Docker itself (missing tag `latest`, registry
+`docker.io`, prefix `library/`). This applies to the update check, to the
+update job's "is anything new" comparison and to choosing the repo digest
+for `metadata.txt`. The UI shows references as written. A container that
+was started from another reference than the compose file names now but
+runs the image the registry has for it counts as up to date.
+
 At most one check per user and three in total run at a time. The check is
 a preview: the update job pulls and compares again itself.
 ## Stop, start and restart
