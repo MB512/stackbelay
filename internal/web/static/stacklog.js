@@ -117,12 +117,6 @@
 
 	// Line wrapping. The choice is remembered in this browser only; storage
 	// may be unavailable (private mode), which is fine.
-	// Reads a remembered choice; choices remembered before StackBelay was
-	// renamed to StackBelay (issue #44) are under the old key.
-	function remembered(key) {
-		var v = window.localStorage.getItem(key);
-		return v !== null ? v : window.localStorage.getItem(key.replace(/^stackbelay\./, "stackvault."));
-	}
 	var wrapKey = "stackbelay.logs.wrap";
 	var wrap = document.getElementById("log-wrap");
 	function setWrap(on) {
@@ -133,7 +127,7 @@
 		} catch (e) { /* not remembered */ }
 	}
 	try {
-		if (remembered(wrapKey) === "0") {
+		if (window.localStorage.getItem(wrapKey) === "0") {
 			setWrap(false);
 		}
 	} catch (e) { /* default: wrap */ }
@@ -151,7 +145,7 @@
 		} catch (e) { /* not remembered */ }
 	}
 	try {
-		if (remembered(colorsKey) === "0") {
+		if (window.localStorage.getItem(colorsKey) === "0") {
 			setColors(false);
 		}
 	} catch (e) { /* default: colors */ }

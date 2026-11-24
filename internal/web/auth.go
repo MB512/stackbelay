@@ -16,8 +16,6 @@ import (
 // enforce Secure, Path=/ and no Domain attribute (the cookie cannot be set
 // or overwritten by other hosts or subdomains).
 const (
-	// Renamed with StackBelay (issue #44): sessions of 0.4 and older end
-	// with the update, everybody logs in once more.
 	cookieSecure   = "__Host-stackbelay_session"
 	cookieInsecure = "stackbelay_session"
 )
