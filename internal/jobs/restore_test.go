@@ -58,7 +58,8 @@ func TestRestoreSuccess(t *testing.T) {
 		restoreCall(),
 		"restic.Node " + snapID + ":/home/docker/web",
 		"docker.Services", // the restored file's services (orphans are not started)
-		"docker.Up app",   // only services running at backup time
+		"docker.ConfiguredImages app",
+		"docker.Up app", // only services running at backup time
 		"docker.WaitHealthy",
 	})
 	if res.SafetySnapshot != "snap-pre-restore" || res.Snapshot != snapID {

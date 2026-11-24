@@ -3,6 +3,7 @@ package jobs
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -31,7 +32,7 @@ func TestStart(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertCalls(t, e.calls.list(), []string{"docker.Services", "docker.Start app,db,tool", "docker.WaitHealthy",
-		"docker.Up never", "docker.WaitHealthy"})
+		"docker.ConfiguredImages never", "docker.Up never", "docker.WaitHealthy"})
 
 	// Creating the new service fails: the job fails (the others run).
 	e2 := newEnv(t)
@@ -149,7 +150,9 @@ func TestUpAndDown(t *testing.T) {
 	if err := e.p.Up(context.Background(), e.stack); err != nil {
 		t.Fatal(err)
 	}
-	assertCalls(t, e.calls.list(), []string{"docker.Services", "docker.UpAll", "docker.WaitHealthy"})
+	// db's image is missing: pulled first, with progress (issue #28).
+	assertCalls(t, e.calls.list(), []string{"docker.Services", "docker.ConfiguredImages app,db,tool,never", "docker.Pull db",
+		"docker.UpAll", "docker.WaitHealthy"})
 
 	// Unhealthy or exited services (one-shot tasks) only warn.
 	e.calls.log = nil
@@ -174,4 +177,21 @@ func TestUpAndDown(t *testing.T) {
 		t.Fatalf("down: %v", err)
 	}
 	assertCalls(t, e.calls.list(), []string{"docker.Services"})
+}
+
+// Pulling the missing images first (issue #28) never stops a start: if the
+// check or the pull fails, compose up runs anyway and pulls itself.
+func TestUpPullMissingFailures(t *testing.T) {
+	for _, method := range []string{"ConfiguredImages", "Pull"} {
+		t.Run(method, func(t *testing.T) {
+			e := newEnv(t)
+			e.docker.failOn[method] = errBoom
+			if err := e.p.Up(context.Background(), e.stack); err != nil {
+				t.Fatal(err)
+			}
+			if calls := e.calls.list(); !slices.Contains(calls, "docker.UpAll") {
+				t.Fatalf("compose up not run: %v", calls)
+			}
+		})
+	}
 }

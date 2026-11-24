@@ -121,6 +121,40 @@ func (p *Pipeline) services(ctx context.Context, log *slog.Logger, dir string) (
 	return defined, nil
 }
 
+// pullMissing pulls the images of services that are not present locally
+// before a "compose up" (issue #28). Compose would pull them itself, but
+// silently; Pull reports the progress to the job page (bytes, per-image
+// status) like an update's pull. Only missing images are pulled, so a tag
+// never moves to a newer image here. A failure is only logged: compose up
+// tries again and reports the real error. A nil or empty services list
+// does nothing.
+func (p *Pipeline) pullMissing(ctx context.Context, log *slog.Logger, dir string, services []string) {
+	if len(services) == 0 {
+		return
+	}
+	images, err := p.Docker.ConfiguredImages(ctx, dir, services)
+	if err != nil {
+		log.Warn("could not check for missing images; compose up pulls them", "error", err)
+		return
+	}
+	var missing, refs []string
+	for _, name := range services {
+		if img := images[name]; img.Ref != "" && img.ID == "" {
+			missing, refs = append(missing, name), append(refs, img.Ref)
+		}
+	}
+	if len(missing) == 0 {
+		return
+	}
+	log.Info("pulling missing images", "services", missing, "images", refs)
+	p.phase("pulling missing images")
+	if err := p.Docker.Pull(ctx, dir, missing); err != nil {
+		log.Warn("pulling missing images failed; compose up tries again", "error", err)
+		return
+	}
+	log.Info("missing images pulled", "services", missing)
+}
+
 // bringUp starts services after a job. It must run even if the job's context
 // was cancelled or timed out, so it derives a fresh context that ignores the
 // parent's cancellation (context.WithoutCancel) and only applies its own
@@ -133,6 +167,11 @@ func (p *Pipeline) bringUp(ctx context.Context, log *slog.Logger, dir string, co
 	defer cancel()
 
 	var err error
+	if up && len(composeFiles) == 0 {
+		// With composeFiles (pinned versions) the images were made
+		// available by digest before.
+		p.pullMissing(ctx, log, dir, services)
+	}
 	p.phase("starting stack")
 	if up {
 		log.Info("starting stack (compose up)", "services", services, "compose_files", composeFiles)

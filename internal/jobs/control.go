@@ -101,9 +101,10 @@ func (p *Pipeline) Restart(ctx context.Context, stack stacks.Stack) (err error) 
 
 // Up creates and starts the stack like "docker compose up --detach",
 // without backup: missing containers are created, those whose
-// configuration or image changed are recreated, the others are left alone
-// (images that are missing are pulled by compose). Then the usual health
-// wait for all services (a warning only: one-shot services exit).
+// configuration or image changed are recreated, the others are left alone.
+// Missing images are pulled first, with progress (pullMissing). Then the
+// usual health wait for all services (a warning only: one-shot services
+// exit).
 func (p *Pipeline) Up(ctx context.Context, stack stacks.Stack) error {
 	log := p.logger().With("stack", stack.Name, "job", "up")
 	if err := requireComplete(stack); err != nil {
@@ -117,6 +118,7 @@ func (p *Pipeline) Up(ctx context.Context, stack stacks.Stack) error {
 	for _, s := range services {
 		names = append(names, s.Name)
 	}
+	p.pullMissing(ctx, log, stack.Dir, names)
 	log.Info("creating and starting stack (compose up)", "services", names)
 	p.phase("starting stack")
 	if err := p.Docker.UpAll(ctx, stack.Dir); err != nil {
