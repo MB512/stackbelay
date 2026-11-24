@@ -11,7 +11,7 @@ stacks root (e.g. `/home/docker/<stack>/compose.yml`). StackBelay backs up the w
 directory, including bind-mounted data inside it, with the stack stopped,
 so the backup is consistent without database-specific dumps.
 
-Status: **0.4**. Use it next to, not instead of, a backup strategy you
+Status: **0.1**. Use it next to, not instead of, a backup strategy you
 already trust until it has proven itself on your hosts.
 
 ## Features

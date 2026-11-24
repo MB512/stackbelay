@@ -30,7 +30,7 @@
 
 services:
   stackbelay:
-    image: ghcr.io/mb512/stackbelay:0.4
+    image: ghcr.io/mb512/stackbelay:0.1
     restart: unless-stopped
     environment:
       # Must be the same absolute path as on the host (see the volume below).
