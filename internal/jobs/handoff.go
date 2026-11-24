@@ -119,6 +119,8 @@ type Spec struct {
 	SnapshotID string `json:"snapshot_id,omitempty"`
 	NoStart    bool   `json:"no_start,omitempty"`
 	PinImages  bool   `json:"pin_images,omitempty"` // see RestoreOptions.PinImages
+	// TagFallback (restore with PinImages): see RestoreOptions.TagFallback.
+	TagFallback bool `json:"tag_fallback,omitempty"`
 	// Import: the first restore of a stack from another host; its
 	// directory does not exist yet, or is left by an incomplete import
 	// (Pipeline.Import).
@@ -186,6 +188,9 @@ func (s Spec) Validate() error {
 		return fmt.Errorf("invalid trigger %q", truncate(s.Trigger))
 	case len(s.Requester) > 64 || strings.ContainsFunc(s.Requester, func(r rune) bool { return r < ' ' }):
 		return errors.New("invalid requester")
+	}
+	if s.TagFallback && (s.Type != TypeRestore || !s.PinImages) {
+		return errors.New("the tag fallback needs a restore with pinned image versions")
 	}
 	if s.Type != TypeComposeApply && (s.ComposeSHA256 != "" || s.ComposeBaseSHA256 != "") {
 		return errors.New("compose options set on a job that does not apply a compose file")
@@ -265,6 +270,9 @@ type Status struct {
 	// they ran before.
 	ImagesChanged  []string `json:"images_changed,omitempty"`
 	ReplacedImages []string `json:"replaced_images,omitempty"`
+	// Unpinned: restore with TagFallback: services that started with their
+	// tag because their recorded image version was gone (issue #12).
+	Unpinned []string `json:"unpinned,omitempty"`
 	// Cleanup: what was removed (FreedBytes: sizes of the removed images).
 	RemovedContainers int   `json:"removed_containers,omitempty"`
 	RemovedImages     int   `json:"removed_images,omitempty"`

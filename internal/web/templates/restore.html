@@ -53,9 +53,13 @@
       As in <code>compose.yml</code> (tags such as <code>:latest</code> may now point to newer images)</label>
     <label class="check"><input type="radio" name="images" value="pinned"{{if or .Import .ForeignHost}} checked{{end}}>
       As at backup time (pinned by digest; pulled if missing; recommended when moving a stack)</label>
+    <label class="check"><input type="radio" name="images" value="pinned-fallback">
+      As at backup time; services whose version the registry no longer has start with their tag</label>
     <p class="hint">Pinning uses the image digests recorded in the snapshot's <code>metadata.txt</code>. Services built locally
-      cannot be pinned and use <code>compose.yml</code>. If a pinned image can no longer be pulled, the restore is aborted and
-      the current stack is started again. <code>compose.yml</code> is not changed: a later <code>docker compose up</code>
+      cannot be pinned and use <code>compose.yml</code>. If a pinned image can no longer be pulled, the files are restored
+      but the stack is not started; start it afterwards (with the tags) or restore again with the third option. That option
+      starts only those services with their tag, which may be a newer version than the restored data was written by:
+      check the job page, it lists them. <code>compose.yml</code> is not changed: a later <code>docker compose up</code>
       uses the tags again.</p>
   </fieldset>
   <label>Limit download (MiB/s, empty = no limit)

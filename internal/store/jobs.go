@@ -23,6 +23,9 @@ type JobOptions struct {
 	SnapshotID string `json:"snapshot_id,omitempty"` // restore: snapshot to restore
 	NoStart    bool   `json:"no_start,omitempty"`    // restore
 	PinImages  bool   `json:"pin_images,omitempty"`  // restore: image versions from metadata.txt
+	// TagFallback (restore with PinImages, issue #12): services whose
+	// recorded image version is gone start with their tag.
+	TagFallback bool `json:"tag_fallback,omitempty"`
 	// Import (restore): the stack directory does not exist yet (a stack
 	// imported from another host), or only partly after an incomplete
 	// import; nothing to stop or to protect.
@@ -50,6 +53,9 @@ type JobResult struct {
 	PreviousDir string `json:"previous_dir,omitempty"`
 	RolledBack  bool   `json:"rolled_back,omitempty"` // update: failed and restored to the job's snapshot
 	Unchanged   bool   `json:"unchanged,omitempty"`   // update: no new image, nothing done
+	// Unpinned (restore with TagFallback): services that started with their
+	// tag because their recorded image version was gone.
+	Unpinned []string `json:"unpinned,omitempty"`
 	// ImagesChanged: update, compose apply: services whose running image
 	// (image id) differs after the change.
 	ImagesChanged []string `json:"images_changed,omitempty"`

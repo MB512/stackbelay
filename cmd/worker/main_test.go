@@ -177,6 +177,10 @@ func TestParseRestoreArgs(t *testing.T) {
 	if !reflect.DeepEqual(spec, want) {
 		t.Fatalf("got %+v, want %+v", spec, want)
 	}
+	spec, _, err = parseArgs([]string{"restore", "--pin-images", "--tag-fallback", "web", "0123abcd"})
+	if err != nil || !spec.TagFallback || !spec.PinImages {
+		t.Fatalf("tag fallback: %+v, %v", spec, err)
+	}
 }
 
 func TestParseUpdateArgs(t *testing.T) {

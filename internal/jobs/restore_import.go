@@ -21,8 +21,8 @@ import (
 // target comes from stacks.ImportTarget: no directory yet, or one left by
 // an incomplete import (stacks.IncompleteMarker), which is continued: only
 // missing and changed files are downloaded. A failed import leaves the
-// directory with the marker for that. Only opts.SnapshotID, NoStart and
-// PinImages apply. The image digests of metadata.txt are compared with the
+// directory with the marker for that. Only opts.SnapshotID, NoStart,
+// PinImages and TagFallback apply. The image digests of metadata.txt are compared with the
 // local images and missing ones are reported (a start pulls them; with
 // PinImages by digest).
 func (p *Pipeline) Import(ctx context.Context, target stacks.Stack, opts RestoreOptions) (res RestoreResult, err error) {
@@ -59,12 +59,12 @@ func (p *Pipeline) Import(ctx context.Context, target stacks.Stack, opts Restore
 
 	var composeFiles []string
 	if opts.PinImages && !opts.NoStart {
-		files, cleanup, err := p.preparePinning(ctx, log, target.Name, target.Dir, target.Dir)
+		files, unpinned, cleanup, err := p.preparePinning(ctx, log, target.Name, target.Dir, target.Dir, opts.TagFallback)
 		if err != nil {
 			return res, err
 		}
 		defer cleanup()
-		composeFiles = files
+		composeFiles, res.Unpinned = files, unpinned
 	}
 	if err := ctx.Err(); err != nil {
 		return res, err

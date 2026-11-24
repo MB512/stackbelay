@@ -6,7 +6,7 @@
 //
 //	worker run <job-dir>
 //	worker backup  <stack>
-//	worker restore [--no-start] [--pin-images] [--import] [--limit-download <KiB/s>] <stack> <snapshot-id>
+//	worker restore [--no-start] [--pin-images [--tag-fallback]] [--import] [--limit-download <KiB/s>] <stack> <snapshot-id>
 //	worker update  [--no-backup] <stack>
 //	worker stop|start|restart|up|down <stack>
 //	worker cleanup [--image-min-age <duration>]
@@ -48,7 +48,7 @@ import (
 const usage = `usage:
   worker run <job-dir>
   worker backup  <stack>
-  worker restore [--no-start] [--pin-images] [--import] [--limit-download <KiB/s>] <stack> <snapshot-id>
+  worker restore [--no-start] [--pin-images [--tag-fallback]] [--import] [--limit-download <KiB/s>] <stack> <snapshot-id>
   worker update  [--no-backup] <stack>
   worker stop|start|restart|up|down <stack>
   worker cleanup [--image-min-age <duration>]
@@ -247,13 +247,14 @@ func parseArgs(args []string) (jobs.Spec, string, error) {
 		fs.SetOutput(io.Discard)
 		noStart := fs.Bool("no-start", false, "do not start the stack after restoring")
 		pin := fs.Bool("pin-images", false, "start with the image versions recorded in the snapshot")
+		fallback := fs.Bool("tag-fallback", false, "with --pin-images: start a service with its tag if its recorded version is gone")
 		imp := fs.Bool("import", false, "first restore of a stack from another host: create its directory")
 		limit := fs.Int("limit-download", 0, "limit downloads from the repository (KiB/s)")
 		if err := fs.Parse(args[1:]); err != nil || fs.NArg() != 2 {
-			return jobs.Spec{}, "", fmt.Errorf("%w: restore expects [--no-start] [--pin-images] [--import] [--limit-download <KiB/s>] <stack> <snapshot-id>", errUsage)
+			return jobs.Spec{}, "", fmt.Errorf("%w: restore expects [--no-start] [--pin-images [--tag-fallback]] [--import] [--limit-download <KiB/s>] <stack> <snapshot-id>", errUsage)
 		}
 		return jobs.Spec{Type: jobs.TypeRestore, Stack: fs.Arg(0), SnapshotID: fs.Arg(1),
-			NoStart: *noStart, PinImages: *pin,
+			NoStart: *noStart, PinImages: *pin, TagFallback: *fallback,
 			Import: *imp, LimitDownloadKiB: *limit}, "", nil
 
 	case "update":
@@ -302,8 +303,9 @@ func execute(ctx context.Context, p *jobs.Pipeline, cfg config.Worker, spec jobs
 		if err != nil {
 			return err
 		}
-		res, err := p.Import(ctx, target, jobs.RestoreOptions{SnapshotID: spec.SnapshotID, NoStart: spec.NoStart, PinImages: spec.PinImages})
-		status.Snapshot = res.Snapshot
+		res, err := p.Import(ctx, target, jobs.RestoreOptions{SnapshotID: spec.SnapshotID, NoStart: spec.NoStart,
+			PinImages: spec.PinImages, TagFallback: spec.TagFallback})
+		status.Snapshot, status.Unpinned = res.Snapshot, res.Unpinned
 		return err
 	}
 	stack, err := stacks.Lookup(cfg.StacksRoot, spec.Stack)
@@ -321,9 +323,9 @@ func execute(ctx context.Context, p *jobs.Pipeline, cfg config.Worker, spec jobs
 	case jobs.TypeRestore:
 		res, err := p.Restore(ctx, stack, jobs.RestoreOptions{
 			SnapshotID: spec.SnapshotID, NoStart: spec.NoStart,
-			PinImages: spec.PinImages, CarryOver: spec.CarryOverJobs,
+			PinImages: spec.PinImages, TagFallback: spec.TagFallback, CarryOver: spec.CarryOverJobs,
 		})
-		status.Snapshot, status.SafetySnapshot = res.Snapshot, res.SafetySnapshot
+		status.Snapshot, status.SafetySnapshot, status.Unpinned = res.Snapshot, res.SafetySnapshot, res.Unpinned
 		return err
 	case jobs.TypeUpdate:
 		res, err := p.Update(ctx, stack, jobs.UpdateOptions{Backup: !spec.NoBackup, CarryOver: spec.CarryOverJobs})

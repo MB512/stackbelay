@@ -545,13 +545,26 @@ With "do not start" the option has no effect (nothing is pulled).
 UI: radio buttons "Image versions" on the restore page (default: tags);
 job option `pin_images`, worker flag `--pin-images`.
 
+A third choice, "as at backup time; services whose version the registry
+no longer has start with their tag" (issue #12, job option
+`tag_fallback`, worker flag `--tag-fallback`, only with pinning), handles
+registries that deleted old manifests: a service whose `docker pull
+<digest>` fails with "not found" (`docker.IsImageNotFound`: "manifest
+unknown") is left out of the override and starts with its tag from
+`compose.yml`; the other services stay pinned. Network, login and
+permission errors never fall back. The job log warns per service, and the
+job page lists them ("Started with tag", `result.unpinned`): such a
+service may run a newer version than the one that wrote the restored data,
+so the fallback is opt-in and never used by the rollback of an update.
+
 Notes and limits (show them in the UI):
 
 - Services with `build:` and no repo digest cannot be pinned. They are rebuilt
   from the restored sources; base images may have changed. Warn per service.
 - The registry must still serve that digest. Registries can delete old
-  manifests. If a pull fails the restore is aborted (rolled back); the user
-  can retry with `tags`.
+  manifests. If a pull fails, the files are restored but the stack is not
+  started (the restore runs in place, issue #33); the user starts it with
+  the tags afterwards or restores again with the tag fallback (see above).
 - Private registries: the worker needs registry credentials (mount a Docker
   `config.json` read-only into the worker if required).
 - Pinning applies to this one start only (decided in issue #13). A later
@@ -1476,7 +1489,7 @@ to them. `restic restore <id>:<subpath>` requires restic >= 0.17.
 ```
 worker run <job-dir>
 worker backup  <stack>
-worker restore [--no-start] [--pin-images] [--import] [--limit-download <KiB/s>] <stack> <snapshot-id>
+worker restore [--no-start] [--pin-images [--tag-fallback]] [--import] [--limit-download <KiB/s>] <stack> <snapshot-id>
 worker update  [--no-backup] <stack>
 worker stop|start|restart|up|down <stack>
 worker cleanup [--image-min-age <duration>]

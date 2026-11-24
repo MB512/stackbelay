@@ -214,6 +214,27 @@ func TestRestoreJob(t *testing.T) {
 	if !j.Options.NoStart || j.Options.PinImages {
 		t.Fatalf("admin restore options: %+v", j.Options)
 	}
+
+	// Third choice (issue #12): pinned, with the tag where a version is
+	// gone. The job page lists the services that fell back.
+	if err := e.st.FinishJob(context.Background(), j.ID, jobs.StateFailed, "", "x", store.JobResult{}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	r = e.post("/stacks/web/restore", url.Values{"csrf_token": {e.csrf("/stacks/web")}, "snapshot_id": {"aaaaaaaa11111111"},
+		"start": {"on"}, "images": {"pinned-fallback"}})
+	j, _ = e.st.JobByID(context.Background(), strings.TrimPrefix(r.location, jobLocation))
+	if !j.Options.PinImages || !j.Options.TagFallback {
+		t.Fatalf("fallback restore options: %+v", j.Options)
+	}
+	if err := e.st.FinishJob(context.Background(), j.ID, jobs.StateSucceeded, "aaaaaaaa11111111", "",
+		store.JobResult{Unpinned: []string{"db"}}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	r = e.get("/jobs/" + j.ID)
+	if !strings.Contains(r.body, "image versions pinned (tags where a version is gone)") ||
+		!strings.Contains(r.body, "<th>Started with tag</th><td>db") {
+		t.Fatalf("job page:\n%s", r.body)
+	}
 }
 
 func TestJobLog(t *testing.T) {

@@ -115,6 +115,8 @@ func TestReadSpecRejects(t *testing.T) {
 		{"restore with flag-like snapshot", `{"version":1,"id":"` + testJobID + `","type":"restore","stack":"web","snapshot_id":"--help"}`},
 		{"backup with restore option", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"web","no_start":true}`},
 		{"backup with pinned images", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"web","pin_images":true}`},
+		{"tag fallback without pinning", `{"version":1,"id":"` + testJobID + `","type":"restore","stack":"web","snapshot_id":"0123abcd","tag_fallback":true}`},
+		{"tag fallback on a backup", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"web","tag_fallback":true}`},
 		{"removed option no_pre_stop (#34)", `{"version":1,"id":"` + testJobID + `","type":"update","stack":"web","no_pre_stop":true}`},
 		{"removed option pre_stop (#34)", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"web","pre_stop":true}`},
 		{"carry-over outside the stack", `{"version":1,"id":"` + testJobID + `","type":"restore","stack":"web","snapshot_id":"0123abcd","carry_over_jobs":"../manager/data"}`},

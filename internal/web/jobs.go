@@ -223,7 +223,8 @@ func (s *Server) startRestore(w http.ResponseWriter, r *http.Request) {
 	opts := store.JobOptions{
 		SnapshotID:       sn.ID,
 		NoStart:          r.PostFormValue("start") != "on",
-		PinImages:        r.PostFormValue("images") == "pinned",
+		PinImages:        r.PostFormValue("images") == "pinned" || r.PostFormValue("images") == "pinned-fallback",
+		TagFallback:      r.PostFormValue("images") == "pinned-fallback",
 		LimitDownloadKiB: limit,
 	}
 	if !st.Present {
@@ -236,8 +237,8 @@ func (s *Server) startRestore(w http.ResponseWriter, r *http.Request) {
 		opts.Import = true
 	}
 	s.submitJob(w, r, st, store.Job{Type: jobs.TypeRestore, Options: opts},
-		fmt.Sprintf("restore of snapshot %s (host %s), import: %t, safety snapshot: %t, start: %t, pinned images: %t, download limit: %d KiB/s",
-			sn.ShortID, sn.Hostname, opts.Import, !opts.Import, !opts.NoStart, opts.PinImages,
+		fmt.Sprintf("restore of snapshot %s (host %s), import: %t, safety snapshot: %t, start: %t, pinned images: %t, tag fallback: %t, download limit: %d KiB/s",
+			sn.ShortID, sn.Hostname, opts.Import, !opts.Import, !opts.NoStart, opts.PinImages, opts.TagFallback,
 			opts.LimitDownloadKiB), true)
 }
 

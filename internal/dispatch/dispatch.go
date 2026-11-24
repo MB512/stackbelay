@@ -271,7 +271,7 @@ func (d *Dispatcher) reconcileDir(ctx context.Context, id string, importing bool
 	j := store.Job{
 		ID: id, StackID: st.ID, StackName: st.Name, Type: spec.Type, Trigger: spec.Trigger, QueuedAt: queued,
 		Options: store.JobOptions{SnapshotID: spec.SnapshotID,
-			NoStart: spec.NoStart, PinImages: spec.PinImages,
+			NoStart: spec.NoStart, PinImages: spec.PinImages, TagFallback: spec.TagFallback,
 			Import: spec.Import, LimitDownloadKiB: spec.LimitDownloadKiB, NoBackup: spec.NoBackup},
 	}
 	if j.Trigger == "" {
@@ -417,7 +417,7 @@ func (d *Dispatcher) start(ctx context.Context, j store.Job) {
 	spec := jobs.Spec{
 		ID: j.ID, Type: j.Type, Stack: j.StackName,
 		SnapshotID: j.Options.SnapshotID,
-		NoStart:    j.Options.NoStart, PinImages: j.Options.PinImages,
+		NoStart:    j.Options.NoStart, PinImages: j.Options.PinImages, TagFallback: j.Options.TagFallback,
 		Import: j.Options.Import, LimitDownloadKiB: j.Options.LimitDownloadKiB,
 		Trigger: j.Trigger, Requester: j.Requester, NoBackup: noBackup,
 	}
@@ -553,7 +553,7 @@ func resultOf(st jobs.Status) store.JobResult {
 	return store.JobResult{
 		PreStopSnapshot: st.PreStopSnapshot, SafetySnapshot: st.SafetySnapshot,
 		RolledBack: st.RolledBack, Unchanged: st.Unchanged, ImagesChanged: st.ImagesChanged,
-		ReplacedImages:    st.ReplacedImages,
+		ReplacedImages: st.ReplacedImages, Unpinned: st.Unpinned,
 		RemovedContainers: st.RemovedContainers, RemovedImages: st.RemovedImages, FreedBytes: st.FreedBytes,
 	}
 }

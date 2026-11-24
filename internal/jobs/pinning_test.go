@@ -182,3 +182,57 @@ func TestComposeFiles(t *testing.T) {
 		})
 	}
 }
+
+// With TagFallback a service whose image version the registry no longer
+// has starts with its tag; the others stay pinned (issue #12). Without it,
+// or for other pull errors, the start fails as before.
+func TestRestorePinnedTagFallback(t *testing.T) {
+	e := restoreEnv(t)
+	e.restic.restoreFiles[MetadataFile] = pinMetadata
+	e.docker.goneImages = []string{dbDigest}
+	res, err := e.p.Restore(context.Background(), e.stack, RestoreOptions{SnapshotID: snapID[:8], PinImages: true, TagFallback: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(res.Unpinned, []string{"db"}) {
+		t.Errorf("unpinned = %v", res.Unpinned)
+	}
+	var got pinnedOverride
+	if err := json.Unmarshal([]byte(e.docker.upOverride), &got); err != nil {
+		t.Fatal(err)
+	}
+	if want := map[string]pinnedService{"app": {Image: testDigest, PullPolicy: "never"}}; !reflect.DeepEqual(got.Services, want) {
+		t.Errorf("override = %+v", got.Services)
+	}
+
+	// Without the option the same gone version stops the start.
+	e = restoreEnv(t)
+	e.restic.restoreFiles[MetadataFile] = pinMetadata
+	e.docker.goneImages = []string{dbDigest}
+	if _, err := e.p.Restore(context.Background(), e.stack, RestoreOptions{SnapshotID: snapID[:8], PinImages: true}); err == nil ||
+		!strings.Contains(err.Error(), "manifest unknown") {
+		t.Fatalf("without fallback: %v", err)
+	}
+
+	// Other errors (network, login) never fall back.
+	e = restoreEnv(t)
+	e.restic.restoreFiles[MetadataFile] = pinMetadata
+	e.docker.failOn["EnsureImage"] = errBoom
+	if _, err := e.p.Restore(context.Background(), e.stack, RestoreOptions{SnapshotID: snapID[:8], PinImages: true, TagFallback: true}); err == nil {
+		t.Fatal("other pull error: no failure")
+	}
+}
+
+// The import (first restore on this host) falls back the same way.
+func TestImportPinnedTagFallback(t *testing.T) {
+	e, target := importEnv(t)
+	e.restic.restoreFiles[MetadataFile] = pinMetadata
+	e.docker.goneImages = []string{testDigest, dbDigest}
+	res, err := e.p.Import(context.Background(), target, RestoreOptions{SnapshotID: snapID[:8], PinImages: true, TagFallback: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(res.Unpinned, []string{"app", "db"}) {
+		t.Errorf("unpinned = %v", res.Unpinned)
+	}
+}

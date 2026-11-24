@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/MB512/stackbelay/internal/docker"
 	"github.com/MB512/stackbelay/internal/stacks"
 )
 
@@ -93,22 +94,27 @@ type pinnedService struct {
 // makes the recorded images available (pulling them by digest if needed)
 // and writes an override file that runs exactly these images. It returns
 // the compose files to start the stack with and a function that removes
-// the override file. Any error aborts the restore before the swap.
-func (p *Pipeline) preparePinning(ctx context.Context, log *slog.Logger, stackName, staging, finalDir string) (files []string, cleanup func(), err error) {
+// the override file. Any error stops the restore before the start (the
+// restored stack stays stopped). With tagFallback, a service whose image
+// version the registry no longer has (docker.IsImageNotFound) is left out
+// of the override, so it starts with its tag; such services are returned
+// as unpinned (issue #12).
+func (p *Pipeline) preparePinning(ctx context.Context, log *slog.Logger, stackName, staging, finalDir string,
+	tagFallback bool) (files, unpinned []string, cleanup func(), err error) {
 	f, err := os.Open(filepath.Join(staging, MetadataFile)) //nolint:gosec // G304: inside the staging directory
 	if err != nil {
-		return nil, nil, fmt.Errorf("image pinning: the snapshot has no %s: %w", MetadataFile, err)
+		return nil, nil, nil, fmt.Errorf("image pinning: the snapshot has no %s: %w", MetadataFile, err)
 	}
 	// metadata.txt comes from the snapshot: ParseMetadata validates every
 	// field, repo digests against RepoDigestPattern.
 	m, err := ParseMetadata(f, stackName)
 	_ = f.Close()
 	if err != nil {
-		return nil, nil, fmt.Errorf("image pinning: %w", err)
+		return nil, nil, nil, fmt.Errorf("image pinning: %w", err)
 	}
 	files, err = composeFiles(staging, finalDir)
 	if err != nil {
-		return nil, nil, fmt.Errorf("image pinning: %w", err)
+		return nil, nil, nil, fmt.Errorf("image pinning: %w", err)
 	}
 
 	override := pinnedOverride{Services: map[string]pinnedService{}}
@@ -120,34 +126,40 @@ func (p *Pipeline) preparePinning(ctx context.Context, log *slog.Logger, stackNa
 		}
 		p.phase("getting image " + s.RepoDigest)
 		pulled, err := p.Docker.EnsureImage(ctx, s.RepoDigest)
+		if err != nil && tagFallback && docker.IsImageNotFound(err) {
+			log.Warn("image version from backup time is no longer available; the service starts with its tag from compose.yml",
+				"service", s.Name, "image", s.RepoDigest, "error", err)
+			unpinned = append(unpinned, s.Name)
+			continue
+		}
 		if err != nil {
-			return nil, nil, fmt.Errorf("image pinning: service %s: getting %s: %w", s.Name, s.RepoDigest, err)
+			return nil, nil, nil, fmt.Errorf("image pinning: service %s: getting %s: %w", s.Name, s.RepoDigest, err)
 		}
 		log.Info("image pinned", "service", s.Name, "image", s.RepoDigest, "pulled", pulled)
 		override.Services[s.Name] = pinnedService{Image: s.RepoDigest, PullPolicy: "never"}
 	}
 	if len(override.Services) == 0 {
 		log.Warn("image pinning: no service has a recorded repo digest; starting with compose.yml only")
-		return files, func() {}, nil
+		return files, unpinned, func() {}, nil
 	}
 
 	data, err := json.MarshalIndent(override, "", "  ")
 	if err != nil {
-		return nil, nil, fmt.Errorf("image pinning: encoding override: %w", err)
+		return nil, nil, nil, fmt.Errorf("image pinning: encoding override: %w", err)
 	}
 	tmp, err := os.CreateTemp("", "compose.pinned-*.yml")
 	if err != nil {
-		return nil, nil, fmt.Errorf("image pinning: %w", err)
+		return nil, nil, nil, fmt.Errorf("image pinning: %w", err)
 	}
 	cleanup = func() { _ = os.Remove(tmp.Name()) }
 	if _, err := tmp.Write(append(data, '\n')); err != nil {
 		_ = tmp.Close()
 		cleanup()
-		return nil, nil, fmt.Errorf("image pinning: writing override: %w", err)
+		return nil, nil, nil, fmt.Errorf("image pinning: writing override: %w", err)
 	}
 	if err := tmp.Close(); err != nil {
 		cleanup()
-		return nil, nil, fmt.Errorf("image pinning: writing override: %w", err)
+		return nil, nil, nil, fmt.Errorf("image pinning: writing override: %w", err)
 	}
-	return append(files, tmp.Name()), cleanup, nil
+	return append(files, tmp.Name()), unpinned, cleanup, nil
 }

@@ -30,6 +30,11 @@ type RestoreOptions struct {
 	// snapshot's metadata.txt (by repo digest) instead of the tags in
 	// compose.yml. See "Pinning image versions on restore".
 	PinImages bool
+	// TagFallback (with PinImages, issue #12): a service whose recorded
+	// image version the registry no longer has starts with its tag from
+	// compose.yml instead of failing the start. Only for "not found"
+	// (docker.IsImageNotFound); other pull errors still fail.
+	TagFallback bool
 	// CarryOver is a directory inside the stack (relative path) whose
 	// current content must survive the restore. Used when the manager
 	// restores its own stack: its job files live there (the restored copy
@@ -42,6 +47,9 @@ type RestoreOptions struct {
 type RestoreResult struct {
 	Snapshot       string // full id of the restored snapshot
 	SafetySnapshot string // pre-restore snapshot, "" if skipped
+	// Unpinned are the services that started with their tag because their
+	// recorded image version was gone (TagFallback).
+	Unpinned []string
 }
 
 // Restore runs the restore pipeline for an existing stack (see
@@ -143,12 +151,12 @@ func (p *Pipeline) Restore(ctx context.Context, stack stacks.Stack, opts Restore
 	case opts.PinImages && opts.NoStart:
 		log.Info("image pinning skipped: the stack is not started")
 	case opts.PinImages:
-		files, cleanup, err := p.preparePinning(ctx, log, stack.Name, stack.Dir, stack.Dir)
+		files, unpinned, cleanup, err := p.preparePinning(ctx, log, stack.Name, stack.Dir, stack.Dir, opts.TagFallback)
 		if err != nil {
 			return res, err
 		}
 		defer cleanup()
-		composeFiles = files
+		composeFiles, res.Unpinned = files, unpinned
 	}
 	if err := ctx.Err(); err != nil {
 		return res, err

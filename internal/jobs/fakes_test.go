@@ -54,6 +54,9 @@ type fakeDocker struct {
 	orphans, orphansAfter []string
 	// missingImages are references ImageExists reports as absent.
 	missingImages []string
+	// goneImages are references the "registry" no longer has: EnsureImage
+	// fails with docker's "manifest unknown" error (issue #12).
+	goneImages []string
 	// upFailures makes the next n Up calls fail with errBoom (besides failOn).
 	upFailures int
 	// servicesAfter, if set, is returned by Services from the second call
@@ -134,6 +137,9 @@ func (f *fakeDocker) Up(ctx context.Context, dir string, composeFiles, services 
 
 func (f *fakeDocker) EnsureImage(ctx context.Context, ref string) (bool, error) {
 	f.calls.add("docker.EnsureImage %s", ref)
+	if slices.Contains(f.goneImages, ref) {
+		return false, fmt.Errorf("docker pull: exit status 1: manifest for %s not found: manifest unknown: manifest unknown", ref)
+	}
 	return true, f.fail("EnsureImage")
 }
 

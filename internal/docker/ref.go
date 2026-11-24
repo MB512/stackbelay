@@ -65,3 +65,18 @@ func SameRef(a, b string) bool {
 func RefRepository(ref string) string {
 	return repository(NormalizeRef(ref))
 }
+
+// IsImageNotFound reports whether err from pulling an image (EnsureImage)
+// says that the registry does not have that image version (any more),
+// e.g. "manifest for nginx@sha256:... not found: manifest unknown".
+// Network, login and permission errors are not "not found": "pull access
+// denied ... repository does not exist or may require 'docker login'" is
+// ambiguous and does not count.
+func IsImageNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "manifest unknown") ||
+		(strings.Contains(msg, "manifest for ") && strings.Contains(msg, " not found"))
+}

@@ -66,13 +66,15 @@
       {{- with jobDuration .Job}}<tr><th>Duration</th><td>{{.}}</td></tr>{{end}}
       {{- with .Job.Options}}
       {{- if .SnapshotID}}<tr><th>Restoring</th><td><code>{{printf "%.8s" .SnapshotID}}</code>
-        {{- if .NoStart}}, stack not started afterwards{{end}}{{if .PinImages}}, image versions pinned{{end}}</td></tr>{{end}}
+        {{- if .NoStart}}, stack not started afterwards{{end}}{{if .PinImages}}, image versions pinned{{if .TagFallback}} (tags where a version is gone){{end}}{{end}}</td></tr>{{end}}
       {{- if .ComposeFile}}<tr><th>Compose file</th><td><code>{{.ComposeFile}}</code>, new content <code>{{printf "%.12s" .ComposeSHA256}}</code> (SHA-256); the replaced file is kept in the job directory as <code>compose.previous</code></td></tr>{{end}}
       {{- if .NoBackup}}<tr><th>Options</th><td>without backup if the stack has no repository: no rollback on failure</td></tr>{{end}}
       {{- end}}
       {{- with .Job.Snapshot}}<tr><th>Snapshot</th><td><code>{{printf "%.8s" .}}</code></td></tr>{{end}}
       {{- with .Job.Result.PreStopSnapshot}}<tr><th>Pre-stop snapshot</th><td><code>{{printf "%.8s" .}}</code></td></tr>{{end}}
       {{- with .Job.Result.SafetySnapshot}}<tr><th>Safety snapshot</th><td><code>{{printf "%.8s" .}}</code></td></tr>{{end}}
+      {{- with .Job.Result.Unpinned}}<tr><th>Started with tag</th><td>{{range $i, $s := .}}{{if $i}}, {{end}}{{$s}}{{end}}
+        <span class="hint">(the image version from backup time is no longer available)</span></td></tr>{{end}}
       {{- if and (eq (print .Job.Type) "cleanup") .Job.State.Final}}<tr><th>Removed</th><td>{{template "cleanup-result" .Job.Result}}</td></tr>{{end}}
       {{- if .Job.Result.Unchanged}}<tr><th>Result</th><td>no new image: nothing was backed up, stopped or recreated</td></tr>{{end}}
       {{- if .Job.Result.RolledBack}}<tr><th>Rollback</th><td>the update failed; restored to snapshot <code>{{printf "%.8s" .Job.Snapshot}}</code> with the previous image versions</td></tr>{{end}}
