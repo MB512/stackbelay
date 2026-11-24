@@ -7,8 +7,6 @@ import (
 	"net"
 	"net/http"
 	"time"
-
-	"github.com/MB512/stackbelay/internal/config"
 )
 
 // healthcheckTimeout stays below the HEALTHCHECK --timeout in the Dockerfile.
@@ -36,7 +34,7 @@ func healthURL(listen string) (string, error) {
 // process exit code (0 healthy, 1 unhealthy). Like a small console tool in
 // C# that calls HttpClient.GetAsync and returns the result as its exit code.
 func healthcheck(ctx context.Context, getenv func(string) string, stderr io.Writer) int {
-	url, err := healthURL(config.NewEnv(getenv).Get("STACKBELAY_LISTEN"))
+	url, err := healthURL(getenv("STACKBELAY_LISTEN"))
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1

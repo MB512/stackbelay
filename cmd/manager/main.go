@@ -53,14 +53,12 @@ const shutdownTimeout = 8 * time.Second
 // server accepts connections (used by tests).
 func run(ctx context.Context, getenv func(string) string, readFile func(string) ([]byte, error),
 	stderr io.Writer, ready func(addr string)) int {
-	env := config.NewEnv(getenv) // falls back to the old STACKVAULT_* names
-	cfg, err := config.LoadManager(env.Get, readFile)
+	cfg, err := config.LoadManager(getenv, readFile)
 	if err != nil {
 		fmt.Fprintf(stderr, "configuration error:\n%v\n", err)
 		return 2
 	}
 	log := slog.New(slog.NewJSONHandler(stderr, &slog.HandlerOptions{Level: cfg.LogLevel}))
-	env.WarnLegacy(log)
 
 	st, err := openStore(ctx, cfg, log)
 	if err != nil {
