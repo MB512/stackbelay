@@ -39,9 +39,9 @@ func TestOpenRefusesWrongKey(t *testing.T) {
 	_ = s.Close()
 }
 
-// TestKeyCheckForOldDatabase covers databases from 0.1, which have no
-// key_check row (simulated by deleting it).
-func TestKeyCheckForOldDatabase(t *testing.T) {
+// TestKeyCheckWithoutRow covers a database without key_check row
+// (simulated by deleting it), with and without an encrypted repository.
+func TestKeyCheckWithoutRow(t *testing.T) {
 	tests := []struct {
 		name     string
 		withRepo bool
