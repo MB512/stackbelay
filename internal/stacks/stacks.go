@@ -43,21 +43,11 @@ var reservedPattern = regexp.MustCompile(`(\.restore-tmp$|\.old-)`)
 // next restore continues the incomplete one.
 const IncompleteMarker = ".stackbelay-restore-incomplete"
 
-// LegacyIncompleteMarker is the IncompleteMarker of StackVault 0.4 and
-// older (issue #44). It can still exist after a restore that did not
-// complete before the update; it counts like IncompleteMarker, and a
-// completed restore removes both.
-const LegacyIncompleteMarker = ".stackvault-restore-incomplete"
-
 // RestoreIncomplete reports whether the last restore into dir did not
-// complete (IncompleteMarker or LegacyIncompleteMarker exists).
+// complete (IncompleteMarker exists).
 func RestoreIncomplete(dir string) bool {
-	for _, name := range []string{IncompleteMarker, LegacyIncompleteMarker} {
-		if _, err := os.Lstat(filepath.Join(dir, name)); err == nil {
-			return true
-		}
-	}
-	return false
+	_, err := os.Lstat(filepath.Join(dir, IncompleteMarker))
+	return err == nil
 }
 
 // ErrNotFound is returned by Lookup when no stack with that name was discovered.

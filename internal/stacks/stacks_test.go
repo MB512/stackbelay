@@ -197,14 +197,4 @@ func TestImportTarget(t *testing.T) {
 	if !RestoreIncomplete(filepath.Join(root, "incomplete")) || RestoreIncomplete(filepath.Join(root, "exists")) {
 		t.Error("RestoreIncomplete")
 	}
-	legacy := filepath.Join(root, "legacy")
-	if err := os.Mkdir(legacy, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(legacy, LegacyIncompleteMarker), nil, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if !RestoreIncomplete(legacy) {
-		t.Error("RestoreIncomplete ignores the legacy marker")
-	}
 }
