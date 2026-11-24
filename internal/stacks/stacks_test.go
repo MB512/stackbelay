@@ -30,10 +30,6 @@ func TestDiscover(t *testing.T) {
 	mkStack(t, root, "legacy2", "docker-compose.yaml")
 	mkStack(t, root, "other", "stack.yml") // not a compose file name
 	mkStack(t, root, ".hidden", "compose.yml")
-	// Leftovers of a restore must not show up as stacks.
-	mkStack(t, root, "app.old-20261113T202615Z", "compose.yml")
-	mkStack(t, root, "app.old-keep", "compose.yml")
-	mkStack(t, root, "app.restore-tmp", "compose.yaml")
 	if err := os.WriteFile(filepath.Join(root, "file.txt"), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -145,17 +141,14 @@ func TestLookup(t *testing.T) {
 
 func TestValidName(t *testing.T) {
 	for name, valid := range map[string]bool{
-		"nextcloud":                true,
-		"example.com":              true,
-		"my_stack-2":               true,
-		"web.old-20261113T202615Z": false,
-		"web.old-keep":             false,
-		"web.restore-tmp":          false,
-		"web.restore-tmp2":         true,
-		"bold-move":                true,
-		"-web":                     false,
-		"web/sub":                  false,
-		strings.Repeat("a", 129):   false,
+		"nextcloud":              true,
+		"example.com":            true,
+		"my_stack-2":             true,
+		"web.old-keep":           true,
+		"bold-move":              true,
+		"-web":                   false,
+		"web/sub":                false,
+		strings.Repeat("a", 129): false,
 	} {
 		if got := ValidName(name); got != valid {
 			t.Errorf("ValidName(%q) = %v, want %v", name, got, valid)
@@ -191,8 +184,8 @@ func TestImportTarget(t *testing.T) {
 			t.Errorf("%s: dir %s", name, s.Dir)
 		}
 	}
-	if _, err := ImportTarget(root, "web.old-1"); err == nil {
-		t.Error("reserved name accepted")
+	if _, err := ImportTarget(root, "../etc"); err == nil {
+		t.Error("invalid name accepted")
 	}
 	if !RestoreIncomplete(filepath.Join(root, "incomplete")) || RestoreIncomplete(filepath.Join(root, "exists")) {
 		t.Error("RestoreIncomplete")

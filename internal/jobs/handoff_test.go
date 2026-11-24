@@ -110,7 +110,7 @@ func TestReadSpecRejects(t *testing.T) {
 		{"bad id", `{"version":1,"id":"../x","type":"backup","stack":"web"}`},
 		{"bad type", `{"version":1,"id":"` + testJobID + `","type":"prune","stack":"web"}`},
 		{"stack path", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"../etc"}`},
-		{"reserved stack", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"web.old-1"}`},
+		{"invalid stack name", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"-web"}`},
 		{"restore without snapshot", `{"version":1,"id":"` + testJobID + `","type":"restore","stack":"web"}`},
 		{"restore with flag-like snapshot", `{"version":1,"id":"` + testJobID + `","type":"restore","stack":"web","snapshot_id":"--help"}`},
 		{"backup with restore option", `{"version":1,"id":"` + testJobID + `","type":"backup","stack":"web","no_start":true}`},

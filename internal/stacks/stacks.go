@@ -29,13 +29,6 @@ func MainFileNames() []string {
 // path separators, "." and ".." and leading dots/dashes.
 var namePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
 
-// reservedPattern matches the sibling directories that restores of
-// StackVault 0.4 and older created next to a stack directory (staging
-// "<stack>.restore-tmp", previous version "<stack>.old-<time>", also when
-// renamed by hand, e.g. "web.old-keep"). They contain a compose file but
-// are not stacks: such names are reserved and never discovered.
-var reservedPattern = regexp.MustCompile(`(\.restore-tmp$|\.old-)`)
-
 // IncompleteMarker is the file a restore creates in the stack directory
 // before restic writes into it and removes once the directory is completely
 // restored (issue #33). While it exists, the directory may be partly
@@ -60,11 +53,9 @@ type Stack struct {
 	ComposeFile string // absolute path of the main compose file, e.g. compose.yaml
 }
 
-// ValidName reports whether name is an acceptable stack name. Names reserved
-// for restore staging/previous directories are not.
+// ValidName reports whether name is an acceptable stack name.
 func ValidName(name string) bool {
-	return namePattern.MatchString(name) && name != "." && name != ".." &&
-		!reservedPattern.MatchString(name)
+	return namePattern.MatchString(name) && name != "." && name != ".."
 }
 
 // Discover lists all stacks directly below root, sorted by name.

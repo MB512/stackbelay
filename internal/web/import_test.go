@@ -38,9 +38,9 @@ func TestImportStack(t *testing.T) {
 	lister := &fakeRepoLister{snaps: []restic.Snapshot{
 		{ID: "a1", ShortID: "a1", Time: t0, Hostname: "old-host", Paths: []string{"/home/docker/cloud"}},
 		{ID: "a2", ShortID: "a2", Time: t0.Add(time.Hour), Hostname: "old-host", Paths: []string{"/home/docker/cloud"}},
-		{ID: "b1", ShortID: "b1", Time: t0, Hostname: "old-host", Paths: []string{"/home/docker/web"}},       // web exists here
-		{ID: "c1", ShortID: "c1", Time: t0, Hostname: "old-host", Paths: []string{"/home/docker/web.old-1"}}, // reserved name
-		{ID: "d1", ShortID: "d1", Time: t0, Hostname: "old-host", Paths: []string{"/a", "/b"}},               // not a stack
+		{ID: "b1", ShortID: "b1", Time: t0, Hostname: "old-host", Paths: []string{"/home/docker/web"}},     // web exists here
+		{ID: "c1", ShortID: "c1", Time: t0, Hostname: "old-host", Paths: []string{"/home/docker/.hidden"}}, // invalid name
+		{ID: "d1", ShortID: "d1", Time: t0, Hostname: "old-host", Paths: []string{"/a", "/b"}},             // not a stack
 		{ID: "e1", ShortID: "e1", Time: t0, Hostname: "new-host", Paths: []string{"/srv/stacks/wiki"}},
 	}}
 	e := newEnvWith(t, true, true, func(s *Server) { s.RepoSnapshots = lister; s.Hostname = "new-host" })
@@ -71,7 +71,7 @@ func TestImportStack(t *testing.T) {
 		t.Fatalf("no token:\n%s", r.body)
 	}
 	// cloud (2 snapshots) can be imported; web and wiki are taken; the
-	// reserved and multi-path snapshots are not offered.
+	// invalid and multi-path snapshots are not offered.
 	rows := strings.Split(r.body[strings.Index(r.body, "<tbody>"):strings.Index(r.body, "</tbody>")], "<tr>")
 	var offered, taken []string
 	for _, row := range rows[1:] {
