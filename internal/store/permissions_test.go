@@ -140,7 +140,7 @@ func TestStackSummariesAndRepositoryInfo(t *testing.T) {
 	if _, err := s.RepositoryInfoForStack(ctx, web); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("no repository: want ErrNotFound, got %v", err)
 	}
-	repo, err := s.SetRepository(ctx, web, "/srv/restic/web", "pw", nil)
+	repo, err := setRepo(ctx, s, web, "/srv/restic/web", "pw", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -111,10 +111,8 @@ func newEnv(t *testing.T) *env {
 		refresh: &fakeRefresher{}, jobsDir: t.TempDir(), clock: time.Date(2026, 11, 14, 10, 0, 0, 0, time.UTC)}
 	for _, name := range []string{"web", "db"} {
 		s, _ := st.StackByName(ctx, name)
-		if _, err := st.SetRepository(ctx, s.ID, "rest:https://backup.example/"+name, "repo-pw-"+name,
-			map[string]string{"RESTIC_REST_USERNAME": "u", "RESTIC_REST_PASSWORD": "rest-pw-" + name}); err != nil {
-			t.Fatal(err)
-		}
+		giveRepo(t, st, s.ID, "rest:https://backup.example/"+name, "repo-pw-"+name,
+			map[string]string{"RESTIC_REST_USERNAME": "u", "RESTIC_REST_PASSWORD": "rest-pw-" + name})
 		if name == "web" {
 			e.web = s.ID
 		} else {
@@ -769,9 +767,7 @@ func TestImportRestore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.st.SetRepository(ctx, st.ID, "rest:https://backup.example/cloud", "pw", nil); err != nil {
-		t.Fatal(err)
-	}
+	giveRepo(t, e.st, st.ID, "rest:https://backup.example/cloud", "pw", nil)
 	j, err := e.d.Submit(ctx, store.Job{StackID: st.ID, Type: jobs.TypeRestore, Trigger: store.TriggerManual,
 		Options: store.JobOptions{SnapshotID: "0123abcd", Import: true, NoStart: true, LimitDownloadKiB: 1024}})
 	if err != nil {
@@ -884,5 +880,19 @@ func TestCleanupJobDirs(t *testing.T) {
 	e.d.CleanupJobDirs(ctx)
 	if _, err := os.Stat(filepath.Join(e.jobsDir, "01AAAAAAAAAAAAAAAAAAAAAAA5")); err != nil {
 		t.Errorf("deleted although retention is off: %v", err)
+	}
+}
+
+// giveRepo creates a repository named after its location and assigns it
+// to the stack.
+func giveRepo(t *testing.T, st *store.Store, stackID int64, location, password string, env map[string]string) {
+	t.Helper()
+	ctx := context.Background()
+	id, err := st.CreateRepository(ctx, location, location, password, env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetStackRepository(ctx, stackID, id); err != nil {
+		t.Fatal(err)
 	}
 }

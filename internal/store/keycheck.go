@@ -38,14 +38,17 @@ func (s *Store) checkKey(ctx context.Context) error {
 		return fmt.Errorf("reading key check: %w", err)
 	}
 
-	var stackID int64
+	var repoID int64
 	var secret []byte
-	err = s.db.QueryRowContext(ctx, `SELECT stack_id, secret_enc FROM repositories ORDER BY id LIMIT 1`).
-		Scan(&stackID, &secret)
+	err = s.db.QueryRowContext(ctx, `SELECT id, secret_enc FROM repositories ORDER BY id LIMIT 1`).
+		Scan(&repoID, &secret)
 	switch {
 	case err == nil:
-		if _, err := s.box.Open(secret, repoAAD(stackID)); err != nil {
-			return ErrKeyMismatch
+		if _, err := s.box.Open(secret, repoAAD(repoID)); err != nil {
+			// Not converted yet (migration 0018, see convertRepositories).
+			if _, ok := s.openOwnerSecret(ctx, s.db, repoID, secret); !ok {
+				return ErrKeyMismatch
+			}
 		}
 	case !errors.Is(err, sql.ErrNoRows):
 		return fmt.Errorf("reading repository for key check: %w", err)

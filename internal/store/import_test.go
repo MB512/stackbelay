@@ -51,7 +51,7 @@ func TestStackSnapshotHosts(t *testing.T) {
 	s := openTest(t)
 	ctx := context.Background()
 	web := stackID(t, s, "web")
-	repo, err := s.SetRepository(ctx, web, "/repos/web", "pw", nil)
+	repo, err := setRepo(ctx, s, web, "/repos/web", "pw", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

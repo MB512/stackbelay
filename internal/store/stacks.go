@@ -70,8 +70,9 @@ func (s *Store) ListStacks(ctx context.Context) ([]Stack, error) {
 // StackSummary is a stack with overview data for the stack list.
 type StackSummary struct {
 	Stack
-	HasRepository bool
-	LastBackup    JobBrief // newest backup job in any state; zero if there is none
+	HasRepository  bool
+	RepositoryName string   // "" if the stack has no repository
+	LastBackup     JobBrief // newest backup job in any state; zero if there is none
 	// LastFinal is the newest job that took a final snapshot (stack
 	// stopped, consistent) that is known to be good: a succeeded backup,
 	// update or compose apply, or one rolled back to that snapshot. Zero if
@@ -105,9 +106,9 @@ func (s *Store) StackSummaries(ctx context.Context) ([]StackSummary, error) {
 	}
 
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT s.id, s.name, s.present, s.seen_present, s.source_host, r.id IS NOT NULL
+		`SELECT s.id, s.name, s.present, s.seen_present, s.source_host, r.id IS NOT NULL, COALESCE(r.name, '')
 		 FROM stacks s
-		 LEFT JOIN repositories r ON r.stack_id = s.id
+		 LEFT JOIN repositories r ON r.id = s.repository_id
 		 ORDER BY s.name`)
 	if err != nil {
 		return nil, fmt.Errorf("listing stacks: %w", err)
@@ -116,7 +117,7 @@ func (s *Store) StackSummaries(ctx context.Context) ([]StackSummary, error) {
 	var out []StackSummary
 	for rows.Next() {
 		var ss StackSummary
-		if err := rows.Scan(&ss.ID, &ss.Name, &ss.Present, &ss.SeenPresent, &ss.SourceHost, &ss.HasRepository); err != nil {
+		if err := rows.Scan(&ss.ID, &ss.Name, &ss.Present, &ss.SeenPresent, &ss.SourceHost, &ss.HasRepository, &ss.RepositoryName); err != nil {
 			return nil, fmt.Errorf("listing stacks: %w", err)
 		}
 		ss.LastBackup = lastBackup[ss.ID]

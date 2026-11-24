@@ -184,7 +184,7 @@ func TestStackDetailShowsRepositoryAndSnapshots(t *testing.T) {
 	e := newEnv(t, true, true)
 	web, _ := e.setupStacks()
 	ctx := context.Background()
-	repo, err := e.st.SetRepository(ctx, web, "rest:https://backup.example/web", "repo-secret-pw",
+	repo, err := setRepo(ctx, e.st, web, "rest:https://backup.example/web", "repo-secret-pw",
 		map[string]string{"RESTIC_REST_PASSWORD": "rest-secret-pw"})
 	if err != nil {
 		t.Fatal(err)
@@ -212,7 +212,7 @@ func TestStackDetailShowsRepositoryAndSnapshots(t *testing.T) {
 	// Stack list (issue #37): column groups, relative times, status dots.
 	r = e.get("/")
 	for _, want := range []string{`<th colspan="3" class="group">Backup</th>`, `<th colspan="3" class="group">Update</th>`,
-		`aria-label="configured" title="Repository configured">✓</span>`, `<span class="muted">never</span>`,
+		`<td>rest:https://backup.example/web</td>`, `<span class="muted">never</span>`,
 		`<span class="muted" title="No schedule">–</span>`} {
 		if !strings.Contains(r.body, want) {
 			t.Errorf("stack list lacks %s", want)

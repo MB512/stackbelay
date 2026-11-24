@@ -111,14 +111,20 @@ c -o /dev/null --data-urlencode "csrf_token=$T" --data-urlencode "current=$PW" \
 c "$B/" | grep -q "href=\"/stacks/$STACK\"" || fail "stack not listed"
 pass "logged in, stack discovered"
 
-step "repository: save, initialize"
+step "repository: add, initialize, choose for the stack"
 REPO_PW="e2e-repo-$RANDOM-secret"
-c --data-urlencode "csrf_token=$T" --data-urlencode "location=$REPO" --data-urlencode "password=$REPO_PW" \
-	"$B/stacks/$STACK/repository" | grep -q 'Initialize repository</button>' || fail "init not offered"
+PAGE="$(c --data-urlencode "csrf_token=$T" -d "name=e2e" --data-urlencode "location=$REPO" --data-urlencode "password=$REPO_PW" \
+	"$B/admin/repositories")"
+grep -q 'Initialize repository</button>' <<<"$PAGE" || fail "init not offered"
+REPO_ID="$(grep -o 'action="/admin/repositories/[0-9]*/init"' <<<"$PAGE" | grep -o '[0-9]*')"
+[[ -n "$REPO_ID" ]] || fail "no repository id"
 pass "no repository yet, init offered"
-c --data-urlencode "csrf_token=$T" "$B/stacks/$STACK/repository/init" | grep -q 'Repository initialized. restic found 0 snapshots.' ||
+c --data-urlencode "csrf_token=$T" "$B/admin/repositories/$REPO_ID/init" | grep -q 'Repository initialized. restic found 0 snapshots.' ||
 	fail "init failed"
 pass "repository initialized"
+c --data-urlencode "csrf_token=$T" -d "repository=$REPO_ID" "$B/stacks/$STACK/repository" |
+	grep -q 'The stack uses the repository e2e now. restic found 0 snapshots of this stack.' || fail "repository not chosen"
+pass "stack uses the repository"
 
 step "backup with pre-stop snapshot, a second one queued behind it"
 submit_backup() { c -o /dev/null -w '%{http_code} %{redirect_url}' --data-urlencode "csrf_token=$T" "$@" "$B/stacks/$STACK/backup"; }

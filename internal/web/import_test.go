@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -59,7 +61,7 @@ func TestImportStack(t *testing.T) {
 	}
 	token := e.csrf("/admin/import")
 	r = e.post("/admin/import", url.Values{"csrf_token": {token},
-		"location": {"rest:https://demo:rest-secret@backup.example/cloud"}, "password": {"repo-secret"}})
+		"name": {"old-nas"}, "location": {"rest:https://demo:rest-secret@backup.example/cloud"}, "password": {"repo-secret"}})
 	expect(t, r, http.StatusOK, "")
 	for _, secret := range []string{"rest-secret", "repo-secret"} {
 		if strings.Contains(r.body, secret) {
@@ -108,7 +110,7 @@ func TestImportStack(t *testing.T) {
 	expect(t, e.post("/admin/import/confirm", url.Values{"csrf_token": {token}, "token": {m[1]}, "choice": {"0"}}),
 		http.StatusBadRequest, "")
 	r = e.post("/admin/import", url.Values{"csrf_token": {token},
-		"location": {"rest:https://demo:rest-secret@backup.example/cloud"}, "password": {"repo-secret"}})
+		"name": {"old-nas"}, "location": {"rest:https://demo:rest-secret@backup.example/cloud"}, "password": {"repo-secret"}})
 	m = importToken.FindStringSubmatch(r.body)
 	expect(t, e.post("/admin/import/confirm", url.Values{"csrf_token": {token}, "token": {m[1]}, "choice": {"0"}}),
 		http.StatusSeeOther, "/stacks/cloud/backups")
@@ -118,9 +120,12 @@ func TestImportStack(t *testing.T) {
 		t.Fatalf("imported stack %+v, %v", st, err)
 	}
 	repo, err := e.st.RepositoryForStack(ctx, st.ID)
-	if err != nil || repo.Location != "rest:https://backup.example/cloud" || repo.Password != "repo-secret" ||
+	if err != nil || repo.Name != "old-nas" || repo.Location != "rest:https://backup.example/cloud" || repo.Password != "repo-secret" ||
 		repo.Env["RESTIC_REST_PASSWORD"] != "rest-secret" {
 		t.Fatalf("repository %+v, %v", repo.Location, err)
+	}
+	if repos, _ := e.st.ListRepositories(ctx); len(repos) != 1 {
+		t.Fatalf("repositories: %+v", repos) // the refused attempts did not save it
 	}
 	e.snaps.mu.Lock()
 	refreshed := e.snaps.calls
@@ -128,8 +133,8 @@ func TestImportStack(t *testing.T) {
 	if refreshed == 0 {
 		t.Error("snapshot cache not refreshed after the import")
 	}
-	if auditActions(t, e.st)["stack.import"] != 1 {
-		t.Error("import not audited")
+	if n := auditActions(t, e.st); n["stack.import"] != 1 || n["repository.create"] != 1 {
+		t.Errorf("audit: %v", n)
 	}
 	for _, a := range auditDetails(t, e.st) {
 		if strings.Contains(a, "secret") {
@@ -153,4 +158,57 @@ func auditDetails(t *testing.T, st *store.Store) []string {
 		out = append(out, a.Detail)
 	}
 	return out
+}
+
+// An import from a configured repository uses its stored credentials and
+// adds no repository.
+func TestImportFromConfiguredRepository(t *testing.T) {
+	t0 := time.Date(2026, 11, 13, 3, 0, 0, 0, time.UTC)
+	lister := &fakeRepoLister{snaps: []restic.Snapshot{
+		{ID: "a1", ShortID: "a1", Time: t0, Hostname: "old-host", Paths: []string{"/home/docker/cloud"}},
+	}}
+	e := newEnvWith(t, true, true, func(s *Server) { s.RepoSnapshots = lister; s.Hostname = "new-host" })
+	e.setupStacks()
+	e.setupLogs() // stacks root with web and db
+	ctx := context.Background()
+	nas, err := e.st.CreateRepository(ctx, "nas", "/srv/restic/nas", "stored-pw", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.loginAdmin()
+	token := e.csrf("/admin/import")
+	r := e.get("/admin/import")
+	if !strings.Contains(r.body, `<option value="`+strconv.FormatInt(nas, 10)+`">nas</option>`) {
+		t.Fatalf("configured repositories not offered:\n%s", r.body)
+	}
+
+	// A new repository may not take the name of a configured one.
+	r = e.post("/admin/import", url.Values{"csrf_token": {token}, "name": {"nas"}, "location": {"/x"}, "password": {"pw"}})
+	expect(t, r, http.StatusConflict, "")
+	expect(t, e.post("/admin/import", url.Values{"csrf_token": {token}, "repository": {"999"}}), http.StatusBadRequest, "")
+
+	r = e.post("/admin/import", url.Values{"csrf_token": {token}, "repository": {strconv.FormatInt(nas, 10)}})
+	expect(t, r, http.StatusOK, "")
+	m := importToken.FindStringSubmatch(r.body)
+	if m == nil || !strings.Contains(r.body, "in nas (<code>/srv/restic/nas</code>)") {
+		t.Fatalf("no candidates:\n%s", r.body)
+	}
+	lister.mu.Lock()
+	got := lister.repos[len(lister.repos)-1]
+	lister.mu.Unlock()
+	if got.Location != "/srv/restic/nas" || !slices.Contains(got.Env, "RESTIC_PASSWORD=stored-pw") {
+		t.Fatalf("restic asked about %+v", got.Location)
+	}
+	expect(t, e.post("/admin/import/confirm", url.Values{"csrf_token": {token}, "token": {m[1]}, "choice": {"0"}}),
+		http.StatusSeeOther, "/stacks/cloud/backups")
+	st, err := e.st.StackByName(ctx, "cloud")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ri, err := e.st.RepositoryInfoForStack(ctx, st.ID); err != nil || ri.ID != nas {
+		t.Fatalf("repository of the imported stack: %+v, %v", ri, err)
+	}
+	if repos, _ := e.st.ListRepositories(ctx); len(repos) != 1 {
+		t.Fatalf("repositories: %+v", repos)
+	}
 }

@@ -46,7 +46,11 @@ func setup(t *testing.T) (*Cache, *fakeRestic, int64, *time.Time) {
 		t.Fatal(err)
 	}
 	web, _ := st.StackByName(ctx, "web")
-	if _, err := st.SetRepository(ctx, web.ID, "/repos/web", "pw", map[string]string{"AWS_ACCESS_KEY_ID": "ak"}); err != nil {
+	repo, err := st.CreateRepository(ctx, "nas", "/repos/web", "pw", map[string]string{"AWS_ACCESS_KEY_ID": "ak"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetStackRepository(ctx, web.ID, repo); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 11, 14, 8, 0, 0, 0, time.UTC)
@@ -103,5 +107,21 @@ func TestRefreshWithoutRepository(t *testing.T) {
 	c, f, _, _ := setup(t)
 	if _, err := c.Refresh(context.Background(), 999); !errors.Is(err, store.ErrNotFound) || f.calls != 0 {
 		t.Fatalf("want ErrNotFound without restic call, got %v (calls %d)", err, f.calls)
+	}
+}
+
+func TestRefreshRepository(t *testing.T) {
+	c, f, web, _ := setup(t)
+	ctx := context.Background()
+	ri, err := c.Store.RepositoryInfoForStack(ctx, web)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snaps, err := c.RefreshRepository(ctx, ri.ID)
+	if err != nil || len(snaps) != 1 || f.repo.Location != "/repos/web" {
+		t.Fatalf("snaps %+v, err %v, restic called with %+v", snaps, err, f.repo)
+	}
+	if _, err := c.RefreshRepository(ctx, 999); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("unknown repository: %v", err)
 	}
 }

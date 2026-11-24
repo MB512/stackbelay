@@ -108,10 +108,14 @@ c -o /dev/null --data-urlencode "csrf_token=$T" --data-urlencode "current=$PW" \
 	-d "new=e2e+long+password&confirm=e2e+long+password" "$B/account/password"
 c "$B/" | grep -q "href=\"/stacks/$NAME\"" || fail "own stack not discovered"
 pass "manager running in its stack, logged in"
-c --data-urlencode "csrf_token=$T" --data-urlencode "location=$REPO" -d "password=self-repo-pw" \
-	"$B/stacks/$NAME/repository" | grep -q 'Initialize repository</button>' || fail "init not offered"
-c --data-urlencode "csrf_token=$T" "$B/stacks/$NAME/repository/init" | grep -q 'Repository initialized' || fail "init failed"
-pass "repository initialized"
+PAGE="$(c --data-urlencode "csrf_token=$T" -d "name=self" --data-urlencode "location=$REPO" -d "password=self-repo-pw" \
+	"$B/admin/repositories")"
+grep -q 'Initialize repository</button>' <<<"$PAGE" || fail "init not offered"
+REPO_ID="$(grep -o 'action="/admin/repositories/[0-9]*/init"' <<<"$PAGE" | grep -o '[0-9]*')"
+c --data-urlencode "csrf_token=$T" "$B/admin/repositories/$REPO_ID/init" | grep -q 'Repository initialized' || fail "init failed"
+c --data-urlencode "csrf_token=$T" -d "repository=$REPO_ID" "$B/stacks/$NAME/repository" |
+	grep -q 'The stack uses the repository self now' || fail "repository not chosen"
+pass "repository initialized and chosen"
 
 step "self-backup"
 BACKUP="$(c -o /dev/null -w '%{redirect_url}' --data-urlencode "csrf_token=$T" "$B/stacks/$NAME/backup")"

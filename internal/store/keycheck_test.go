@@ -61,7 +61,7 @@ func TestKeyCheckWithoutRow(t *testing.T) {
 				t.Fatal(err)
 			}
 			if tt.withRepo {
-				if _, err := s.SetRepository(ctx, stackID(t, s, "web"), "/repos/web", "pw", nil); err != nil {
+				if _, err := setRepo(ctx, s, stackID(t, s, "web"), "/repos/web", "pw", nil); err != nil {
 					t.Fatal(err)
 				}
 			}

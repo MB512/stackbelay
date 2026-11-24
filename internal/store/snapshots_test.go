@@ -18,7 +18,7 @@ func snap(id string, ts time.Time, tags ...string) restic.Snapshot {
 func TestReplaceAndListSnapshots(t *testing.T) {
 	s := openTest(t)
 	ctx := context.Background()
-	repo, err := s.SetRepository(ctx, stackID(t, s, "web"), "/repos/web", "pw", nil)
+	repo, err := setRepo(ctx, s, stackID(t, s, "web"), "/repos/web", "pw", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestReplaceSnapshotsErrors(t *testing.T) {
 	if err := s.ReplaceSnapshots(ctx, 999, nil, time.Now()); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("want ErrNotFound for unknown repo, got %v", err)
 	}
-	repo, _ := s.SetRepository(ctx, stackID(t, s, "web"), "/repos/web", "pw", nil)
+	repo, _ := setRepo(ctx, s, stackID(t, s, "web"), "/repos/web", "pw", nil)
 	bad := restic.Snapshot{ID: "../../etc", ShortID: "x", Time: time.Now()}
 	if err := s.ReplaceSnapshots(ctx, repo, []restic.Snapshot{bad}, time.Now()); err == nil {
 		t.Fatal("invalid snapshot id accepted")
@@ -82,7 +82,7 @@ func TestStackSnapshotsFilter(t *testing.T) {
 	s := openTest(t)
 	ctx := context.Background()
 	web := stackID(t, s, "web")
-	repo, err := s.SetRepository(ctx, web, "/repos/shared", "pw", nil)
+	repo, err := setRepo(ctx, s, web, "/repos/shared", "pw", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestSnapshotSummaryCached(t *testing.T) {
 	s := openTest(t)
 	ctx := context.Background()
 	web := stackID(t, s, "web")
-	repo, err := s.SetRepository(ctx, web, "/repos/web", "pw", nil)
+	repo, err := setRepo(ctx, s, web, "/repos/web", "pw", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

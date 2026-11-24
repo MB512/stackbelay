@@ -50,6 +50,7 @@
   <a href="/admin/users"{{if eq . "users"}} aria-current="page"{{end}}>Users</a>
   <a href="/admin/jobs"{{if eq . "jobs"}} aria-current="page"{{end}}>Jobs</a>
   <a href="/admin/host"{{if eq . "host"}} aria-current="page"{{end}}>Host</a>
+  <a href="/admin/repositories"{{if eq . "repositories"}} aria-current="page"{{end}}>Repositories</a>
   <a href="/admin/import"{{if eq . "import"}} aria-current="page"{{end}}>Import stack</a>
   <a href="/admin/audit"{{if eq . "audit"}} aria-current="page"{{end}}>Audit log</a>
 </nav>
@@ -128,3 +129,37 @@
   {{- end}}
 </section>
 {{- end}}
+
+{{- /* The fields of a repository form (admin Repositories tab, import).
+       Dot is a repoForm; never holds secret values. */}}
+{{define "repo-fields"}}
+    <label>Name
+      <input name="name" required maxlength="200" value="{{.Name}}" spellcheck="false" placeholder="nas-2026">
+    </label>
+    <p class="hint">Shown in the stack list and on the stacks' Settings tab, e.g. the server and year.</p>
+    <label>Location
+      <input name="location" required maxlength="1024" value="{{.Location}}" spellcheck="false"
+             placeholder="rest:https://user:password@backup.example:8000/stacks">
+    </label>
+    <p class="hint">A restic repository string: a path, <code>rest:https://…</code>, <code>s3:…</code>, <code>sftp:…</code>, …
+      A user name and password in a <code>rest:</code> URL are removed from the location and stored encrypted
+      (special characters in the password must be percent-encoded).</p>
+
+    <label>Repository password
+      <input name="password" type="password" autocomplete="new-password" {{if not .ID}}required{{end}}
+             {{- if .ID}} placeholder="leave empty to keep the current password"{{end}}>
+    </label>
+
+    <label>Backend credentials (optional, one <code>KEY=value</code> per line)
+      <textarea name="env" rows="3" spellcheck="false" autocomplete="off"
+                placeholder="AWS_ACCESS_KEY_ID=…&#10;AWS_SECRET_ACCESS_KEY=…"></textarea>
+    </label>
+    <p class="hint">
+      {{- if .EnvKeys}}Stored (encrypted): {{range $i, $k := .EnvKeys}}{{if $i}}, {{end}}<code>{{$k}}</code>{{end}}.
+      Entering variables replaces all stored ones; leave empty to keep them.
+      {{- else if .ID}}No backend credentials stored.{{end}}
+      Supported: {{range $i, $k := .Allowed}}{{if $i}}, {{end}}<code>{{$k}}</code>{{end}}.</p>
+    {{- if .EnvKeys}}
+    <label class="check"><input type="checkbox" name="clear_env"> Remove the stored backend credentials</label>
+    {{- end}}
+{{end}}

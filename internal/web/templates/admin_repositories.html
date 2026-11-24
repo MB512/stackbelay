@@ -1,0 +1,43 @@
+{{define "content"}}
+<h1>Administration</h1>
+{{template "admin-tabs" "repositories"}}
+{{- with .Data}}
+<p class="hint">The restic repositories that stacks back up into. Several stacks may share one; a change here (new
+  location, password or credentials) applies to every stack that uses it from its next job on. Choose a stack's
+  repository on its Settings tab.</p>
+
+<section>
+  <h2>Repositories</h2>
+  {{- if .Repos}}
+  <table>
+    <thead><tr><th>Name</th><th>Location</th><th>Stacks</th><th>Snapshots refreshed</th></tr></thead>
+    <tbody>
+      {{- range .Repos}}
+      <tr>
+        <td><a href="/admin/repositories/{{.ID}}">{{.Name}}</a></td>
+        <td><code>{{.Location}}</code></td>
+        <td>{{if .Stacks}}{{range $i, $n := .Stacks}}{{if $i}}, {{end}}<a href="/stacks/{{$n}}/settings">{{$n}}</a>{{end}}
+          {{- else}}<span class="muted">none</span>{{end}}</td>
+        <td>{{if .SnapshotsRefreshedAt.IsZero}}<span class="muted">never</span>{{else}}{{when .SnapshotsRefreshedAt}}{{end}}</td>
+      </tr>
+      {{- end}}
+    </tbody>
+  </table>
+  {{- else}}
+  <p class="hint">No repositories yet.</p>
+  {{- end}}
+</section>
+
+<section>
+  <h2>Add repository</h2>
+  <form method="post" action="/admin/repositories" class="card wide" autocomplete="off"
+        data-busy="Saving and checking access…">
+    <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+    {{template "repo-fields" .New}}
+    <div><button type="submit">Add repository</button>
+      <span class="hint">Saving checks access by listing the snapshots. If there is no repository at the location
+        yet, its page offers to initialize one.</span></div>
+  </form>
+</section>
+{{- end}}
+{{end}}

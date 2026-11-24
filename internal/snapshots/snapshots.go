@@ -1,4 +1,4 @@
-// Package snapshots keeps the snapshot cache of a stack's repository up to
+// Package snapshots keeps the snapshot cache of the repositories up to
 // date. Refreshing is a read-only "restic snapshots" call that the manager
 // runs directly (not through a worker container), see docs/architecture.md.
 package snapshots
@@ -29,15 +29,30 @@ func (c *Cache) now() time.Time {
 
 // Refresh lists the snapshots in the stack's repository, updates the cache
 // and returns the cached list (newest first, including missing snapshots).
+// The cache belongs to the repository: it holds the snapshots of every
+// stack and host that use it.
 func (c *Cache) Refresh(ctx context.Context, stackID int64) ([]store.CachedSnapshot, error) {
 	repo, err := c.Store.RepositoryForStack(ctx, stackID)
 	if err != nil {
 		return nil, err
 	}
+	return c.refresh(ctx, repo)
+}
+
+// RefreshRepository is Refresh for a repository given by id.
+func (c *Cache) RefreshRepository(ctx context.Context, repoID int64) ([]store.CachedSnapshot, error) {
+	repo, err := c.Store.Repository(ctx, repoID)
+	if err != nil {
+		return nil, err
+	}
+	return c.refresh(ctx, repo)
+}
+
+func (c *Cache) refresh(ctx context.Context, repo store.Repository) ([]store.CachedSnapshot, error) {
 	at := c.now()
 	snaps, err := c.Restic.Snapshots(ctx, repo.Restic())
 	if err != nil {
-		return nil, fmt.Errorf("listing snapshots for stack %d: %w", stackID, err)
+		return nil, fmt.Errorf("listing snapshots of repository %q: %w", repo.Name, err)
 	}
 	if err := c.Store.ReplaceSnapshots(ctx, repo.ID, snaps, at); err != nil {
 		return nil, err

@@ -25,9 +25,11 @@ import (
 // host. The name is never typed in: it comes from the snapshot paths of the
 // repository (last path component, validated like a discovered name).
 //
-// Step 1 lists the repository's snapshots (read-only restic) and keeps the
-// credentials on the server for step 2 (pendingImports: in memory, short
-// lived, bound to the admin), so they never travel through the page.
+// Step 1 lists the snapshots (read-only restic) of a configured repository
+// or of a new one. The credentials of a new one wait on the server for
+// step 2 (pendingImports: in memory, short lived, bound to the admin), so
+// they never travel through the page; it is only saved when the import is
+// confirmed.
 
 // RepoSnapshotLister lists the snapshots of a repository that is not saved
 // yet (*restic.CLI, read-only).
@@ -53,10 +55,11 @@ type importCandidate struct {
 
 // pendingImport is step 1's result, kept on the server until step 2.
 type pendingImport struct {
-	userID     int64
-	location   string
-	password   string
-	env        map[string]string
+	userID int64
+	// repoID is the configured repository; 0 = the new repository in
+	// newRepo, created on confirmation.
+	repoID     int64
+	newRepo    repoInput
 	candidates []importCandidate
 	expires    time.Time
 }
@@ -101,9 +104,13 @@ func (p *pendingImports) take(token string, userID int64, now time.Time) (pendin
 
 // importPage is the data of the admin "Import" tab.
 type importPage struct {
-	Location   string // step 1 input after an error (never a password)
-	Allowed    []string
+	Repos []store.RepositoryInfo // configured repositories to choose from
+	New   repoForm               // step 1 input after an error (never a password)
+	// RepoID is the chosen configured repository (step 1 input, step 2).
+	RepoID     int64
 	Token      string // step 2
+	RepoName   string // step 2: name of the chosen or new repository
+	Location   string // step 2: its location
 	Candidates []importCandidate
 	ThisHost   string
 	Count      int // snapshots in the repository
@@ -115,40 +122,64 @@ func (s *Server) adminImport(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) renderImport(w http.ResponseWriter, r *http.Request, status int, page importPage, errMsg string) {
-	page.Allowed, page.ThisHost = allowedRepoEnv(), s.Hostname
+	repos, err := s.Store.ListRepositories(r.Context())
+	if err != nil {
+		s.internalError(w, r, "listing repositories", err)
+		return
+	}
+	page.Repos, page.New.Allowed, page.ThisHost = repos, allowedRepoEnv(), s.Hostname
 	s.render(w, r, status, "admin_import.html", pageData{Title: "Import stack", Error: errMsg, Data: page})
 }
 
-// listImport is step 1: read the repository's snapshots and offer the
-// stacks found in them.
+// listImport is step 1: read the snapshots of a configured repository
+// (form field repository) or of a new one (name, location, password, env)
+// and offer the stacks found in them.
 func (s *Server) listImport(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	fail := func(status int, msg, location string) {
-		s.renderImport(w, r, status, importPage{Location: location}, msg)
+	fail := func(status int, msg string, page importPage) {
+		s.renderImport(w, r, status, page, msg)
 	}
 	if s.RepoSnapshots == nil {
-		fail(http.StatusServiceUnavailable, "Listing repositories is not available in this installation.", "")
+		fail(http.StatusServiceUnavailable, "Listing repositories is not available in this installation.", importPage{})
 		return
 	}
-	location, urlEnv, err := restic.SplitRESTCredentials(strings.TrimSpace(r.PostFormValue("location")))
-	if err != nil {
-		fail(http.StatusBadRequest, capitalize(err.Error())+".", "") // may contain a password: not echoed
-		return
-	}
-	env := map[string]string{}
-	if text := r.PostFormValue("env"); strings.TrimSpace(text) != "" {
-		if env, err = parseEnvLines(text); err != nil {
-			fail(http.StatusBadRequest, capitalize(err.Error())+".", location)
+	pi := pendingImport{userID: authFrom(ctx).User.ID, expires: s.now().Add(pendingImportTTL)}
+	var page importPage
+	var repo restic.Repo
+	if v := r.PostFormValue("repository"); v != "" {
+		id, err := strconv.ParseInt(v, 10, 64)
+		var stored store.Repository
+		if err == nil {
+			stored, err = s.Store.Repository(ctx, id)
+		}
+		if errors.Is(err, store.ErrNotFound) || id <= 0 {
+			fail(http.StatusBadRequest, "Choose a repository from the list.", importPage{})
 			return
 		}
+		if err != nil {
+			s.internalError(w, r, "loading repository", err)
+			return
+		}
+		pi.repoID, repo = stored.ID, stored.Restic()
+		page = importPage{RepoID: stored.ID, RepoName: stored.Name, Location: stored.Location}
+	} else {
+		in, echo, msg := parseRepoInput(r, nil)
+		if msg != "" {
+			fail(http.StatusBadRequest, msg, importPage{New: echo})
+			return
+		}
+		if taken, err := s.repoNameTaken(ctx, in.name); err != nil {
+			s.internalError(w, r, "checking repository name", err)
+			return
+		} else if taken {
+			fail(http.StatusConflict, "A repository with this name exists already. Choose it above, or enter another name.", importPage{New: echo})
+			return
+		}
+		pi.newRepo = in
+		repo = store.Repository{Location: in.location, Password: in.password, Env: in.env}.Restic()
+		page = importPage{New: echo, RepoName: in.name, Location: in.location}
 	}
-	maps.Copy(env, urlEnv)
-	password := r.PostFormValue("password")
-	if err := store.ValidateRepository(location, password, env); err != nil {
-		fail(http.StatusBadRequest, capitalize(err.Error())+".", location)
-		return
-	}
-	repo := store.Repository{Location: location, Password: password, Env: env}.Restic()
+
 	lctx, cancel := context.WithTimeout(ctx, refreshTimeout)
 	snaps, err := s.RepoSnapshots.Snapshots(lctx, repo)
 	cancel()
@@ -159,7 +190,7 @@ func (s *Server) listImport(w http.ResponseWriter, r *http.Request) {
 		if errors.As(err, &re) {
 			msg = re.Message()
 		}
-		fail(http.StatusBadRequest, "restic could not list the repository: "+truncate(msg, 300), location)
+		fail(http.StatusBadRequest, "restic could not list the repository: "+truncate(msg, 300), importPage{New: page.New, RepoID: page.RepoID})
 		return
 	}
 	candidates, err := s.importCandidates(ctx, snaps)
@@ -167,17 +198,26 @@ func (s *Server) listImport(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, r, "checking stack names", err)
 		return
 	}
-	page := importPage{Location: location, Candidates: candidates, Count: len(snaps)}
+	page.Candidates, page.Count = candidates, len(snaps)
 	if len(candidates) > 0 {
-		token, err := s.imports.put(pendingImport{userID: authFrom(ctx).User.ID, location: location, password: password,
-			env: env, candidates: candidates, expires: s.now().Add(pendingImportTTL)}, s.now())
+		pi.candidates = candidates
+		token, err := s.imports.put(pi, s.now())
 		if err != nil {
-			fail(http.StatusServiceUnavailable, capitalize(err.Error())+".", location)
+			fail(http.StatusServiceUnavailable, capitalize(err.Error())+".", importPage{New: page.New, RepoID: page.RepoID})
 			return
 		}
 		page.Token = token
 	}
 	s.renderImport(w, r, http.StatusOK, page, "")
+}
+
+// repoNameTaken reports whether a repository has that name.
+func (s *Server) repoNameTaken(ctx context.Context, name string) (bool, error) {
+	repos, err := s.Store.ListRepositories(ctx)
+	if err != nil {
+		return false, err
+	}
+	return slices.ContainsFunc(repos, func(ri store.RepositoryInfo) bool { return ri.Name == name }), nil
 }
 
 // importCandidates groups the snapshots by stack name (last component of
@@ -243,19 +283,21 @@ func (s *Server) nameTaken(ctx context.Context, name string) (string, error) {
 	return "", nil
 }
 
-// confirmImport is step 2: create the stack record with the repository of
-// step 1 and fill its snapshot cache.
+// confirmImport is step 2: save the new repository (if step 1 entered
+// one), create the stack record with the repository and fill its snapshot
+// cache.
 func (s *Server) confirmImport(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	a := authFrom(ctx)
 	pi, ok := s.imports.take(r.PostFormValue("token"), a.User.ID, s.now())
 	if !ok {
-		s.renderImport(w, r, http.StatusBadRequest, importPage{}, "This import has expired. Enter the repository again.")
+		s.renderImport(w, r, http.StatusBadRequest, importPage{}, "This import has expired. Choose the repository again.")
 		return
 	}
+	again := importPage{RepoID: pi.repoID, New: repoForm{Name: pi.newRepo.name, Location: pi.newRepo.location}}
 	i, err := strconv.Atoi(r.PostFormValue("choice"))
 	if err != nil || i < 0 || i >= len(pi.candidates) {
-		s.renderImport(w, r, http.StatusBadRequest, importPage{Location: pi.location}, "Choose a stack to import.")
+		s.renderImport(w, r, http.StatusBadRequest, again, "Choose a stack to import.")
 		return
 	}
 	c := pi.candidates[i]
@@ -264,29 +306,58 @@ func (s *Server) confirmImport(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, r, "checking stack name", err)
 		return
 	} else if taken != "" {
-		s.renderImport(w, r, http.StatusConflict, importPage{Location: pi.location}, fmt.Sprintf("%s cannot be imported: %s.", c.Name, taken))
+		s.renderImport(w, r, http.StatusConflict, again, fmt.Sprintf("%s cannot be imported: %s.", c.Name, taken))
 		return
 	}
+
+	repoID, repoName := pi.repoID, ""
+	if repoID == 0 {
+		in := pi.newRepo
+		repoID, err = s.Store.CreateRepository(ctx, in.name, in.location, in.password, in.env)
+		if errors.Is(err, store.ErrConflict) {
+			s.renderImport(w, r, http.StatusConflict, again, "A repository with this name exists already. Choose it, or enter another name.")
+			return
+		}
+		if err != nil {
+			s.internalError(w, r, "saving repository", err)
+			return
+		}
+		repoName = in.name
+		s.audit(r, store.AuditEntry{UserID: a.User.ID, Action: "repository.create",
+			Detail: fmt.Sprintf("repository %q (id %d), location %q, variables %v (import)", truncate(in.name, 100), repoID,
+				truncate(in.location, 200), slices.Sorted(maps.Keys(in.env)))})
+	} else {
+		ri, err := s.Store.RepositoryInfo(ctx, repoID)
+		if errors.Is(err, store.ErrNotFound) {
+			s.renderImport(w, r, http.StatusConflict, importPage{}, "The repository was deleted in the meantime.")
+			return
+		}
+		if err != nil {
+			s.internalError(w, r, "loading repository", err)
+			return
+		}
+		repoName = ri.Name
+	}
+
 	source := c.Host
 	if source == s.Hostname {
 		source = "" // this host
 	}
 	st, err := s.Store.CreateImportedStack(ctx, c.Name, source)
 	if errors.Is(err, store.ErrConflict) {
-		s.renderImport(w, r, http.StatusConflict, importPage{Location: pi.location}, c.Name+" exists already.")
+		s.renderImport(w, r, http.StatusConflict, importPage{}, c.Name+" exists already.")
 		return
 	}
 	if err != nil {
 		s.internalError(w, r, "creating stack", err)
 		return
 	}
-	if _, err := s.Store.SetRepository(ctx, st.ID, pi.location, pi.password, pi.env); err != nil {
-		s.internalError(w, r, "saving repository", err)
+	if err := s.Store.SetStackRepository(ctx, st.ID, repoID); err != nil {
+		s.internalError(w, r, "setting repository", err)
 		return
 	}
 	s.audit(r, store.AuditEntry{UserID: a.User.ID, Action: "stack.import", StackID: st.ID,
-		Detail: fmt.Sprintf("stack %s from host %q, repository %q, variables %v", c.Name, c.Host,
-			truncate(pi.location, 200), slices.Sorted(maps.Keys(pi.env)))})
+		Detail: fmt.Sprintf("stack %s from host %q, repository %q (id %d)", c.Name, c.Host, truncate(repoName, 100), repoID)})
 	if _, err := s.refreshSnapshots(ctx, st); err != nil {
 		s.Logger.Warn("refreshing snapshots of an imported stack", "stack", st.Name, "error", err)
 	}

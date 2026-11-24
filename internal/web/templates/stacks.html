@@ -23,7 +23,7 @@
         {{- else if not .SeenPresent}}<span class="badge" title="Imported from another host: its first restore creates the directory.">not restored yet</span>
         {{- else}}<span class="badge warn" title="The stack directory is missing.">missing</span>{{end}}</td>
       <td class="group-start">{{template "schedule-cell" .BackupSchedule}}</td>
-      <td>{{if .HasRepository}}<span class="dot ok" role="img" aria-label="configured" title="Repository configured">✓</span>
+      <td>{{if .HasRepository}}{{.RepositoryName}}
         {{- else}}<span class="muted" title="No repository: backups are not possible">–</span>{{end}}</td>
       <td>{{with .Backup}}
         {{- if not .Job.ID}}<span class="muted">never</span>

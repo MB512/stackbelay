@@ -62,7 +62,7 @@ func setupJobsEnv(t *testing.T) (e *testEnv, alice, bob *http.Client) {
 	e = newEnv(t, true, true)
 	webID, _ := e.setupStacks()
 	ctx := context.Background()
-	repo, err := e.st.SetRepository(ctx, webID, "/srv/restic/web", "pw", nil)
+	repo, err := setRepo(ctx, e.st, webID, "/srv/restic/web", "pw", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -267,7 +267,7 @@ func TestSharedRepositoryShowsOwnSnapshotsOnly(t *testing.T) {
 	e.server.Hostname = "host-a"
 	webID, _ := e.setupStacks()
 	ctx := context.Background()
-	repo, err := e.st.SetRepository(ctx, webID, "/srv/restic/shared", "pw", nil)
+	repo, err := setRepo(ctx, e.st, webID, "/srv/restic/shared", "pw", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

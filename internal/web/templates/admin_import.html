@@ -2,15 +2,16 @@
 <h1>Administration</h1>
 {{template "admin-tabs" "import"}}
 {{- with .Data}}
-<p class="hint">Move a stack here from another host (or rebuild a host): enter the repository that holds its snapshots.
-  StackBelay lists the stacks in it; the one you choose is added with that repository, without a directory, disabled for
-  schedules and visible to admins only. Its Backups tab then lists the snapshots of the chosen host, and its first restore
+<p class="hint">Move a stack here from another host (or rebuild a host): choose or enter the repository that holds its
+  snapshots. StackBelay lists the stacks in it; the one you choose is added with that repository, without a directory,
+  without schedules and visible to admins only. Its Backups tab then lists the snapshots of the chosen host, and its first restore
   creates the stack directory under the same name. The name cannot be changed on the way.</p>
 
 {{- if .Token}}
 <section>
   <h2>Stacks in the repository</h2>
-  <p class="hint">{{.Count}} snapshot{{if ne .Count 1}}s{{end}} in <code>{{.Location}}</code>.</p>
+  <p class="hint">{{.Count}} snapshot{{if ne .Count 1}}s{{end}} in {{.RepoName}} (<code>{{.Location}}</code>).
+    {{- if not .RepoID}} The repository is added when you import a stack.{{end}}</p>
   <form method="post" action="/admin/import/confirm" class="card wide">
     <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
     <input type="hidden" name="token" value="{{.Token}}">
@@ -37,23 +38,31 @@
 </section>
 {{- else}}
 {{- if .Count}}<p class="warning">The repository holds {{.Count}} snapshot{{if ne .Count 1}}s{{end}}, but none of a single stack directory with a valid name.</p>{{end}}
-<form method="post" action="/admin/import" class="card wide" autocomplete="off" data-busy="Reading the repository…">
-  <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
-  <label>Location
-    <input name="location" required maxlength="1024" value="{{.Location}}" spellcheck="false"
-           placeholder="rest:https://user:password@backup.example:8000/nextcloud">
-  </label>
-  <p class="hint">As on a stack's Settings tab. A user name and password in a <code>rest:</code> URL are stored encrypted
-    as variables.</p>
-  <label>Repository password
-    <input name="password" type="password" required autocomplete="off">
-  </label>
-  <label>Backend variables (optional, one <code>KEY=value</code> per line)
-    <textarea name="env" rows="3" spellcheck="false" autocomplete="off"></textarea>
-  </label>
-  <p class="hint">Allowed: {{range $i, $k := .Allowed}}{{if $i}}, {{end}}<code>{{$k}}</code>{{end}}.</p>
-  <div><button type="submit">List stacks</button></div>
-</form>
+{{- if .Repos}}
+<section>
+  <h2>From a configured repository</h2>
+  <form method="post" action="/admin/import" class="card wide" data-busy="Reading the repository…">
+    <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+    <label>Repository
+      <select name="repository" required>
+        {{- range .Repos}}
+        <option value="{{.ID}}"{{if eq .ID $.Data.RepoID}} selected{{end}}>{{.Name}}</option>
+        {{- end}}
+      </select>
+    </label>
+    <div><button type="submit">List stacks</button></div>
+  </form>
+</section>
+{{- end}}
+<section>
+  <h2>From a new repository</h2>
+  <form method="post" action="/admin/import" class="card wide" autocomplete="off" data-busy="Reading the repository…">
+    <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+    {{template "repo-fields" .New}}
+    <div><button type="submit">List stacks</button>
+      <span class="hint">The repository is added to the Repositories tab when you import a stack from it.</span></div>
+  </form>
+</section>
 {{- end}}
 {{- end}}
 {{end}}

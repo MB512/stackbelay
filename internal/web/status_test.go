@@ -196,7 +196,8 @@ func TestBusyForms(t *testing.T) {
 	for path, wants := range map[string][]string{
 		"/stacks/web":          {`<script src="/static/forms.js?v=`, `<span class="hint busy-text">asking the registries…</span>`},
 		"/stacks/web/backups":  {`<span class="hint busy-text">reading the repository…</span>`},
-		"/stacks/web/settings": {`data-busy="Saving and checking access…"`, `data-busy="Initializing…"`},
+		"/stacks/web/settings": {`data-busy="Saving and checking access…"`},
+		"/admin/repositories":  {`data-busy="Saving and checking access…"`},
 		"/stacks/web/compose":  {`data-busy="Validating…"`},
 		"/":                    {`<script src="/static/forms.js?v=`},
 	} {

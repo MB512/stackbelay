@@ -36,7 +36,7 @@ func TestSnapshotSizes(t *testing.T) {
 	e := newEnv(t, true, true)
 	webID, _ := e.setupStacks()
 	ctx := context.Background()
-	repo, err := e.st.SetRepository(ctx, webID, "/srv/restic/web", "pw", nil)
+	repo, err := setRepo(ctx, e.st, webID, "/srv/restic/web", "pw", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

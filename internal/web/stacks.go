@@ -154,7 +154,7 @@ func (b backupsTab) LastBackupSize() *store.CachedSnapshot {
 // settingsTab is the data of the admin-only "Settings" tab.
 type settingsTab struct {
 	stackHeader
-	Repo        repoForm
+	Repo        stackRepoForm
 	Permissions []permRow
 	Schedules   []scheduleRow
 	// AllSchedulesEnabled / AllSchedulesDisabled disable the "Enable all"
@@ -318,8 +318,8 @@ func (s *Server) refreshStackSnapshots(w http.ResponseWriter, r *http.Request) {
 	s.renderPartial(w, "stack.html", "snapshots", page)
 }
 
-// stackSettings shows the admin-only settings of a stack: repository,
-// schedules, enable/disable and the per-user permissions.
+// stackSettings shows the admin-only settings of a stack: the choice of
+// repository, schedules, enable/disable and the per-user permissions.
 func (s *Server) stackSettings(w http.ResponseWriter, r *http.Request) {
 	st, _, ok := s.loadStack(w, r, auth.ActionView)
 	if !ok {
@@ -332,12 +332,6 @@ func (s *Server) stackSettings(w http.ResponseWriter, r *http.Request) {
 type settingsView struct {
 	Status      int // HTTP status; 0 = 200
 	Info, Error string
-	// Location, if set, replaces the stored location in the form (to keep
-	// the user's input after an error).
-	Location string
-	// OfferInit shows the "Initialize repository" button (restic reported
-	// that no repository exists at the stored location).
-	OfferInit bool
 	// NewSchedule keeps the input of the "add schedule" form after an
 	// error.
 	NewSchedule newSchedule
@@ -352,15 +346,11 @@ type newSchedule struct {
 
 // renderSettings renders the Settings tab.
 func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, st store.Stack, v settingsView) {
-	repo, err := s.loadRepoForm(r.Context(), st)
+	repo, err := s.loadStackRepoForm(r.Context(), st)
 	if err != nil {
 		s.internalError(w, r, "loading repository", err)
 		return
 	}
-	if v.Location != "" {
-		repo.Location = v.Location
-	}
-	repo.OfferInit = v.OfferInit && repo.Exists
 	if v.Status == 0 {
 		v.Status = http.StatusOK
 	}

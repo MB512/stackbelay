@@ -66,7 +66,7 @@ func TestPragmas(t *testing.T) {
 		t.Fatalf("foreign_keys=%d journal_mode=%s", fk, mode)
 	}
 	// Foreign keys are actually enforced.
-	_, err := s.db.ExecContext(ctx, `INSERT INTO repositories (stack_id, location, secret_enc) VALUES (999, 'x', x'00')`)
+	_, err := s.db.ExecContext(ctx, `INSERT INTO snapshots (repo_id, snapshot_id, short_id, time, hostname, paths) VALUES (999, 'x', 'x', 't', 'h', '[]')`)
 	if err == nil || !strings.Contains(err.Error(), "FOREIGN KEY") {
 		t.Fatalf("expected foreign key error, got %v", err)
 	}

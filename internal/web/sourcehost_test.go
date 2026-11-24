@@ -36,7 +36,7 @@ func (e *testEnv) setupMigration(webID int64) (cloud store.Stack, fc *fakeContai
 			{ID: "bbbbbbbb11111111", ShortID: "bbbbbbbb", Time: t0, Hostname: "old-host", Paths: []string{"/home/docker/web"}},
 		}},
 	} {
-		repo, err := e.st.SetRepository(ctx, tc.id, "/srv/restic/"+itoa(tc.id), "pw", nil)
+		repo, err := setRepo(ctx, e.st, tc.id, "/srv/restic/"+itoa(tc.id), "pw", nil)
 		if err != nil {
 			e.t.Fatal(err)
 		}

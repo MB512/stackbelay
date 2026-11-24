@@ -21,7 +21,7 @@ func TestTimesInManagerTimeZone(t *testing.T) {
 	e := newEnvWith(t, true, true, func(s *Server) { s.Location = berlin })
 	web, _ := e.setupStacks()
 	ctx := context.Background()
-	repo, err := e.st.SetRepository(ctx, web, "/srv/restic/web", "pw", nil)
+	repo, err := setRepo(ctx, e.st, web, "/srv/restic/web", "pw", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

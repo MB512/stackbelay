@@ -5,51 +5,20 @@
 <section>
   <h2>Repository</h2>
   {{- with .Repo}}
-  <form method="post" action="/stacks/{{$.Data.Stack.Name}}/repository" class="card wide" autocomplete="off"
-        data-busy="Saving and checking access…">
+  <form method="post" action="/stacks/{{$.Data.Stack.Name}}/repository" class="card wide" data-busy="Saving and checking access…">
     <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
-    <label>Location
-      <input name="location" required maxlength="1024" value="{{.Location}}" spellcheck="false"
-             placeholder="rest:https://user:password@backup.example:8000/{{$.Data.Stack.Name}}">
+    <label>Repository
+      <select name="repository">
+        <option value=""{{if not .Exists}} selected{{end}}>none (no backups)</option>
+        {{- range .Options}}
+        <option value="{{.ID}}"{{if eq .ID $.Data.Repo.Current}} selected{{end}}>{{.Name}}</option>
+        {{- end}}
+      </select>
     </label>
-    <p class="hint">A restic repository string: a path, <code>rest:https://…</code>, <code>s3:…</code>, <code>sftp:…</code>, …
-      A user name and password in a <code>rest:</code> URL are removed from the location and stored encrypted
-      (special characters in the password must be percent-encoded).
-      The repository must already exist (<code>restic init</code> is done by the repository owner).</p>
-
-    <label>Repository password
-      <input name="password" type="password" autocomplete="new-password" {{if not .Exists}}required{{end}}
-             {{- if .Exists}} placeholder="leave empty to keep the current password"{{end}}>
-    </label>
-
-    <label>Backend credentials (optional, one <code>KEY=value</code> per line)
-      <textarea name="env" rows="3" spellcheck="false"
-                placeholder="AWS_ACCESS_KEY_ID=…&#10;AWS_SECRET_ACCESS_KEY=…"></textarea>
-    </label>
-    <p class="hint">
-      {{- if .EnvKeys}}Stored (encrypted): {{range $i, $k := .EnvKeys}}{{if $i}}, {{end}}<code>{{$k}}</code>{{end}}.
-      Entering variables replaces all stored ones; leave empty to keep them.
-      {{- else}}No backend credentials stored.{{end}}
-      Supported: {{range $i, $k := .Allowed}}{{if $i}}, {{end}}<code>{{$k}}</code>{{end}}.</p>
-    {{- if .EnvKeys}}
-    <label class="check"><input type="checkbox" name="clear_env"> Remove the stored backend credentials</label>
-    {{- end}}
-
-    <div><button type="submit">{{if .Exists}}Save repository{{else}}Add repository{{end}}</button>
-      <span class="hint">Saving checks access by listing the snapshots.</span></div>
-  </form>
-  <form method="post" action="/stacks/{{$.Data.Stack.Name}}/repository/init" class="card wide{{if .OfferInit}} init{{end}}"
-        data-busy="Initializing…">
-    <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
-    {{- if .OfferInit}}
-    <p>Create a new, empty restic repository at <code>{{.Location}}</code> with the stored password?
-      This also works with an append-only rest-server. restic refuses if a repository already exists there.</p>
-    <p class="hint">Keep the repository password safe: without it the backups cannot be read.</p>
-    {{- else}}
-    <p class="hint">Initialize repository: creates a new, empty restic repository at the stored location.
-      Available when saving the repository reports that no repository exists there.</p>
-    {{- end}}
-    <div><button type="submit"{{if not .OfferInit}} disabled{{end}}>Initialize repository</button></div>
+    <p class="hint">The restic repository this stack backs up into. Several stacks may share one; location, password and
+      credentials are managed on the <a href="/admin/repositories">Repositories</a> tab
+      {{- if not .Options}} (none added yet){{end}}.</p>
+    <div><button type="submit">Save</button> <span class="hint">Saving checks access by listing the snapshots.</span></div>
   </form>
   {{- end}}
 </section>

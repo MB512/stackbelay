@@ -1,0 +1,46 @@
+{{define "content"}}
+<h1>Administration</h1>
+{{template "admin-tabs" "repositories"}}
+{{- with .Data}}
+<p><a href="/admin/repositories">All repositories</a></p>
+<h2>{{.Repo.Name}}</h2>
+<p class="hint">{{if .Repo.Stacks}}Used by {{range $i, $n := .Repo.Stacks}}{{if $i}}, {{end}}<a href="/stacks/{{$n}}/settings">{{$n}}</a>{{end}}.
+  A change applies to all of them from their next job on.
+  {{- else}}No stack uses this repository.{{end}}</p>
+
+<section>
+  <form method="post" action="/admin/repositories/{{.Repo.ID}}" class="card wide" autocomplete="off"
+        data-busy="Saving and checking access…">
+    <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+    {{template "repo-fields" .Form}}
+    <div><button type="submit">Save repository</button>
+      <span class="hint">Saving checks access by listing the snapshots. A new location starts with an empty snapshot
+        list; the snapshots of the old location are no longer listed.</span></div>
+  </form>
+  <form method="post" action="/admin/repositories/{{.Repo.ID}}/init" class="card wide{{if .Form.OfferInit}} init{{end}}"
+        data-busy="Initializing…">
+    <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+    {{- if .Form.OfferInit}}
+    <p>Create a new, empty restic repository at <code>{{.Repo.Location}}</code> with the stored password?
+      This also works with an append-only rest-server. restic refuses if a repository already exists there.</p>
+    <p class="hint">Keep the repository password safe: without it the backups cannot be read.</p>
+    {{- else}}
+    <p class="hint">Initialize repository: creates a new, empty restic repository at the stored location.
+      Available when saving the repository reports that no repository exists there.</p>
+    {{- end}}
+    <div><button type="submit"{{if not .Form.OfferInit}} disabled{{end}}>Initialize repository</button></div>
+  </form>
+</section>
+
+<section>
+  <h2>Delete</h2>
+  <form method="post" action="/admin/repositories/{{.Repo.ID}}/delete" class="card wide"
+        data-confirm="Delete the repository {{.Repo.Name}} from StackBelay? The backups in it are not touched.">
+    <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+    <p class="hint">Removes the repository and its snapshot list from StackBelay. The repository itself and its
+      backups are not touched. {{if .Repo.Stacks}}Possible once no stack uses it.{{end}}</p>
+    <div><button type="submit" class="secondary"{{if .Repo.Stacks}} disabled{{end}}>Delete repository</button></div>
+  </form>
+</section>
+{{- end}}
+{{end}}

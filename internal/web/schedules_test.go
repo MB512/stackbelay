@@ -40,7 +40,7 @@ func TestSchedules(t *testing.T) {
 		t.Fatal(err)
 	}
 	web, _ := e.st.StackByName(ctx, "web")
-	if _, err := e.st.SetRepository(ctx, web.ID, "/srv/restic/web", "repo-pw", nil); err != nil {
+	if _, err := setRepo(ctx, e.st, web.ID, "/srv/restic/web", "repo-pw", nil); err != nil {
 		t.Fatal(err)
 	}
 	e.loginAdmin()
@@ -197,7 +197,7 @@ func TestUpdateScheduleWithoutRepository(t *testing.T) {
 	}
 	web, _ := e.st.StackByName(ctx, "web")
 	db, _ := e.st.StackByName(ctx, "db") // no repository
-	if _, err := e.st.SetRepository(ctx, web.ID, "/srv/restic/web", "repo-pw", nil); err != nil {
+	if _, err := setRepo(ctx, e.st, web.ID, "/srv/restic/web", "repo-pw", nil); err != nil {
 		t.Fatal(err)
 	}
 	e.loginAdmin()
