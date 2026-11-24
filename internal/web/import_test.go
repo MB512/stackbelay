@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/MB512/stackbelay/internal/jobs"
 	"github.com/MB512/stackbelay/internal/restic"
 	"github.com/MB512/stackbelay/internal/store"
 )
@@ -210,5 +211,73 @@ func TestImportFromConfiguredRepository(t *testing.T) {
 	}
 	if repos, _ := e.st.ListRepositories(ctx); len(repos) != 1 {
 		t.Fatalf("repositories: %+v", repos)
+	}
+}
+
+// A stack whose directory is gone can be forgotten on its Settings tab;
+// Import stack then reuses its record (issue #38).
+func TestForgetStackThenImport(t *testing.T) {
+	t0 := time.Date(2026, 11, 13, 3, 0, 0, 0, time.UTC)
+	lister := &fakeRepoLister{snaps: []restic.Snapshot{
+		{ID: "a1", ShortID: "a1", Time: t0, Hostname: "host-a", Paths: []string{"/home/docker/old"}},
+	}}
+	e := newEnvWith(t, true, true, func(s *Server) { s.RepoSnapshots = lister; s.Hostname = "new-host" })
+	e.setupLogs() // stacks root with web and db
+	ctx := context.Background()
+	if err := e.st.SyncStacks(ctx, []string{"web", "db", "old"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.st.SyncStacks(ctx, []string{"web", "db"}); err != nil { // old's directory is gone
+		t.Fatal(err)
+	}
+	old, _ := e.st.StackByName(ctx, "old")
+	repo, err := setRepo(ctx, e.st, old.ID, "/srv/restic/old", "pw", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.st.CreateSchedule(ctx, store.Schedule{StackID: old.ID, CronExpr: "@daily", Type: jobs.TypeBackup, Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	e.loginAdmin()
+	token := e.csrf("/admin/import")
+
+	// The import refuses the name and links to the stack.
+	r := e.post("/admin/import", url.Values{"csrf_token": {token}, "repository": {strconv.FormatInt(repo, 10)}})
+	if !strings.Contains(r.body, "forget it on its Settings tab") || !strings.Contains(r.body, `<a href="/stacks/old/settings">Settings</a>`) ||
+		!strings.Contains(r.body, `aria-label="Import old from host-a" disabled required`) {
+		t.Fatalf("import of a stack with old setup:\n%s", r.body)
+	}
+
+	// Only a stack without directory can be forgotten.
+	if r := e.get("/stacks/web/settings"); strings.Contains(r.body, "Forget stack") {
+		t.Fatal("forget offered for a present stack")
+	}
+	expect(t, e.post("/stacks/web/forget", url.Values{"csrf_token": {token}}), http.StatusConflict, "")
+	if r := e.get("/stacks/old/settings"); !strings.Contains(r.body, `action="/stacks/old/forget"`) {
+		t.Fatalf("forget not offered:\n%s", r.body)
+	}
+	r = e.post("/stacks/old/forget", url.Values{"csrf_token": {token}})
+	expect(t, r, http.StatusOK, "")
+	if !strings.Contains(r.body, "Import stack can import this name again.") {
+		t.Fatalf("after forget:\n%s", r.body)
+	}
+	if auditActions(t, e.st)["stack.forget"] != 1 {
+		t.Error("forget not audited")
+	}
+
+	// Now the import offers it and reuses the record.
+	r = e.post("/admin/import", url.Values{"csrf_token": {token}, "repository": {strconv.FormatInt(repo, 10)}})
+	m := importToken.FindStringSubmatch(r.body)
+	if m == nil || !strings.Contains(r.body, "reuses the forgotten record") {
+		t.Fatalf("import after forget:\n%s", r.body)
+	}
+	expect(t, e.post("/admin/import/confirm", url.Values{"csrf_token": {token}, "token": {m[1]}, "choice": {"0"}}),
+		http.StatusSeeOther, "/stacks/old/backups")
+	st, err := e.st.StackByName(ctx, "old")
+	if err != nil || st.ID != old.ID || st.SourceHost != "host-a" || st.SeenPresent {
+		t.Fatalf("reused record %+v, %v", st, err)
+	}
+	if scheds, _ := e.st.ListSchedules(ctx, old.ID); len(scheds) != 0 {
+		t.Fatalf("old schedules came back: %v", scheds)
 	}
 }

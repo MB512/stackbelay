@@ -22,7 +22,8 @@
         <tr>
           <td><input type="radio" name="choice" value="{{$i}}" aria-label="Import {{$c.Name}} from {{$c.Host}}"
             {{- if $c.Taken}} disabled{{end}} required></td>
-          <td>{{$c.Name}}{{with $c.Taken}} <span class="muted">({{.}})</span>{{end}}</td>
+          <td>{{$c.Name}}{{with $c.Taken}} <span class="muted">({{.}})</span>{{end}}
+            {{- if $c.Existing}} <a href="/stacks/{{$c.Name}}/settings">{{if $c.Taken}}Settings{{else}}reuses the forgotten record{{end}}</a>{{end}}</td>
           <td><code>{{$c.Host}}</code>{{if eq $c.Host $.Data.ThisHost}} <span class="muted">(this host)</span>{{end}}</td>
           <td>{{$c.Snapshots}}</td>
           <td>{{when $c.Latest}}</td>

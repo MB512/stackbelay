@@ -123,3 +123,86 @@ func TestRestoresCountAgainstLimit(t *testing.T) {
 		t.Fatalf("options %+v", j.Options)
 	}
 }
+
+// A stack whose directory is gone keeps its record; ForgetStack resets it
+// and an import of the name then reuses it (issue #38).
+func TestForgetStackAndReuse(t *testing.T) {
+	s := openTest(t)
+	ctx := context.Background()
+	web := stackID(t, s, "web")
+	if _, err := setRepo(ctx, s, web, "/repos/web", "pw", nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateSchedule(ctx, Schedule{StackID: web, CronExpr: "@daily", Type: jobs.TypeBackup, Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	uid, err := s.CreateUser(ctx, User{Username: "alice", PasswordHash: "x"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetPermission(ctx, Permission{UserID: uid, StackID: web, CanBackup: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetStackSourceHost(ctx, web, "old-host"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Present: refused.
+	if err := s.ForgetStack(ctx, web); !errors.Is(err, ErrStackBusy) {
+		t.Fatalf("present stack: %v", err)
+	}
+	if err := s.SyncStacks(ctx, nil); err != nil { // the directory is gone
+		t.Fatal(err)
+	}
+	if ok, _ := s.StackReusable(ctx, web); ok {
+		t.Fatal("record with permissions and schedules reusable")
+	}
+	if _, err := s.CreateImportedStack(ctx, "web", "host-b"); !errors.Is(err, ErrConflict) {
+		t.Fatalf("import over a stack with old setup: %v", err)
+	}
+	// A queued job: refused.
+	if err := s.CreateJob(ctx, Job{ID: "01AAAAAAAAAAAAAAAAAAAAAAA1", StackID: web, Type: jobs.TypeBackup,
+		Trigger: TriggerManual, QueuedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ForgetStack(ctx, web); !errors.Is(err, ErrStackBusy) {
+		t.Fatalf("queued job: %v", err)
+	}
+	if _, err := s.db.ExecContext(ctx, `UPDATE jobs SET state = 'failed'`); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.ForgetStack(ctx, web); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.RepositoryInfoForStack(ctx, web); !errors.Is(err, ErrNotFound) {
+		t.Errorf("repository still chosen: %v", err)
+	}
+	if scheds, _ := s.ListSchedules(ctx, web); len(scheds) != 0 {
+		t.Errorf("schedules left: %v", scheds)
+	}
+	if perms, _ := s.PermissionsForStack(ctx, web); len(perms) != 0 {
+		t.Errorf("permissions left: %v", perms)
+	}
+	if ok, err := s.StackReusable(ctx, web); !ok || err != nil {
+		t.Fatalf("forgotten stack not reusable: %v", err)
+	}
+	// The repository itself and the job history stay.
+	if repos, _ := s.ListRepositories(ctx); len(repos) != 1 {
+		t.Errorf("repositories: %v", repos)
+	}
+	if j, err := s.JobByID(ctx, "01AAAAAAAAAAAAAAAAAAAAAAA1"); err != nil || j.StackName != "web" {
+		t.Errorf("job history: %+v, %v", j, err)
+	}
+
+	st, err := s.CreateImportedStack(ctx, "web", "host-b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.ID != web || st.Present || st.SeenPresent || st.SourceHost != "host-b" {
+		t.Fatalf("reused record %+v", st)
+	}
+	if err := s.ForgetStack(ctx, 999); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("unknown stack: %v", err)
+	}
+}

@@ -167,6 +167,9 @@ type settingsTab struct {
 	// host first); SourceHost is the chosen one.
 	SourceHosts          []string
 	SourceHost, ThisHost string
+	// Forgettable: the stack's directory is gone, so its record can be
+	// reset (ForgetStack, issue #38).
+	Forgettable bool
 }
 
 // permRow is one user in the permission table of a stack (admin view). It
@@ -382,6 +385,7 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, st store
 		return
 	}
 	page.SourceHost, page.ThisHost = s.snapshotHost(st), s.Hostname
+	page.Forgettable = !st.Present && !s.pathExists(st.Name)
 	s.render(w, r, v.Status, "stack_settings.html",
 		pageData{Title: st.Name + " settings", Info: v.Info, Error: v.Error, Data: page})
 }

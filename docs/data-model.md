@@ -183,6 +183,10 @@ CREATE TABLE audit_log (
   comes from a repository's snapshot paths (validated, no directory yet):
   `present = 0`, `seen_present = 0`, `source_host` = the host it is imported
   from. Its first restore creates the directory and sets `present = 1`.
+  If a record of that name exists and is unused (`store.StackReusable`:
+  not present, no repository, permissions, schedules, queued or running
+  jobs; the state `ForgetStack` leaves, issue #38), the import reuses it
+  instead of failing with `ErrConflict`.
 - Every running job counts against the limit of running jobs
   (`STACKBELAY_MAX_JOBS`, issue #36). Downtime
   slots are not in the database but in the job directories (see

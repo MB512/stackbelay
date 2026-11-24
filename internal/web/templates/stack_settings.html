@@ -145,6 +145,20 @@
   <p class="hint">There are no non-admin users. <a href="/admin/users">Create one</a> to grant permissions.</p>
   {{- end}}
 </section>
+
+{{- if .Forgettable}}
+<section>
+  <h2>Forget stack</h2>
+  <form method="post" action="/stacks/{{.Stack.Name}}/forget" class="card wide"
+        data-confirm="Forget the setup of {{.Stack.Name}}? Its permissions, schedules and repository choice are removed.">
+    <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+    <p class="hint">The directory of this stack is gone. Forgetting it removes its permissions, schedules, repository
+      choice and source host, so a stack of the same name can be imported cleanly later (Import stack then reuses this
+      record). The job history and the audit log stay; the repository and its backups are not touched.</p>
+    <div><button type="submit" class="secondary">Forget stack</button></div>
+  </form>
+</section>
+{{- end}}
 {{- end}}
 {{end}}
 

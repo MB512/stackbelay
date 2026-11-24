@@ -436,7 +436,9 @@ host) through the shared repository.
   `web.RepoSnapshotLister`) and offers every stack name (last component of
   a snapshot's single path, `stacks.ValidName`) and host, with the number
   of snapshots and the newest. Names with a stack record or a directory on
-  this host are shown disabled. The choice (a configured repository, or the
+  this host are shown disabled, a stack record with a link to its Settings
+  tab. Exception (issue #38): the record of a stack that was **forgotten**
+  (see below) does not block its name; the import reuses it. The choice (a configured repository, or the
   credentials of a new one) waits on the server for the second step
   (`pendingImports`: 15 minutes, bound to the admin, used once); the page
   only carries a random token and the index of the choice. The import saves
@@ -449,6 +451,17 @@ snapshot path's last component must equal it (`snapshotStackPath`), the
 rest of the path may differ (`/home/docker/web` on A restores into
 `$STACKS_ROOT/web` on B).
 
+- **Forget stack** (issue #38): stack records are never deleted, so the
+  name of a stack whose directory was removed long ago stays taken, with
+  its old permissions, schedules and repository choice. Its Settings tab
+  offers **Forget stack** (admin, `POST /stacks/{name}/forget`, audited as
+  `stack.forget`) once nothing exists at its path under the stacks root:
+  `store.ForgetStack` removes permissions, schedules, repository choice and
+  source host, and refuses while the stack is present or has a queued or
+  running job. The record itself stays, so job history and audit entries
+  keep their stack. An import of the name then reuses the record
+  (`CreateImportedStack` with `store.StackReusable`) instead of creating a
+  new one; its job history shows the old jobs too.
 - **First restore (import)**: `Pipeline.Import`, job option / spec field
   `import`. The stack directory does not exist (`stacks.ImportTarget`:
   valid name, no directory), so there is nothing to stop or to protect
@@ -905,6 +918,7 @@ with a light and a dark set; the job log is a dark panel in both modes.
 | `POST /stacks/{name}/repository` | admin | choose the stack's repository (`repository`: id, or empty for none), then refresh the snapshot cache as an access check |
 | `POST /stacks/{name}/permissions` | admin | set one user's backup/restore right (HTMX: returns the table row) |
 | `POST /stacks/{name}/source-host` | admin | set the host whose snapshots the stack lists and restores, see "Restore from another host" |
+| `POST /stacks/{name}/forget` | admin | reset the record of a stack whose directory is gone (permissions, schedules, repository choice, source host), see "Restore from another host" |
 | `POST /stacks/{name}/schedules/enabled` | admin | enable/disable all schedules of the stack |
 | `POST /stacks/{name}/schedules` | admin | add a schedule (cron expression, job type); at most 20 per stack |
 | `POST /stacks/{name}/schedules/{id}/enabled` | admin | enable/disable one schedule |

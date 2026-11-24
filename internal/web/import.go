@@ -6,15 +6,19 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/fs"
 	"maps"
 	"net/http"
+	"os"
 	"path"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/MB512/stackbelay/internal/auth"
 	"github.com/MB512/stackbelay/internal/restic"
 	"github.com/MB512/stackbelay/internal/stacks"
 	"github.com/MB512/stackbelay/internal/store"
@@ -51,6 +55,9 @@ type importCandidate struct {
 	// Taken explains why the name cannot be imported ("" if it can): a
 	// stack of that name exists in the database or on disk.
 	Taken string
+	// Existing: a stack record of that name exists; the page links to its
+	// Settings tab (restore it there, or forget it, issue #38).
+	Existing bool
 }
 
 // pendingImport is step 1's result, kept on the server until step 2.
@@ -256,31 +263,82 @@ func (s *Server) importCandidates(ctx context.Context, snaps []restic.Snapshot) 
 		return strings.Compare(a.Host, b.Host)
 	})
 	for i := range out {
-		taken, err := s.nameTaken(ctx, out[i].Name)
+		taken, existing, err := s.nameTaken(ctx, out[i].Name)
 		if err != nil {
 			return nil, err
 		}
-		out[i].Taken = taken
+		out[i].Taken, out[i].Existing = taken, existing
 	}
 	return out, nil
 }
 
 // nameTaken explains why a stack of that name cannot be imported, or "".
-func (s *Server) nameTaken(ctx context.Context, name string) (string, error) {
-	_, err := s.Store.StackByName(ctx, name)
+// existing reports a stack record of that name. A record without
+// directory and without its old setup (forgotten, see store.StackReusable)
+// does not block the name: the import reuses it.
+func (s *Server) nameTaken(ctx context.Context, name string) (msg string, existing bool, err error) {
+	st, err := s.Store.StackByName(ctx, name)
 	switch {
 	case err == nil:
-		return "a stack of this name exists (restore it from its Backups tab)", nil
+		reusable, err := s.Store.StackReusable(ctx, st.ID)
+		if err != nil {
+			return "", true, err
+		}
+		if !reusable {
+			return "a stack of this name exists: restore it from its Backups tab, or forget it on its Settings tab", true, nil
+		}
+		existing = true
 	case !errors.Is(err, store.ErrNotFound):
-		return "", err
+		return "", false, err
 	}
 	if s.StacksRoot == "" {
-		return "the stacks root is not configured", nil
+		return "the stacks root is not configured", existing, nil
 	}
 	if _, err := stacks.ImportTarget(s.StacksRoot, name); err != nil {
-		return "a directory of this name exists", nil
+		return "a directory of this name exists", existing, nil
 	}
-	return "", nil
+	return "", existing, nil
+}
+
+// pathExists reports whether anything exists at the stack's path under the
+// stacks root (a directory, also one of an incomplete import, a file or a
+// symlink). Without a stacks root it reports true (nothing is known).
+func (s *Server) pathExists(name string) bool {
+	if s.StacksRoot == "" {
+		return true
+	}
+	_, err := os.Lstat(filepath.Join(s.StacksRoot, name))
+	return !errors.Is(err, fs.ErrNotExist)
+}
+
+// forgetStack resets the record of a stack whose directory is gone (admin
+// only, issue #38): permissions, schedules, repository choice and source
+// host go, so an import of the name starts clean.
+func (s *Server) forgetStack(w http.ResponseWriter, r *http.Request) {
+	st, _, ok := s.loadStack(w, r, auth.ActionView)
+	if !ok {
+		return
+	}
+	ctx := r.Context()
+	if st.Present || s.pathExists(st.Name) {
+		s.renderSettings(w, r, st, settingsView{Status: http.StatusConflict,
+			Error: "The stack directory exists: only a stack whose directory is gone can be forgotten."})
+		return
+	}
+	err := s.Store.ForgetStack(ctx, st.ID)
+	if errors.Is(err, store.ErrStackBusy) {
+		s.renderSettings(w, r, st, settingsView{Status: http.StatusConflict,
+			Error: "The stack has a queued or running job, or its directory exists. Try again when it has finished."})
+		return
+	}
+	if err != nil {
+		s.internalError(w, r, "forgetting stack", err)
+		return
+	}
+	s.audit(r, store.AuditEntry{UserID: authFrom(ctx).User.ID, Action: "stack.forget", StackID: st.ID,
+		Detail: "permissions, schedules, repository choice and source host removed"})
+	st.SourceHost = ""
+	s.renderSettings(w, r, st, settingsView{Info: "The stack's setup is forgotten. Import stack can import this name again."})
 }
 
 // confirmImport is step 2: save the new repository (if step 1 entered
@@ -302,7 +360,7 @@ func (s *Server) confirmImport(w http.ResponseWriter, r *http.Request) {
 	}
 	c := pi.candidates[i]
 	// Checked again: something may have changed since step 1.
-	if taken, err := s.nameTaken(ctx, c.Name); err != nil {
+	if taken, _, err := s.nameTaken(ctx, c.Name); err != nil {
 		s.internalError(w, r, "checking stack name", err)
 		return
 	} else if taken != "" {

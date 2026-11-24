@@ -220,6 +220,7 @@ func (s *Server) Handler() (http.Handler, error) {
 				r.Post("/stacks/{name}/permissions", s.setPermission)
 				r.Post("/stacks/{name}/schedules/enabled", s.setAllSchedulesEnabled)
 				r.Post("/stacks/{name}/source-host", s.setSourceHost)
+				r.Post("/stacks/{name}/forget", s.forgetStack)
 				r.Post("/stacks/{name}/schedules", s.createSchedule)
 				r.Post("/stacks/{name}/schedules/{id}/enabled", s.setScheduleEnabled)
 				r.Post("/stacks/{name}/schedules/{id}/delete", s.deleteSchedule)

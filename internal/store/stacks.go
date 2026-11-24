@@ -147,19 +147,107 @@ func (s *Store) StackByName(ctx context.Context, name string) (Stack, error) {
 // repository (restore from another host): not present until its first
 // restore (it has no schedules until an admin adds some), listing the
 // snapshots of sourceHost. The caller has validated the name
-// (stacks.ValidName) and checked that no such directory exists. It returns
-// ErrConflict if a stack of that name exists.
+// (stacks.ValidName) and checked that no such directory exists. A record
+// of that name is reused if it is unused (see StackReusable, issue #38);
+// otherwise it returns ErrConflict.
 func (s *Store) CreateImportedStack(ctx context.Context, name, sourceHost string) (Stack, error) {
-	res, err := s.db.ExecContext(ctx,
-		`INSERT INTO stacks (name, present, seen_present, source_host) VALUES (?, 0, 0, ?) ON CONFLICT (name) DO NOTHING`,
-		name, sourceHost)
+	err := s.inTx(ctx, func(tx *sql.Tx) error {
+		res, err := tx.ExecContext(ctx,
+			`INSERT INTO stacks (name, present, seen_present, source_host) VALUES (?, 0, 0, ?) ON CONFLICT (name) DO NOTHING`,
+			name, sourceHost)
+		if err != nil {
+			return err
+		}
+		if n, err := res.RowsAffected(); err != nil || n == 1 {
+			return err
+		}
+		var id int64
+		if err := tx.QueryRowContext(ctx, `SELECT id FROM stacks WHERE name = ?`, name).Scan(&id); err != nil {
+			return err
+		}
+		reusable, err := stackReusable(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		if !reusable {
+			return fmt.Errorf("stack %q: %w", name, ErrConflict)
+		}
+		_, err = tx.ExecContext(ctx, `UPDATE stacks SET seen_present = 0, source_host = ? WHERE id = ?`, sourceHost, id)
+		return err
+	})
 	if err != nil {
 		return Stack{}, fmt.Errorf("creating stack %q: %w", name, err)
 	}
-	if n, err := res.RowsAffected(); err != nil || n == 0 {
-		return Stack{}, fmt.Errorf("stack %q: %w", name, ErrConflict)
-	}
 	return s.StackByName(ctx, name)
+}
+
+// ErrStackBusy is returned by ForgetStack while the stack has a queued or
+// running job, or while its directory exists.
+var ErrStackBusy = errors.New("the stack has a directory or queued or running jobs")
+
+// ForgetStack resets the record of a stack whose directory is gone (issue
+// #38): its permissions, schedules, repository choice and source host go,
+// so a later "Import stack" of the name starts clean and reuses the
+// record. Job history and audit entries stay with it. It refuses with
+// ErrStackBusy while the stack is present or has a queued or running job;
+// the caller checks the disk as well.
+func (s *Store) ForgetStack(ctx context.Context, id int64) error {
+	err := s.inTx(ctx, func(tx *sql.Tx) error {
+		var present bool
+		err := tx.QueryRowContext(ctx, `SELECT present FROM stacks WHERE id = ?`, id).Scan(&present)
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("stack %d: %w", id, ErrNotFound)
+		}
+		if err != nil {
+			return err
+		}
+		var active int
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM jobs WHERE stack_id = ? AND state IN (?, ?)`,
+			id, jobs.StateQueued, jobs.StateRunning).Scan(&active); err != nil {
+			return err
+		}
+		if present || active > 0 {
+			return ErrStackBusy
+		}
+		for _, q := range []string{
+			`DELETE FROM permissions WHERE stack_id = ?`,
+			`DELETE FROM schedules WHERE stack_id = ?`,
+			`UPDATE stacks SET repository_id = NULL, source_host = '' WHERE id = ?`,
+		} {
+			if _, err := tx.ExecContext(ctx, q, id); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("forgetting stack %d: %w", id, err)
+	}
+	return nil
+}
+
+// StackReusable reports whether an import may reuse the record of a stack
+// (issue #38): not present, and nothing left of its old setup: no
+// repository, permissions, schedules, queued or running jobs (the state
+// ForgetStack leaves).
+func (s *Store) StackReusable(ctx context.Context, id int64) (bool, error) {
+	ok, err := stackReusable(ctx, s.db, id)
+	if err != nil {
+		return false, fmt.Errorf("checking stack %d: %w", id, err)
+	}
+	return ok, nil
+}
+
+func stackReusable(ctx context.Context, q interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}, id int64) (bool, error) {
+	var ok bool
+	err := q.QueryRowContext(ctx, `SELECT present = 0 AND repository_id IS NULL
+		   AND NOT EXISTS (SELECT 1 FROM permissions WHERE stack_id = ?1)
+		   AND NOT EXISTS (SELECT 1 FROM schedules WHERE stack_id = ?1)
+		   AND NOT EXISTS (SELECT 1 FROM jobs WHERE stack_id = ?1 AND state IN (?2, ?3))
+		 FROM stacks WHERE id = ?1`, id, jobs.StateQueued, jobs.StateRunning).Scan(&ok)
+	return ok, err
 }
 
 // SetStackPresent records that a stack's directory exists (after the first
