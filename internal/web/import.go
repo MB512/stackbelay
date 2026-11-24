@@ -67,6 +67,7 @@ type pendingImport struct {
 	// newRepo, created on confirmation.
 	repoID     int64
 	newRepo    repoInput
+	newForm    repoForm // newRepo's form, to show again (no secrets)
 	candidates []importCandidate
 	expires    time.Time
 }
@@ -134,7 +135,8 @@ func (s *Server) renderImport(w http.ResponseWriter, r *http.Request, status int
 		s.internalError(w, r, "listing repositories", err)
 		return
 	}
-	page.Repos, page.New.Allowed, page.ThisHost = repos, allowedRepoEnv(), s.Hostname
+	page.Repos, page.ThisHost = repos, s.Hostname
+	page.New.prepare()
 	s.render(w, r, status, "admin_import.html", pageData{Title: "Import stack", Error: errMsg, Data: page})
 }
 
@@ -182,7 +184,7 @@ func (s *Server) listImport(w http.ResponseWriter, r *http.Request) {
 			fail(http.StatusConflict, "A repository with this name exists already. Choose it above, or enter another name.", importPage{New: echo})
 			return
 		}
-		pi.newRepo = in
+		pi.newRepo, pi.newForm = in, echo
 		repo = store.Repository{Location: in.location, Password: in.password, Env: in.env}.Restic()
 		page = importPage{New: echo, RepoName: in.name, Location: in.location}
 	}
@@ -352,7 +354,7 @@ func (s *Server) confirmImport(w http.ResponseWriter, r *http.Request) {
 		s.renderImport(w, r, http.StatusBadRequest, importPage{}, "This import has expired. Choose the repository again.")
 		return
 	}
-	again := importPage{RepoID: pi.repoID, New: repoForm{Name: pi.newRepo.name, Location: pi.newRepo.location}}
+	again := importPage{RepoID: pi.repoID, New: pi.newForm}
 	i, err := strconv.Atoi(r.PostFormValue("choice"))
 	if err != nil || i < 0 || i >= len(pi.candidates) {
 		s.renderImport(w, r, http.StatusBadRequest, again, "Choose a stack to import.")

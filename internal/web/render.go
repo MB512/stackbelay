@@ -42,6 +42,10 @@ func (s *Server) templateFuncs(assets map[string]string) template.FuncMap {
 			}
 			return "/static/" + name + "?v=" + v, nil
 		},
+		// envRowData and emptyEnvRow feed the "env-row" partial of the
+		// repository form (a row plus the key choices).
+		"envRowData":  func(row envRow, keys []envKey) envRowData { return envRowData{Row: row, Keys: keys} },
+		"emptyEnvRow": func() envRow { return envRow{} },
 		// version is the build version, shown in the page footer.
 		"version": func() string { return buildinfo.Version },
 		// imageVersion formats an image version for the update check: the

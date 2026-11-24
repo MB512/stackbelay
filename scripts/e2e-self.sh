@@ -108,7 +108,7 @@ c -o /dev/null --data-urlencode "csrf_token=$T" --data-urlencode "current=$PW" \
 	-d "new=e2e+long+password&confirm=e2e+long+password" "$B/account/password"
 c "$B/" | grep -q "href=\"/stacks/$NAME\"" || fail "own stack not discovered"
 pass "manager running in its stack, logged in"
-PAGE="$(c --data-urlencode "csrf_token=$T" -d "name=self" --data-urlencode "location=$REPO" -d "password=self-repo-pw" \
+PAGE="$(c --data-urlencode "csrf_token=$T" -d "name=self" -d "type=other" --data-urlencode "location=$REPO" -d "password=self-repo-pw" \
 	"$B/admin/repositories")"
 grep -q 'Initialize repository</button>' <<<"$PAGE" || fail "init not offered"
 REPO_ID="$(grep -o 'action="/admin/repositories/[0-9]*/init"' <<<"$PAGE" | grep -o '[0-9]*')"

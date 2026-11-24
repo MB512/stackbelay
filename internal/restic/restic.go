@@ -118,6 +118,12 @@ func SecretValues(env []string) []string {
 	return out
 }
 
+// IsSecretEnvVar reports whether the value of the backend variable key is
+// a secret: redacted from logs and never shown in the UI.
+func IsSecretEnvVar(key string) bool {
+	return slices.Contains(secretEnvVars, key)
+}
+
 // ValidEnvKey reports whether key may be set in Repo.Env.
 func ValidEnvKey(key string) bool {
 	return slices.Contains(BackendEnvVars, key)

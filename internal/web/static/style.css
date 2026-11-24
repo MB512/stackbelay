@@ -212,3 +212,14 @@ form.htmx-request .busy-text { display: inline; }
 @keyframes dot-pulse { 50% { opacity: .45; } }
 @media (prefers-reduced-motion: reduce) { .dot.run { animation: none; } }
 
+
+/* Repository form (issue #45). fieldset has display: grid, which would
+   override the hidden attribute. */
+.repo-form { display: grid; gap: 1rem; }
+.repo-form fieldset[hidden] { display: none; }
+.input-row { display: flex; gap: .5rem; align-items: center; }
+.input-row input { flex: 1; min-width: 0; }
+table.env { width: 100%; }
+table.env select, table.env input { width: 100%; box-sizing: border-box; }
+table.env td:last-child, table.env th:last-child { width: 2.5rem; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }

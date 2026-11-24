@@ -130,36 +130,111 @@
 </section>
 {{- end}}
 
-{{- /* The fields of a repository form (admin Repositories tab, import).
-       Dot is a repoForm; never holds secret values. */}}
+{{- /* The fields of a repository form (admin Repositories tab, import;
+       issue #45). Dot is a repoForm; it never holds a secret value: stored
+       secrets show as a placeholder, an empty field keeps them. Without
+       JavaScript all type sections are shown and the chosen type counts;
+       static/repoform.js shows only the chosen one and adds the buttons. */}}
 {{define "repo-fields"}}
-    <label>Name
-      <input name="name" required maxlength="200" value="{{.Name}}" spellcheck="false" placeholder="nas-2026">
-    </label>
-    <p class="hint">Shown in the stack list and on the stacks' Settings tab, e.g. the server and year.</p>
-    <label>Location
-      <input name="location" required maxlength="1024" value="{{.Location}}" spellcheck="false"
-             placeholder="rest:https://user:password@backup.example:8000/stacks">
-    </label>
-    <p class="hint">A restic repository string: a path, <code>rest:https://…</code>, <code>s3:…</code>, <code>sftp:…</code>, …
-      A user name and password in a <code>rest:</code> URL are removed from the location and stored encrypted
-      (special characters in the password must be percent-encoded).</p>
+<div class="repo-form" data-repo-form>
+  <label>Name
+    <input name="name" required maxlength="200" value="{{.Name}}" spellcheck="false" placeholder="nas-2026">
+  </label>
+  <p class="hint">Shown in the stack list and on the stacks' Settings tab, e.g. the server and year.</p>
 
-    <label>Repository password
-      <input name="password" type="password" autocomplete="new-password" {{if not .ID}}required{{end}}
-             {{- if .ID}} placeholder="leave empty to keep the current password"{{end}}>
-    </label>
+  <fieldset>
+    <legend>Type</legend>
+    <label class="check"><input type="radio" name="type" value="rest"{{if eq .Type "rest"}} checked{{end}}> REST server
+      <span class="hint">(restic rest-server, e.g. managed by BelayPoint)</span></label>
+    <label class="check"><input type="radio" name="type" value="s3"{{if eq .Type "s3"}} checked{{end}}> S3
+      <span class="hint">(Amazon S3, MinIO, …)</span></label>
+    <label class="check"><input type="radio" name="type" value="other"{{if eq .Type "other"}} checked{{end}}> Other
+      <span class="hint">(any restic repository string with variables)</span></label>
+  </fieldset>
 
-    <label>Backend credentials (optional, one <code>KEY=value</code> per line)
-      <textarea name="env" rows="3" spellcheck="false" autocomplete="off"
-                placeholder="AWS_ACCESS_KEY_ID=…&#10;AWS_SECRET_ACCESS_KEY=…"></textarea>
+  <fieldset data-type="rest">
+    <legend>REST server</legend>
+    <label>URL
+      <span class="input-row">
+        <input name="rest_url" maxlength="1024" value="{{.RestURL}}" spellcheck="false" autocomplete="off"
+               placeholder="https://backup.example:8000/stacks" data-url="rest">
+        <button type="button" class="secondary" data-move-credentials hidden disabled>Move user and password to the fields</button>
+      </span>
     </label>
-    <p class="hint">
-      {{- if .EnvKeys}}Stored (encrypted): {{range $i, $k := .EnvKeys}}{{if $i}}, {{end}}<code>{{$k}}</code>{{end}}.
-      Entering variables replaces all stored ones; leave empty to keep them.
-      {{- else if .ID}}No backend credentials stored.{{end}}
-      Supported: {{range $i, $k := .Allowed}}{{if $i}}, {{end}}<code>{{$k}}</code>{{end}}.</p>
-    {{- if .EnvKeys}}
-    <label class="check"><input type="checkbox" name="clear_env"> Remove the stored backend credentials</label>
+    <label>User
+      <input name="rest_user" value="{{.RestUser}}" spellcheck="false" autocomplete="off" data-cred-user>
+    </label>
+    <label>Password of the REST server
+      <input name="rest_password" type="password" autocomplete="new-password" data-cred-pass
+             {{- if .RestPasswordStored}} placeholder="•••••••• stored – type to change"{{end}}>
+    </label>
+  </fieldset>
+
+  <fieldset data-type="s3">
+    <legend>S3</legend>
+    <label>Endpoint and bucket
+      <input name="s3_location" maxlength="1024" value="{{.S3Location}}" spellcheck="false" autocomplete="off"
+             placeholder="s3.eu-central-1.amazonaws.com/bucket/stacks or https://minio.example/bucket">
+    </label>
+    <label>Access key id
+      <input name="s3_key_id" value="{{.S3KeyID}}" spellcheck="false" autocomplete="off">
+    </label>
+    <label>Secret access key
+      <input name="s3_secret" type="password" autocomplete="new-password"
+             {{- if .S3SecretStored}} placeholder="•••••••• stored – type to change"{{end}}>
+    </label>
+    <label>Region (optional)
+      <input name="s3_region" value="{{.S3Region}}" spellcheck="false" autocomplete="off" placeholder="eu-central-1">
+    </label>
+  </fieldset>
+
+  <fieldset data-type="other">
+    <legend>Other</legend>
+    <label>Repository
+      <span class="input-row">
+        <input name="location" maxlength="1024" value="{{.Location}}" spellcheck="false" autocomplete="off"
+               placeholder="b2:bucket:stacks, azure:container:/stacks, …" data-url="other">
+        <button type="button" class="secondary" data-move-credentials hidden disabled>Move user and password to variables</button>
+      </span>
+    </label>
+    <p class="hint">A restic repository string. SFTP and local paths need SSH keys or mounts that the worker
+      containers do not have.</p>
+    <table class="env">
+      <thead><tr><th>Variable</th><th>Value</th><th><span class="visually-hidden">Remove</span></th></tr></thead>
+      <tbody data-env-rows>
+        {{- range .Rows}}
+        {{template "env-row" (envRowData . $.Keys)}}
+        {{- end}}
+      </tbody>
+    </table>
+    <template data-env-template>{{template "env-row" (envRowData (emptyEnvRow) .Keys)}}</template>
+    <div><button type="button" class="secondary" data-add-row hidden>Add variable</button></div>
+    <p class="hint">Choose “–” to remove a variable. Secret values (passwords, secret keys) are never shown; an empty
+      field keeps the stored value.</p>
+  </fieldset>
+
+  <label>Repository password
+    <input name="password" type="password" autocomplete="new-password"
+           {{- if .PasswordStored}} placeholder="•••••••• stored – type to change"{{else}} required{{end}}>
+  </label>
+  <p class="hint">The restic password that encrypts the backups (not the password of the server). Without it the backups
+    cannot be read: keep it safe.</p>
+</div>
+<script src="{{asset "repoform.js"}}" defer></script>
+{{end}}
+
+{{- /* One row of the variables table. Dot is an envRowData. */}}
+{{define "env-row"}}
+<tr data-env-row>
+  <td><select name="env_key" aria-label="Variable" data-env-key>
+    <option value="">–</option>
+    {{- range .Keys}}
+    <option value="{{.Name}}"{{if .Secret}} data-secret{{end}}{{if eq .Name $.Row.Key}} selected{{end}}>{{.Name}}</option>
     {{- end}}
+  </select></td>
+  <td><input name="env_value" aria-label="Value" spellcheck="false" autocomplete="off" data-env-value
+             type="{{if .Row.Secret}}password{{else}}text{{end}}" value="{{.Row.Value}}"
+             {{- if .Row.Stored}} placeholder="•••••••• stored – type to change"{{end}}></td>
+  <td><button type="button" class="secondary" data-remove-row hidden aria-label="Remove">×</button></td>
+</tr>
 {{end}}

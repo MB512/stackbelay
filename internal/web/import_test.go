@@ -62,7 +62,7 @@ func TestImportStack(t *testing.T) {
 	}
 	token := e.csrf("/admin/import")
 	r = e.post("/admin/import", url.Values{"csrf_token": {token},
-		"name": {"old-nas"}, "location": {"rest:https://demo:rest-secret@backup.example/cloud"}, "password": {"repo-secret"}})
+		"name": {"old-nas"}, "type": {"other"}, "location": {"rest:https://demo:rest-secret@backup.example/cloud"}, "password": {"repo-secret"}})
 	expect(t, r, http.StatusOK, "")
 	for _, secret := range []string{"rest-secret", "repo-secret"} {
 		if strings.Contains(r.body, secret) {
@@ -111,7 +111,7 @@ func TestImportStack(t *testing.T) {
 	expect(t, e.post("/admin/import/confirm", url.Values{"csrf_token": {token}, "token": {m[1]}, "choice": {"0"}}),
 		http.StatusBadRequest, "")
 	r = e.post("/admin/import", url.Values{"csrf_token": {token},
-		"name": {"old-nas"}, "location": {"rest:https://demo:rest-secret@backup.example/cloud"}, "password": {"repo-secret"}})
+		"name": {"old-nas"}, "type": {"other"}, "location": {"rest:https://demo:rest-secret@backup.example/cloud"}, "password": {"repo-secret"}})
 	m = importToken.FindStringSubmatch(r.body)
 	expect(t, e.post("/admin/import/confirm", url.Values{"csrf_token": {token}, "token": {m[1]}, "choice": {"0"}}),
 		http.StatusSeeOther, "/stacks/cloud/backups")
@@ -184,7 +184,7 @@ func TestImportFromConfiguredRepository(t *testing.T) {
 	}
 
 	// A new repository may not take the name of a configured one.
-	r = e.post("/admin/import", url.Values{"csrf_token": {token}, "name": {"nas"}, "location": {"/x"}, "password": {"pw"}})
+	r = e.post("/admin/import", url.Values{"csrf_token": {token}, "name": {"nas"}, "type": {"other"}, "location": {"/x"}, "password": {"pw"}})
 	expect(t, r, http.StatusConflict, "")
 	expect(t, e.post("/admin/import", url.Values{"csrf_token": {token}, "repository": {"999"}}), http.StatusBadRequest, "")
 

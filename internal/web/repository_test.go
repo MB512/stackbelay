@@ -91,11 +91,12 @@ func TestRepositoryAdmin(t *testing.T) {
 	}
 	token := e.csrf("/admin/repositories")
 
-	// New repository from a REST URL with credentials.
-	r := e.post("/admin/repositories", url.Values{"csrf_token": {token}, "name": {"nas"},
-		"location": {"rest:https://alice:s3cr%2Ft@backup.example:8000/stacks"}, "password": {"repo-pw-1"}})
+	// New REST repository; user and password typed into the URL are moved
+	// into the variables by the server (without JavaScript).
+	r := e.post("/admin/repositories", url.Values{"csrf_token": {token}, "name": {"nas"}, "type": {"rest"},
+		"rest_url": {"https://alice:s3cr%2Ft@backup.example:8000/stacks"}, "password": {"repo-pw-1"}})
 	expect(t, r, http.StatusOK, "")
-	if !strings.Contains(r.body, "restic found 1 snapshot.") || !strings.Contains(r.body, "RESTIC_REST_USERNAME/RESTIC_REST_PASSWORD") {
+	if !strings.Contains(r.body, "restic found 1 snapshot.") || !strings.Contains(r.body, "stored encrypted as variables") {
 		t.Fatalf("no success message:\n%s", r.body)
 	}
 	id, _ := repoIDByName(ctx, e.st, "nas")
@@ -115,13 +116,18 @@ func TestRepositoryAdmin(t *testing.T) {
 	if got.Location != "rest:https://backup.example:8000/stacks" || got.Password != "repo-pw-1" || !reflect.DeepEqual(got.Env, wantEnv) {
 		t.Fatalf("stored repository: %q %q %v", got.Location, got.Password, got.Env)
 	}
+	// The page shows the REST type with URL and user; secrets only as
+	// "stored".
 	for _, secret := range []string{"s3cr", "repo-pw-1"} {
 		if strings.Contains(r.body, secret) {
 			t.Fatalf("page contains secret %q", secret)
 		}
 	}
-	if !strings.Contains(r.body, "<code>RESTIC_REST_PASSWORD</code>, <code>RESTIC_REST_USERNAME</code>") {
-		t.Fatal("stored variable names not shown")
+	for _, want := range []string{`name="type" value="rest" checked`, `value="https://backup.example:8000/stacks"`,
+		`name="rest_user" value="alice"`, `name="rest_password" type="password" autocomplete="new-password" data-cred-pass placeholder="•••••••• stored`} {
+		if !strings.Contains(r.body, want) {
+			t.Fatalf("page lacks %s:\n%s", want, r.body)
+		}
 	}
 
 	// Two stacks use it; the list shows them.
@@ -140,9 +146,10 @@ func TestRepositoryAdmin(t *testing.T) {
 		v.Set("csrf_token", token)
 		return e.post("/admin/repositories/"+strconv.FormatInt(id, 10), v)
 	}
-	// Empty password and variables keep the stored ones; the location
-	// changes for both stacks.
-	expect(t, edit(url.Values{"name": {"nas-2027"}, "location": {"rest:https://backup2.example/stacks"}}), http.StatusOK, "")
+	// Empty secret fields keep the stored values; the URL changes for both
+	// stacks.
+	expect(t, edit(url.Values{"name": {"nas-2027"}, "type": {"rest"}, "rest_url": {"https://backup2.example/stacks"},
+		"rest_user": {"alice"}}), http.StatusOK, "")
 	if got := repo(); got.Name != "nas-2027" || got.Location != "rest:https://backup2.example/stacks" ||
 		got.Password != "repo-pw-1" || !reflect.DeepEqual(got.Env, wantEnv) {
 		t.Fatalf("after keep: %+v", got)
@@ -153,38 +160,56 @@ func TestRepositoryAdmin(t *testing.T) {
 		}
 	}
 
-	// Variables replace all stored ones.
-	expect(t, edit(url.Values{"name": {"nas-2027"}, "location": {"s3:s3.example/bucket"}, "password": {"repo-pw-2"},
-		"env": {"# S3\r\nAWS_ACCESS_KEY_ID=AK\r\n\r\nAWS_SECRET_ACCESS_KEY=a=b c\r\n"}}), http.StatusOK, "")
-	if got := repo(); got.Password != "repo-pw-2" ||
-		!reflect.DeepEqual(got.Env, map[string]string{"AWS_ACCESS_KEY_ID": "AK", "AWS_SECRET_ACCESS_KEY": "a=b c"}) {
-		t.Fatalf("after replace: %q %v", got.Password, got.Env)
+	// S3: "s3:" is added; the region (not secret) is shown, the secret key
+	// is not. The REST variables are gone with the type.
+	r = edit(url.Values{"name": {"nas-2027"}, "type": {"s3"}, "s3_location": {"s3.example/bucket"}, "password": {"repo-pw-2"},
+		"s3_key_id": {"AK"}, "s3_secret": {"sk-secret"}, "s3_region": {"eu-central-1"}})
+	expect(t, r, http.StatusOK, "")
+	if got := repo(); got.Location != "s3:s3.example/bucket" || got.Password != "repo-pw-2" ||
+		!reflect.DeepEqual(got.Env, map[string]string{"AWS_ACCESS_KEY_ID": "AK", "AWS_SECRET_ACCESS_KEY": "sk-secret", "AWS_DEFAULT_REGION": "eu-central-1"}) {
+		t.Fatalf("after s3: %+v", got)
 	}
-	// clear_env removes them.
-	expect(t, edit(url.Values{"name": {"nas-2027"}, "location": {"/srv/restic/stacks"}, "clear_env": {"on"}}), http.StatusOK, "")
-	if got := repo(); len(got.Env) != 0 {
-		t.Fatalf("after clear: %v", got.Env)
+	if !strings.Contains(r.body, `name="type" value="s3" checked`) || !strings.Contains(r.body, `value="eu-central-1"`) ||
+		strings.Contains(r.body, "sk-secret") || strings.Contains(r.body, "repo-pw-2") {
+		t.Fatalf("s3 page:\n%s", r.body)
+	}
+
+	// Other: a table of variables. The stored secret is kept (empty field),
+	// the region removed (key "–"), a new variable added.
+	r = edit(url.Values{"name": {"nas-2027"}, "type": {"other"}, "location": {"s3:s3.example/bucket"},
+		"env_key":   {"AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "", "AWS_SESSION_TOKEN"},
+		"env_value": {"AK2", "", "eu-central-1", "token-secret"}})
+	expect(t, r, http.StatusOK, "")
+	if got := repo(); !reflect.DeepEqual(got.Env, map[string]string{"AWS_ACCESS_KEY_ID": "AK2", "AWS_SECRET_ACCESS_KEY": "sk-secret",
+		"AWS_SESSION_TOKEN": "token-secret"}) {
+		t.Fatalf("after other: %v", got.Env)
+	}
+	// Session token is not an S3 field: the page shows type Other with the
+	// table (non-secret value visible, secrets masked).
+	if !strings.Contains(r.body, `name="type" value="other" checked`) || !strings.Contains(r.body, `value="AK2"`) ||
+		strings.Contains(r.body, "token-secret") || strings.Count(r.body, "•••••••• stored") < 3 {
+		t.Fatalf("other page:\n%s", r.body)
 	}
 
 	// Refresh failure: saved anyway, error shown.
 	e.snaps.err = fmt.Errorf("listing snapshots: %w", &restic.Error{Op: "snapshots", Err: errors.New("exit status 1"),
 		Stderr: `{"message_type":"exit_error","code":1,"message":"Fatal: unable to open config file"}`})
-	r = edit(url.Values{"name": {"nas-2027"}, "location": {"/srv/restic/stacks2"}})
+	r = edit(url.Values{"name": {"nas-2027"}, "type": {"other"}, "location": {"/srv/restic/stacks2"}})
 	expect(t, r, http.StatusOK, "")
 	if !strings.Contains(r.body, "restic could not open the repository: Fatal: unable to open config file") {
 		t.Fatalf("no refresh error:\n%s", r.body)
 	}
-	if repo().Location != "/srv/restic/stacks2" {
-		t.Fatal("repository not saved")
+	if got := repo(); got.Location != "/srv/restic/stacks2" || len(got.Env) != 0 {
+		t.Fatalf("repository not saved: %+v", got)
 	}
 
-	// Names are unique.
+	// Names are unique; the input is shown again.
 	if _, err := e.st.CreateRepository(ctx, "other", "/srv/restic/other", "pw", nil); err != nil {
 		t.Fatal(err)
 	}
-	r = edit(url.Values{"name": {"other"}, "location": {"/srv/restic/stacks2"}})
+	r = edit(url.Values{"name": {"other"}, "type": {"other"}, "location": {"/srv/restic/stacks2"}})
 	expect(t, r, http.StatusConflict, "")
-	r = e.post("/admin/repositories", url.Values{"csrf_token": {token}, "name": {"other"}, "location": {"/x"}, "password": {"pw"}})
+	r = e.post("/admin/repositories", url.Values{"csrf_token": {token}, "name": {"other"}, "type": {"other"}, "location": {"/x"}, "password": {"pw"}})
 	expect(t, r, http.StatusConflict, "")
 	if !strings.Contains(r.body, `value="other"`) || !strings.Contains(r.body, `value="/x"`) {
 		t.Fatalf("input not kept:\n%s", r.body)
@@ -196,7 +221,7 @@ func TestRepositoryAdmin(t *testing.T) {
 	counts := map[string]int{}
 	for _, a := range entries {
 		counts[a.Action]++
-		for _, secret := range []string{"s3cr", "repo-pw", "AK"} {
+		for _, secret := range []string{"s3cr", "repo-pw", "sk-secret", "token-secret"} {
 			if strings.HasPrefix(a.Action, "repository.") && strings.Contains(a.Detail, secret) {
 				t.Fatalf("audit detail contains a secret: %s", a.Detail)
 			}
@@ -212,24 +237,32 @@ func TestRepositoryFormValidation(t *testing.T) {
 	e.setupStacks()
 	e.loginAdmin()
 	token := e.csrf("/admin/repositories")
+	other := func(v url.Values) url.Values {
+		v.Set("type", "other")
+		return v
+	}
 	tests := []struct {
 		name    string
 		form    url.Values
 		wantMsg string
 		secret  string // must not be echoed
 	}{
-		{"no name", url.Values{"location": {"/r"}, "password": {"x"}}, "name must not be empty", ""},
-		{"no password for a new repository", url.Values{"name": {"n"}, "location": {"/r"}}, "password must not be empty", ""},
-		{"unparseable URL", url.Values{"name": {"n"}, "location": {"rest:https://alice:pa/ss@host/web"}, "password": {"x"}},
+		{"no type", url.Values{"name": {"n"}, "location": {"/r"}, "password": {"x"}}, "Choose the type", ""},
+		{"no name", other(url.Values{"location": {"/r"}, "password": {"x"}}), "name must not be empty", ""},
+		{"no password for a new repository", other(url.Values{"name": {"n"}, "location": {"/r"}}), "password must not be empty", ""},
+		{"unparseable URL", url.Values{"type": {"rest"}, "name": {"n"}, "rest_url": {"https://alice:pa/ss@host/web"}, "password": {"x"}},
 			"cannot be parsed", "pa/ss"},
-		{"credentials in s3 URL", url.Values{"name": {"n"}, "location": {"s3:https://ak:sk-secret@s3.example/b"}, "password": {"x"}},
+		{"credentials in s3 URL", url.Values{"type": {"s3"}, "name": {"n"}, "s3_location": {"https://ak:sk-secret@s3.example/b"}, "password": {"x"}},
 			"Only rest: repository URLs", "sk-secret"},
-		{"unsupported variable", url.Values{"name": {"n"}, "location": {"/r"}, "password": {"x"}, "env": {"LD_PRELOAD=/evil.so"}},
-			"not supported", "/evil.so"},
-		{"password variable", url.Values{"name": {"n"}, "location": {"/r"}, "password": {"x"}, "env": {"RESTIC_PASSWORD=env-pw-secret"}},
-			"not supported", "env-pw-secret"},
-		{"malformed line", url.Values{"name": {"n"}, "location": {"/r"}, "password": {"x"}, "env": {"AWS_ACCESS_KEY_ID"}}, "KEY=value", ""},
-		{"flag as location", url.Values{"name": {"n"}, "location": {"--insecure-tls"}, "password": {"x"}}, "must not start with", ""},
+		{"unsupported variable", other(url.Values{"name": {"n"}, "location": {"/r"}, "password": {"x"},
+			"env_key": {"LD_PRELOAD"}, "env_value": {"/evil.so"}}), "not supported", "/evil.so"},
+		{"password variable", other(url.Values{"name": {"n"}, "location": {"/r"}, "password": {"x"},
+			"env_key": {"RESTIC_PASSWORD"}, "env_value": {"env-pw-secret"}}), "not supported", "env-pw-secret"},
+		{"variable twice", other(url.Values{"name": {"n"}, "location": {"/r"}, "password": {"x"},
+			"env_key": {"B2_ACCOUNT_ID", "B2_ACCOUNT_ID"}, "env_value": {"a", "b"}}), "set twice", ""},
+		{"incomplete table", other(url.Values{"name": {"n"}, "location": {"/r"}, "password": {"x"},
+			"env_key": {"B2_ACCOUNT_ID"}}), "incomplete", ""},
+		{"flag as location", other(url.Values{"name": {"n"}, "location": {"--insecure-tls"}, "password": {"x"}}), "must not start with", ""},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -271,7 +304,7 @@ func TestRepositoryAdminOnly(t *testing.T) {
 	expect(t, e.do(alice, http.MethodGet, "/admin/repositories", nil, nil), http.StatusForbidden, "")
 	expect(t, e.do(alice, http.MethodGet, repoPath, nil, nil), http.StatusForbidden, "")
 	for _, path := range []string{"/admin/repositories", repoPath, repoPath + "/init", repoPath + "/delete", "/stacks/web/repository"} {
-		r := e.do(alice, http.MethodPost, path, url.Values{"csrf_token": {token}, "name": {"x"}, "location": {"/r"}, "password": {"x"}}, nil)
+		r := e.do(alice, http.MethodPost, path, url.Values{"csrf_token": {token}, "name": {"x"}, "type": {"other"}, "location": {"/r"}, "password": {"x"}}, nil)
 		expect(t, r, http.StatusForbidden, "")
 	}
 	if len(init.repos) != 0 {
@@ -366,19 +399,6 @@ func TestDeleteRepository(t *testing.T) {
 	}
 	if n := auditActions(t, e.st)["repository.delete"]; n != 1 {
 		t.Fatalf("repository.delete logged %d times", n)
-	}
-}
-
-func TestParseEnvLines(t *testing.T) {
-	got, err := parseEnvLines("  # comment\nB2_ACCOUNT_ID=id\n\nB2_ACCOUNT_KEY= spaced value \n")
-	want := map[string]string{"B2_ACCOUNT_ID": "id", "B2_ACCOUNT_KEY": " spaced value "}
-	if err != nil || !reflect.DeepEqual(got, want) {
-		t.Fatalf("got %v, %v", got, err)
-	}
-	for _, bad := range []string{"B2_ACCOUNT_ID=a\nB2_ACCOUNT_ID=b", "RESTIC_PASSWORD_FILE=/x", "PATH=/tmp", "novalue"} {
-		if _, err := parseEnvLines(bad); err == nil {
-			t.Errorf("%q: want error", bad)
-		}
 	}
 }
 
@@ -492,7 +512,7 @@ func TestInitRepository(t *testing.T) {
 
 	// No repository at the location: the init button is offered.
 	e.snaps.err = fmt.Errorf("listing snapshots: %w", resticExitError(t, 10, "Fatal: repository does not exist: unable to open config file"))
-	r := post("/admin/repositories", url.Values{"name": {"nas-2027"},
+	r := post("/admin/repositories", url.Values{"name": {"nas-2027"}, "type": {"other"},
 		"location": {"rest:https://u:rest-pw@backup.example/stacks-2027"}, "password": {"repo-pw"}})
 	expect(t, r, http.StatusOK, "")
 	if !strings.Contains(r.body, "There is no restic repository at this location yet") || !initEnabled(r.body) {
@@ -518,7 +538,7 @@ func TestInitRepository(t *testing.T) {
 
 	// Other errors (wrong password, network) do not offer init.
 	e.snaps.err = resticExitError(t, 12, "Fatal: wrong password or no key found")
-	r = post(path, url.Values{"name": {"nas-2027"}, "location": {"/srv/restic/web"}})
+	r = post(path, url.Values{"name": {"nas-2027"}, "type": {"other"}, "location": {"/srv/restic/web"}})
 	if initEnabled(r.body) || !strings.Contains(r.body, "wrong password") {
 		t.Fatalf("init offered for a wrong password:\n%s", r.body)
 	}

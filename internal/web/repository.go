@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -32,112 +31,6 @@ type SnapshotRefresher interface {
 
 // refreshTimeout bounds a snapshot refresh started from the UI.
 const refreshTimeout = 60 * time.Second
-
-// repoForm is the add/edit form of a repository. It never holds secret
-// values, only the names of stored variables.
-type repoForm struct {
-	ID       int64  // 0 = new repository
-	Name     string // current name, or the submitted one after an error
-	Location string // current location, or the submitted one after an error
-	EnvKeys  []string
-	Allowed  []string // variable names that may be entered
-	// OfferInit shows the "Initialize repository" button enabled.
-	OfferInit bool
-}
-
-// allowedRepoEnv are the backend variables the form accepts. The
-// repository password has its own field.
-func allowedRepoEnv() []string {
-	var out []string
-	for _, k := range restic.BackendEnvVars {
-		if k != "RESTIC_PASSWORD" && k != "RESTIC_PASSWORD_FILE" {
-			out = append(out, k)
-		}
-	}
-	return out
-}
-
-// parseEnvLines parses "KEY=value" lines. Empty lines and lines starting
-// with "#" are skipped. Values are taken literally (no quotes, no trim).
-func parseEnvLines(text string) (map[string]string, error) {
-	env := map[string]string{}
-	for n, line := range strings.Split(text, "\n") {
-		line = strings.TrimSuffix(line, "\r")
-		if strings.TrimSpace(line) == "" || strings.HasPrefix(strings.TrimSpace(line), "#") {
-			continue
-		}
-		key, value, ok := strings.Cut(line, "=")
-		key = strings.TrimSpace(key)
-		switch {
-		case !ok:
-			return nil, fmt.Errorf("line %d: expected KEY=value", n+1)
-		case !slices.Contains(allowedRepoEnv(), key):
-			// Only the key is echoed, never the value.
-			return nil, fmt.Errorf("line %d: variable %q is not supported", n+1, truncate(key, 40))
-		}
-		if _, dup := env[key]; dup {
-			return nil, fmt.Errorf("line %d: %s is set twice", n+1, key)
-		}
-		env[key] = value
-	}
-	return env, nil
-}
-
-// repoInput is a submitted repository form, validated.
-type repoInput struct {
-	name, location, password string
-	env                      map[string]string
-	fromURL                  bool // credentials were moved from the URL into env
-}
-
-// parseRepoInput reads and validates the repository form fields: name,
-// location (a REST URL may contain user:password, which is moved into the
-// encrypted variables), password (empty = keep old's), env ("KEY=value"
-// lines; non-empty replaces all stored variables) and clear_env. old is
-// nil for a new repository. On error it returns a message for the user and
-// the form values that may be shown again (never a password).
-func parseRepoInput(r *http.Request, old *store.Repository) (repoInput, repoForm, string) {
-	in := repoInput{name: strings.TrimSpace(r.PostFormValue("name"))}
-	echo := repoForm{Name: in.name}
-	location, urlEnv, err := restic.SplitRESTCredentials(strings.TrimSpace(r.PostFormValue("location")))
-	if err != nil {
-		return in, echo, capitalize(err.Error()) + "." // the input may contain a password: not echoed
-	}
-	in.location, echo.Location = location, location
-	if err := store.ValidateRepositoryName(in.name); err != nil {
-		return in, echo, capitalize(err.Error()) + "."
-	}
-	in.password = r.PostFormValue("password")
-	in.env = map[string]string{}
-	if old != nil {
-		if in.password == "" {
-			in.password = old.Password
-		}
-		if r.PostFormValue("clear_env") != "on" {
-			maps.Copy(in.env, old.Env)
-		}
-	}
-	if text := r.PostFormValue("env"); strings.TrimSpace(text) != "" {
-		if in.env, err = parseEnvLines(text); err != nil {
-			return in, echo, capitalize(err.Error()) + "."
-		}
-	}
-	maps.Copy(in.env, urlEnv) // credentials from the URL win
-	in.fromURL = len(urlEnv) > 0
-	if err := store.ValidateRepository(in.location, in.password, in.env); err != nil {
-		return in, echo, capitalize(err.Error()) + "."
-	}
-	return in, echo, ""
-}
-
-// savedInfo is the message after saving a repository.
-func (in repoInput) savedInfo() string {
-	info := "Repository saved."
-	if in.fromURL {
-		info += " The user name and password from the URL are stored encrypted as RESTIC_REST_USERNAME/RESTIC_REST_PASSWORD."
-	}
-	return info
-}
 
 // reposPage is the data of the admin "Repositories" tab.
 type reposPage struct {
@@ -167,7 +60,7 @@ func (v pageView) status() int {
 
 // adminRepositories lists the repositories, with the form for a new one.
 func (s *Server) adminRepositories(w http.ResponseWriter, r *http.Request) {
-	s.renderRepos(w, r, repoForm{}, pageView{})
+	s.renderRepos(w, r, newRepoForm(nil), pageView{})
 }
 
 func (s *Server) renderRepos(w http.ResponseWriter, r *http.Request, form repoForm, v pageView) {
@@ -176,7 +69,7 @@ func (s *Server) renderRepos(w http.ResponseWriter, r *http.Request, form repoFo
 		s.internalError(w, r, "listing repositories", err)
 		return
 	}
-	form.Allowed = allowedRepoEnv()
+	form.prepare()
 	s.render(w, r, v.status(), "admin_repositories.html",
 		pageData{Title: "Repositories", Info: v.Info, Error: v.Error, Data: reposPage{Repos: repos, New: form}})
 }
@@ -202,7 +95,7 @@ func (s *Server) createRepository(w http.ResponseWriter, r *http.Request) {
 	s.audit(r, store.AuditEntry{UserID: authFrom(ctx).User.ID, Action: "repository.create",
 		Detail: fmt.Sprintf("repository %q (id %d), location %q, variables %v", truncate(in.name, 100), id,
 			truncate(in.location, 200), slices.Sorted(maps.Keys(in.env)))})
-	s.renderRepo(w, r, id, repoForm{}, s.checkRepository(ctx, id, in.savedInfo()))
+	s.renderRepo(w, r, id, nil, s.checkRepository(ctx, id, in.savedInfo()))
 }
 
 // loadRepo loads the repository from the URL, or answers 404.
@@ -230,28 +123,31 @@ func (s *Server) repositoryPage(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	s.renderRepo(w, r, repo.ID, repoForm{}, pageView{})
+	s.renderRepo(w, r, repo.ID, nil, pageView{})
 }
 
-// renderRepo renders a repository's page. echo, if it has a name, replaces
-// the stored name and location in the form (the user's input after an
-// error).
-func (s *Server) renderRepo(w http.ResponseWriter, r *http.Request, id int64, echo repoForm, v pageView) {
+// renderRepo renders a repository's page. echo, if not nil, is the form
+// to show instead of the stored values (the user's input after an error).
+func (s *Server) renderRepo(w http.ResponseWriter, r *http.Request, id int64, echo *repoForm, v pageView) {
 	ctx := r.Context()
 	info, err := s.Store.RepositoryInfo(ctx, id)
 	if err != nil {
 		s.internalError(w, r, "loading repository", err)
 		return
 	}
-	form := repoForm{ID: id, Name: info.Name, Location: info.Location, Allowed: allowedRepoEnv(), OfferInit: v.OfferInit}
-	// Only the variable names are shown. A secret that does not decrypt
-	// (e.g. a conversion that failed) just shows none.
-	if repo, err := s.Store.Repository(ctx, id); err == nil {
-		form.EnvKeys = slices.Sorted(maps.Keys(repo.Env))
+	var form repoForm
+	switch repo, err := s.Store.Repository(ctx, id); {
+	case echo != nil:
+		form = *echo
+	case err == nil:
+		form = newRepoForm(&repo)
+	default:
+		// A secret that does not decrypt: the stored values that are not
+		// secret, and nothing stored.
+		form = newRepoForm(&store.Repository{ID: id, Name: info.Name, Location: info.Location})
 	}
-	if echo.Name != "" || echo.Location != "" {
-		form.Name, form.Location = echo.Name, echo.Location
-	}
+	form.ID, form.OfferInit = id, v.OfferInit
+	form.prepare()
 	s.render(w, r, v.status(), "admin_repository.html",
 		pageData{Title: info.Name, Info: v.Info, Error: v.Error, Data: repoPage{Repo: info, Form: form}})
 }
@@ -267,12 +163,12 @@ func (s *Server) updateRepository(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	in, echo, msg := parseRepoInput(r, &old)
 	if msg != "" {
-		s.renderRepo(w, r, old.ID, echo, pageView{Status: http.StatusBadRequest, Error: msg})
+		s.renderRepo(w, r, old.ID, &echo, pageView{Status: http.StatusBadRequest, Error: msg})
 		return
 	}
 	err := s.Store.UpdateRepository(ctx, old.ID, in.name, in.location, in.password, in.env)
 	if errors.Is(err, store.ErrConflict) {
-		s.renderRepo(w, r, old.ID, echo, pageView{Status: http.StatusConflict, Error: "A repository with this name exists already."})
+		s.renderRepo(w, r, old.ID, &echo, pageView{Status: http.StatusConflict, Error: "A repository with this name exists already."})
 		return
 	}
 	if err != nil {
@@ -283,7 +179,7 @@ func (s *Server) updateRepository(w http.ResponseWriter, r *http.Request) {
 		Detail: fmt.Sprintf("repository %q (id %d), name %q, location %q, variables %v, password changed: %t",
 			truncate(old.Name, 100), old.ID, truncate(in.name, 100), truncate(in.location, 200),
 			slices.Sorted(maps.Keys(in.env)), in.password != old.Password)})
-	s.renderRepo(w, r, old.ID, repoForm{}, s.checkRepository(ctx, old.ID, in.savedInfo()))
+	s.renderRepo(w, r, old.ID, nil, s.checkRepository(ctx, old.ID, in.savedInfo()))
 }
 
 // deleteRepository removes a repository that no stack uses (admin only).
@@ -295,7 +191,7 @@ func (s *Server) deleteRepository(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	err := s.Store.DeleteRepository(ctx, repo.ID)
 	if errors.Is(err, store.ErrInUse) {
-		s.renderRepo(w, r, repo.ID, repoForm{}, pageView{Status: http.StatusConflict,
+		s.renderRepo(w, r, repo.ID, nil, pageView{Status: http.StatusConflict,
 			Error: "Stacks still use this repository. Choose another repository (or none) on their Settings tab first."})
 		return
 	}
@@ -413,7 +309,7 @@ func (s *Server) initRepository(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	if s.Repos == nil {
-		s.renderRepo(w, r, repo.ID, repoForm{}, pageView{Status: http.StatusServiceUnavailable,
+		s.renderRepo(w, r, repo.ID, nil, pageView{Status: http.StatusServiceUnavailable,
 			Error: "Initializing repositories is not available."})
 		return
 	}
@@ -428,10 +324,10 @@ func (s *Server) initRepository(w http.ResponseWriter, r *http.Request) {
 		if errors.As(err, &re) {
 			msg = re.Message()
 		}
-		s.renderRepo(w, r, repo.ID, repoForm{}, pageView{Error: "restic could not initialize the repository: " + truncate(msg, 300)})
+		s.renderRepo(w, r, repo.ID, nil, pageView{Error: "restic could not initialize the repository: " + truncate(msg, 300)})
 		return
 	}
-	s.renderRepo(w, r, repo.ID, repoForm{}, s.checkRepository(ctx, repo.ID, "Repository initialized."))
+	s.renderRepo(w, r, repo.ID, nil, s.checkRepository(ctx, repo.ID, "Repository initialized."))
 }
 
 // stackRepoForm is the repository section of a stack's Settings tab.

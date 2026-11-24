@@ -113,7 +113,7 @@ pass "logged in, stack discovered"
 
 step "repository: add, initialize, choose for the stack"
 REPO_PW="e2e-repo-$RANDOM-secret"
-PAGE="$(c --data-urlencode "csrf_token=$T" -d "name=e2e" --data-urlencode "location=$REPO" --data-urlencode "password=$REPO_PW" \
+PAGE="$(c --data-urlencode "csrf_token=$T" -d "name=e2e" -d "type=other" --data-urlencode "location=$REPO" --data-urlencode "password=$REPO_PW" \
 	"$B/admin/repositories")"
 grep -q 'Initialize repository</button>' <<<"$PAGE" || fail "init not offered"
 REPO_ID="$(grep -o 'action="/admin/repositories/[0-9]*/init"' <<<"$PAGE" | grep -o '[0-9]*')"

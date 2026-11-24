@@ -955,14 +955,37 @@ with a light and a dark set; the job log is a dark panel in both modes.
 | `POST /admin/import/confirm` | admin | create the chosen stack record with that repository |
 | `GET /admin/audit` | admin | "Audit log" admin tab: 100 entries per page, newest first; `?before=<id>` for older ones |
 
-Repository form (Repositories tab, new repository of an import): a unique
-name (at most 200 characters, shown in the stack list) and the location,
-which may be a `rest:` URL with `user:password`; that is split off into
-`RESTIC_REST_USERNAME`/`RESTIC_REST_PASSWORD`.
-An empty password field keeps the stored password; backend variables are
-entered as `KEY=value` lines and replace all stored variables (empty =
-keep). Secret values are never rendered back into the page, only the names
-of stored variables. After saving, a snapshot cache refresh checks access;
+Repository form (Repositories tab, new repository of an import; issue
+#45, `web/repoform.go`, `templates/partials.html` "repo-fields",
+`static/repoform.js`): a unique name (at most 200 characters, shown in the
+stack list), a **type** and the restic repository password.
+
+- Types: **REST server** (URL without `rest:`, user, password:
+  `RESTIC_REST_USERNAME`/`RESTIC_REST_PASSWORD`), **S3** (endpoint and
+  bucket without `s3:`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`,
+  `AWS_DEFAULT_REGION`) and **Other** (any repository string and a table
+  of variables, the key a drop-down of the allowed keys,
+  `restic.BackendEnvVars` without the password variables; key "–"
+  removes a row). The type is not stored: `repoType` derives it from the
+  location prefix and the variables; a repository with a variable its
+  type has no field for shows as Other, so nothing is lost. Saving a type
+  sets exactly that type's location and variables. SFTP and local paths
+  have no own type (the workers have no SSH keys and no mounts for them).
+- Values of variables that are not secret (user names, access key ids,
+  regions, project ids) are shown and edited directly. Secret ones
+  (`restic.IsSecretEnvVar`, the list the log redaction uses) and the
+  repository password are never sent to the browser: the empty field
+  shows the placeholder "•••••••• stored"; an empty field keeps the stored
+  value, typing replaces it.
+- A `rest:` URL may contain `user:password`. The button "Move user and
+  password …" next to the URL takes them out in the browser (into the
+  REST fields or the variable rows); without JavaScript the server does
+  it on save and says so. A password is never stored in the location.
+- Without JavaScript all type sections are shown (the chosen type
+  counts) and the table has two empty rows; with it only the chosen
+  section, "Add variable" and × per row.
+
+After saving, a snapshot cache refresh checks access;
 if it fails the repository stays saved and the restic error is shown.
 If the check reports that no repository exists at the location (restic
 exit code 10, `restic.IsNoRepository`), the repository's page offers an
