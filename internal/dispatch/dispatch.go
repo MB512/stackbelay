@@ -522,24 +522,12 @@ func (d *Dispatcher) check(ctx context.Context, j store.Job) {
 	d.finish(ctx, j, jobs.StateFailed, "", msg, store.JobResult{})
 }
 
-// workerContainer inspects the worker container of job id under its name
-// or, if no container has that name, under LegacyContainerName. It returns
-// the name of the container found, or ContainerName if there is none.
+// workerContainer inspects the worker container of job id and returns
+// its name (ContainerName) with its state.
 func (d *Dispatcher) workerContainer(ctx context.Context, id string) (string, docker.ContainerState, error) {
 	name := ContainerName(id)
 	cs, err := d.Docker.InspectContainer(ctx, name)
-	if err != nil || cs.Exists {
-		return name, cs, err
-	}
-	legacy := LegacyContainerName(id)
-	lcs, err := d.Docker.InspectContainer(ctx, legacy)
-	if err != nil {
-		return name, cs, err
-	}
-	if lcs.Exists {
-		return legacy, lcs, nil
-	}
-	return name, cs, nil
+	return name, cs, err
 }
 
 // finalStatus returns the worker's final status, if it wrote one. err is
