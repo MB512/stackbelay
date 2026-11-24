@@ -31,6 +31,27 @@ app therefore only uses operations that work there: `init`, `backup`,
 the responsibility of the repository owner on the server. Deleting stale lock
 files is allowed in append-only mode.
 
+## Repositories
+
+Decided in issue #39: repositories are **global**. An admin adds them on
+the "Repositories" admin tab (name, location, password, backend
+variables), and each stack picks at most one on its Settings tab
+(`stacks.repository_id`). Several stacks, also of several hosts, may share
+one repository: restic keeps their snapshots apart by path and host (see
+"Snapshot cache"). A change of a repository (e.g. a new location for a new
+year, then "Initialize repository") applies to every stack that uses it
+from its next job on; as before, the snapshots of an old location are no
+longer listed (issue #2). Worker jobs still get the location and
+credentials per job (see "Job handoff"). A repository can only be deleted
+when no stack uses it; deleting it removes it and its snapshot cache from
+StackBelay, never anything in the repository itself.
+
+Migration 0018 turned the per-stack repositories of earlier versions into
+global ones. `store.Open` then converts them once (`convertRepositories`):
+it seals the secrets with the new associated data, merges repositories
+with the same location, password and backend variables, and names them
+after their location (made unique with " (2)", ...).
+
 ## Mounts
 
 Manager:
@@ -408,18 +429,21 @@ directory, never the stack folder itself.
 Decided in issue #1: moving a stack from host A to host B (or rebuilding a
 host) through the shared repository.
 
-- **Import stack** (admin tab, `/admin/import`): the admin enters a
-  repository (location, password, backend variables, as on the Settings
-  tab). The manager lists its snapshots read-only (`restic snapshots`,
+- **Import stack** (admin tab, `/admin/import`): the admin chooses a
+  configured repository or enters a new one (name, location, password,
+  backend variables, as on the Repositories tab). The manager lists its
+  snapshots read-only (`restic snapshots`,
   `web.RepoSnapshotLister`) and offers every stack name (last component of
   a snapshot's single path, `stacks.ValidName`) and host, with the number
   of snapshots and the newest. Names with a stack record or a directory on
-  this host are shown disabled. The credentials wait on the server for the
-  second step (`pendingImports`: 15 minutes, bound to the admin, used
-  once); the page only carries a random token and the index of the choice.
-  The import creates the stack record (`CreateImportedStack`: not present,
-  no schedules, source host = the chosen host), saves the repository, audits
-  `stack.import` and fills the snapshot cache. Only admins see the new
+  this host are shown disabled. The choice (a configured repository, or the
+  credentials of a new one) waits on the server for the second step
+  (`pendingImports`: 15 minutes, bound to the admin, used once); the page
+  only carries a random token and the index of the choice. The import saves
+  a new repository only now (audited as `repository.create`), creates the
+  stack record (`CreateImportedStack`: not present, no schedules, source
+  host = the chosen host) with that repository, audits `stack.import` and
+  fills the snapshot cache. Only admins see the new
   stack until permissions are granted. The stack keeps its name: the
 snapshot path's last component must equal it (`snapshotStackPath`), the
 rest of the path may differ (`/home/docker/web` on A restores into
@@ -751,7 +775,8 @@ Listing snapshots on a remote repository can be slow, so the manager keeps a
 cache in the `snapshots` table (id, short id, time, host, paths, tags, and
 the backup summary restic >= 0.17 records in every snapshot).
 
-- Refresh = `restic snapshots --json` against the stack's repository. It is a
+- Refresh = `restic snapshots --json` against a repository (the cache is
+  kept per repository, so stacks that share one share its cache). It is a
   read-only operation, so the manager runs it directly (decrypting the repo
   credentials in memory and passing them to the child process via env), not
   through a worker container.
@@ -846,7 +871,7 @@ with a light and a dark set; the job log is a dark panel in both modes.
 | `GET /` | logged in | stack list: the stacks the user may view (admins: all), see "Stack list" |
 | `GET /stacks/{name}` | view right | "Status" tab, the home of a stack: containers with state and image, recent jobs, "Back up now" (backup right), see "Status tab" |
 | `GET /stacks/{name}/status/live` | view right | the self-refreshing part of the Status tab (HTMX fragment, polled every 10 s) |
-| `GET /stacks/{name}/backups` | view right | "Backups" tab: repository location, cached snapshots (same for every user) |
+| `GET /stacks/{name}/backups` | view right | "Backups" tab: repository name and location, cached snapshots (same for every user) |
 | `POST /stacks/{name}/backup` | backup right | queue a backup |
 | `POST /stacks/{name}/up`, `/start`, `/restart`, `/stop`, `/down` | operate right | queue an up, start, restart, stop or down without backup, see "Stop, start and restart" (no stop or down for the manager's own stack) |
 | `GET /stacks/{name}/logs` | logs right | "Logs" tab: container checkboxes and live log panel |
@@ -867,9 +892,8 @@ with a light and a dark set; the job log is a dark panel in both modes.
 | `GET /stacks/{name}/shell/ws` | admin, opt-in | WebSocket of a shell session, see "Container shell" |
 | `GET /stacks/{name}/compose` | admin | "Compose" tab: editor for the main compose file |
 | `POST /stacks/{name}/compose` | admin | validate and queue a compose-apply job, see "Compose editor" |
-| `GET /stacks/{name}/settings` | admin | "Settings" tab: repository, schedules with next run, enable/disable, per-user permissions |
-| `POST /stacks/{name}/repository` | admin | create/update the repository, then refresh the snapshot cache as an access check |
-| `POST /stacks/{name}/repository/init` | admin | `restic init` at the stored location (offered only when no repository exists there) |
+| `GET /stacks/{name}/settings` | admin | "Settings" tab: choice of repository, schedules with next run, enable/disable, per-user permissions |
+| `POST /stacks/{name}/repository` | admin | choose the stack's repository (`repository`: id, or empty for none), then refresh the snapshot cache as an access check |
 | `POST /stacks/{name}/permissions` | admin | set one user's backup/restore right (HTMX: returns the table row) |
 | `POST /stacks/{name}/source-host` | admin | set the host whose snapshots the stack lists and restores, see "Restore from another host" |
 | `POST /stacks/{name}/schedules/enabled` | admin | enable/disable all schedules of the stack |
@@ -886,20 +910,26 @@ with a light and a dark set; the job log is a dark panel in both modes.
 | `POST /admin/host/schedules` | admin | add a cleanup schedule (cron expression) |
 | `POST /admin/host/schedules/{id}/enabled` | admin | enable/disable a host schedule |
 | `POST /admin/host/schedules/{id}/delete` | admin | delete a host schedule |
+| `GET/POST /admin/repositories` | admin | "Repositories" admin tab: list the repositories with the stacks that use them, add one (then check access) |
+| `GET/POST /admin/repositories/{id}` | admin | show and change a repository (then check access); applies to every stack that uses it |
+| `POST /admin/repositories/{id}/init` | admin | `restic init` at the stored location (offered only when no repository exists there) |
+| `POST /admin/repositories/{id}/delete` | admin | remove a repository that no stack uses, with its snapshot cache (the repository itself is not touched) |
 | `GET/POST /admin/import` | admin | "Import stack": list the stacks in a repository (read-only restic), see "Restore from another host" |
 | `POST /admin/import/confirm` | admin | create the chosen stack record with that repository |
 | `GET /admin/audit` | admin | "Audit log" admin tab: 100 entries per page, newest first; `?before=<id>` for older ones |
 
-Repository form: the location may be a `rest:` URL with `user:password`,
-which is split off into `RESTIC_REST_USERNAME`/`RESTIC_REST_PASSWORD`.
+Repository form (Repositories tab, new repository of an import): a unique
+name (at most 200 characters, shown in the stack list) and the location,
+which may be a `rest:` URL with `user:password`; that is split off into
+`RESTIC_REST_USERNAME`/`RESTIC_REST_PASSWORD`.
 An empty password field keeps the stored password; backend variables are
 entered as `KEY=value` lines and replace all stored variables (empty =
 keep). Secret values are never rendered back into the page, only the names
 of stored variables. After saving, a snapshot cache refresh checks access;
 if it fails the repository stays saved and the restic error is shown.
 If the check reports that no repository exists at the location (restic
-exit code 10, `restic.IsNoRepository`), the Settings tab offers an
-**Initialize repository** button (`POST /stacks/{name}/repository/init`,
+exit code 10, `restic.IsNoRepository`), the repository's page offers an
+**Initialize repository** button (`POST /admin/repositories/{id}/init`,
 admin, audited as `repository.init`). The manager runs `restic init`
 directly with the stored password; restic refuses if a repository already
 exists, so nothing is overwritten. This works with an append-only
@@ -918,7 +948,7 @@ tooltip; job states are dots with a symbol, not color alone (✓ succeeded,
 - **Stack** and **State** (see below).
 - **Backup**: *Scheduling* (next run of the stack's enabled backup
   schedules, cron expression in the tooltip; `–` without schedule, `off`
-  when all are disabled), *Repository* (✓ or `–`), *Last* (the newest
+  when all are disabled), *Repository* (its name or `–`), *Last* (the newest
   consistent snapshot, with a link to the job that made it: a final
   snapshot of a backup, an update or a compose change, taken with the
   stack stopped; jobs that failed count only if they were rolled back to
@@ -1001,7 +1031,8 @@ so HTMX loads the login page instead of swapping it into the fragment.
 
 The header shows admins an "Admin" link to pages outside the stacks, with
 their own tabs (`admin-tabs` in `partials.html`): "Users" (`/admin/users`),
-"Jobs" (`/admin/jobs`; host jobs show "host" as stack), "Import stack"
+"Jobs" (`/admin/jobs`; host jobs show "host" as stack), "Repositories"
+(`/admin/repositories`, see "Repositories"), "Import stack"
 (`/admin/import`, see "Restore from another host"), "Host"
 (`/admin/host`, the host cleanup: preview, "Clean up now", recent cleanups,
 schedules; see "Host cleanup") and "Audit log" (`/admin/audit`, read-only,

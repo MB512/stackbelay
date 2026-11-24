@@ -16,8 +16,9 @@ already trust until it has proven itself on your hosts.
 
 ## Features
 
-- **Backups per stack** into one restic repository per stack (several
-  stacks and hosts may share a repository).
+- **Backups per stack** into restic repositories that admins manage in
+  one place: several stacks (and hosts) may share a repository, and a
+  change of it (e.g. a new location per year) applies to all of them.
   Pipeline: `metadata.txt` (image digests, service states) -> snapshot
   while running (shorter downtime) -> `compose stop` -> final
   snapshot -> `compose start`. The stack is started again in every case,
@@ -75,7 +76,7 @@ design discussions are tracked in
   file named `compose.yaml`, `compose.yml`, `docker-compose.yml` or
   `docker-compose.yaml` (the names `docker compose` looks for); only data inside the stack directory is
   backed up (bind mounts outside it and named volumes are not).
-- A restic repository per stack (or shared), e.g. on a rest-server
+- One or more restic repositories (shared by stacks or one per stack), e.g. on a rest-server
   started with `--append-only`.
 - A TLS reverse proxy in front of the web UI.
 
@@ -106,9 +107,10 @@ design discussions are tracked in
    one.
 
 4. Open the UI through your reverse proxy, log in as `admin`, set a new
-   password. For each stack: **Settings** -> repository (location and
-   password; "Initialize repository" creates a new one), schedules and user
-   rights. Then **Back up now** on the stack's Status tab.
+   password. Add a repository under **Admin** -> **Repositories** (name,
+   location and password; "Initialize repository" creates a new one). For
+   each stack: **Settings** -> choose the repository, add schedules and
+   user rights. Then **Back up now** on the stack's Status tab.
 
 ### Optional: keep the key out of the backups
 

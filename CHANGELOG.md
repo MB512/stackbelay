@@ -34,6 +34,15 @@ older than 90 days are deleted on the first start; set
 
 ### Added
 
+- **Shared repositories** (#39): repositories are managed on the new admin
+  tab "Repositories" (name, location, password, backend variables,
+  "Initialize repository") and a stack's Settings tab only picks one.
+  Several stacks share a repository and its snapshot cache; a change of it
+  applies to all of them. The stack list shows the repository's name.
+  Import stack offers the configured repositories. On the first start the
+  per-stack repositories are converted: identical ones (same location,
+  password and backend variables) are merged, and each is named after its
+  location (rename it on its page).
 - **Colors in container logs** (#29): the ANSI colors applications write
   into their output are shown on the Logs tab and in the global log view;
   other escape sequences no longer appear as stray characters. "Colors"

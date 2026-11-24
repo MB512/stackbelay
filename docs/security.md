@@ -31,9 +31,10 @@ attackers reaching the UI, a leaked database file.
    `stacks.ImportTarget` (valid name; no directory, or a real directory,
    not a symlink, left by an incomplete import with the marker
    `.stackbelay-restore-incomplete`; `mkdir` never replaces anything that
-   appeared in the meantime). Between the two steps of an import the repository
-   credentials stay in the manager's memory (15 minutes, bound to the
-   admin's user id, used once), never in the page. Snapshot IDs
+   appeared in the meantime). Between the two steps of an import the
+   credentials of a new repository (or the id of a configured one) stay in
+   the manager's memory (15 minutes, bound to the admin's user id, used
+   once), never in the page. Snapshot IDs
    must match `^[0-9a-f]{8,64}$` and are verified against `restic snapshots`.
    Cron expressions are parsed and validated before saving (see
    "Scheduler" in architecture.md); the parser runs with a recover guard.
@@ -86,9 +87,12 @@ attackers reaching the UI, a leaked database file.
    `meta` lets the manager refuse to start with a key that does not match,
    and it never creates a new key next to an existing database. The key is
    never logged and never passed to workers.
-   Each ciphertext is bound to its row via associated data, so an attacker
-   with write access to the DB cannot move a secret to another stack's
-   repository. Repository locations are plain text and must not embed
+   Each ciphertext is bound to its row via associated data
+   (`repository:id=<id>`), so an attacker with write access to the DB cannot
+   move a secret to another repository. Repositories are global and only
+   admins manage them or choose a stack's repository (issue #39); a user
+   with rights on a stack never sees the credentials, only the repository's
+   name and location. Repository locations are plain text and must not embed
    passwords. restic gets only an allow-listed environment, so the secrets
    key never reaches a child process.
 5. **Secrets in transit to worker.** Delivered via a tmpfs-mounted file or env
@@ -133,7 +137,8 @@ attackers reaching the UI, a leaked database file.
    behind `requireAdmin`. Admins cannot change their own flags in the UI,
    and the store refuses changes that leave no active admin.
 9. **Audit log.** Login, failed login, job creation (manual and scheduled),
-   restore, permission, schedule and repository changes. No secrets in entries.
+   restore, permission, schedule and repository changes (create, change,
+   initialize, delete, a stack's choice). No secrets in entries.
 10. **TLS.** The app speaks plain HTTP and is meant to run behind a reverse
     proxy that terminates TLS; the README says so prominently. Login over
     plain HTTP is refused unless `STACKBELAY_ALLOW_INSECURE_HTTP=true`.

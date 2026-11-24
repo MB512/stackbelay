@@ -27,12 +27,13 @@ CREATE TABLE stacks (
   -- enabled (0001) was dropped by migration 0016 (issue #37: only schedules are enabled or disabled)
   present     INTEGER NOT NULL DEFAULT 1,   -- 0 = directory missing (vanished, or imported stack not restored yet)
   seen_present INTEGER NOT NULL DEFAULT 1,  -- migration 0017 (issue #27): the directory existed at some point; 0 only for an imported stack never restored here
-  source_host TEXT NOT NULL DEFAULT ''      -- migration 0012: whose snapshots it lists/restores; '' = this host
+  source_host TEXT NOT NULL DEFAULT '',     -- migration 0012: whose snapshots it lists/restores; '' = this host
+  repository_id INTEGER REFERENCES repositories(id) -- migration 0018 (issue #39): NULL = no repository
 );
 
-CREATE TABLE repositories (
+CREATE TABLE repositories (                 -- global since migration 0018 (issue #39); stacks pick one
   id            INTEGER PRIMARY KEY,
-  stack_id      INTEGER NOT NULL UNIQUE REFERENCES stacks(id) ON DELETE CASCADE,
+  name          TEXT NOT NULL UNIQUE,       -- shown in the UI, e.g. "nas-2026"
   location      TEXT NOT NULL,              -- restic repo string (path, s3:..., sftp:...)
   secret_enc    BLOB NOT NULL,              -- AES-GCM: password + backend env vars
   snapshots_refreshed_at TEXT
@@ -155,14 +156,20 @@ CREATE TABLE audit_log (
   one. A database with a newer schema than the binary is refused.
 - `repositories.secret_enc`: AES-256-GCM (`internal/secrets`) of the JSON
   `{"password": "...", "env": {"RESTIC_REST_USERNAME": "...", ...}}`, with
-  associated data `repository:stack=<stack_id>`. Env keys must be
+  associated data `repository:id=<repository id>` (a ciphertext copied to
+  another row does not decrypt). Up to migration 0018 repositories belonged
+  to one stack and used `repository:stack=<stack_id>`; `store.Open`
+  converts such rows once (`convertRepositories`, see "Repositories" in
+  architecture.md). Env keys must be
   in `restic.BackendEnvVars`. `location` is stored in plain text and must not
   contain a password (`rest:https://user:pw@...` is refused, and so is a URL
   that does not parse cleanly but contains `@`, e.g. an unescaped `/` or `#`
   in a password). The repository form splits such REST URLs into the
   location and `RESTIC_REST_USERNAME`/`RESTIC_REST_PASSWORD`
   (`restic.SplitRESTCredentials`).
-- Changing a repository's `location` deletes its cached snapshots.
+- Changing a repository's `location` deletes its cached snapshots. A
+  repository can be deleted only while no stack references it
+  (`store.ErrInUse`); its cached snapshots go with it.
 - Snapshot cache refresh marks snapshots no longer in the repository as
   `missing = 1` instead of deleting them.
 - All tables are `STRICT` (SQLite enforces column types). Connections enable
