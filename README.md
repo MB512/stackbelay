@@ -3,9 +3,7 @@
 > Never climb without a belay. Never update without a backup.
 
 Self-hosted web app that backs up Docker Compose stacks to
-[restic](https://restic.net) repositories, and restores them. StackBelay
-was called StackVault up to version 0.4 (see
-[Upgrading from StackVault 0.4](#upgrading-from-stackvault-04)).
+[restic](https://restic.net) repositories, and restores them.
 
 A *stack* is a directory with a compose file (`compose.yaml`,
 `compose.yml`, `docker-compose.yml` or `docker-compose.yaml`) under one
@@ -14,9 +12,7 @@ directory, including bind-mounted data inside it, with the stack stopped,
 so the backup is consistent without database-specific dumps.
 
 Status: **0.4**. Use it next to, not instead of, a backup strategy you
-already trust until it has proven itself on your hosts. Upgrading from 0.3
-(or 0.2): see the [changelog](CHANGELOG.md#040---2026-11-18); from 0.1 also
-[Upgrading from 0.1](#upgrading-from-01-move-the-secret-key-into-the-data-directory).
+already trust until it has proven itself on your hosts.
 
 ## Features
 
@@ -132,65 +128,6 @@ On an existing installation, move the generated key there instead
 (`sudo mv data/secret.key /etc/stackbelay/secret.key`) — a new key would not
 match the database. Then enable the commented lines in the compose file.
 
-### Upgrading from StackVault 0.4
-
-StackVault was renamed to StackBelay (issue #44). Existing installations
-keep working; data, repositories and snapshots are unchanged. To update:
-
-- Change the image from `ghcr.io/mb512/stackvault` to
-  `ghcr.io/mb512/stackbelay`. The old image gets no new versions.
-- Rename the environment variables from `STACKVAULT_*` to `STACKBELAY_*`.
-  The old names still work for now, with a warning in the log.
-- The stack directory and the compose service may keep their names (e.g.
-  `/home/docker/stackvault`); nothing depends on them.
-
-What happens on the first start:
-
-- The database file `data/stackvault.db` is renamed to `data/stackbelay.db`.
-  Stored repository passwords stay readable with the same key; they are
-  encrypted again in a format without the product name.
-- Everybody is logged out once (new session cookie name).
-- Workers use a new restic cache volume, `stackbelay-restic-cache`; the
-  first backup per repository downloads the index again. The old volume
-  `stackvault-restic-cache` can be removed with
-  `docker volume rm stackvault-restic-cache`.
-- Snapshots made by StackVault restore unchanged, and a restore that did
-  not complete before the update is continued as before.
-
-Going back to StackVault 0.4 afterwards is not possible with the converted
-database: 0.4 cannot read the re-encrypted repository passwords. Keep a
-copy of `data/stackvault.db` from before the update if you might need to go
-back. 0.4's restore also does not read the metadata of backups made by
-StackBelay.
-
-### Upgrading from 0.1: move the secret key into the data directory
-
-0.1 required the secret key outside the stack (`STACKBELAY_SECRET_KEY_FILE`,
-usually `/etc/stackvault/secret.key`). That still works unchanged. Since 0.2
-the default place is `data/secret.key` inside the StackBelay stack, so the
-stack's own backup contains everything needed to run StackBelay again:
-database **and** key. Restoring StackBelay on a new host is then just a
-restore of its stack. To switch an existing installation:
-
-```sh
-cd /home/docker/stackvault             # the StackBelay stack directory
-docker compose down
-sudo install -m 600 /etc/stackvault/secret.key data/secret.key
-# with STACKBELAY_SECRET_KEY (the key itself in the environment) instead:
-#   printf '%s\n' '<the key>' | sudo tee data/secret.key >/dev/null && sudo chmod 600 data/secret.key
-```
-
-Then remove `STACKBELAY_SECRET_KEY_FILE` (or `STACKBELAY_SECRET_KEY`) and
-the key's volume line from `compose.yml`, set the image to `0.4`, and start
-it again (`docker compose up -d`). StackBelay checks the key against the
-database at startup and refuses to start if it does not match, so a wrong
-copy cannot damage anything. Run a backup of the StackBelay stack
-afterwards, and keep `/etc/stackvault/secret.key` until that backup exists.
-
-Trade-off: whoever gets a copy of the StackBelay stack's backup (and its
-repository password) now also has the key that decrypts the stored
-repository passwords. To keep the 0.1 behaviour, change nothing.
-
 The image is `ghcr.io/mb512/stackbelay` (linux/amd64, linux/arm64). It
 contains the manager (web UI, scheduler) and the worker; the manager starts
 its workers from its own image.
@@ -221,10 +158,7 @@ moved to each new dev build without a version number (the UI shows
 
 ## Configuration
 
-Environment variables only. Up to version 0.4 the variables started with
-`STACKVAULT_` instead of `STACKBELAY_` (issue #44). The old names still work
-as a fallback when the new one is not set; the log warns about each one that
-is used, so rename them at your next change.
+Environment variables only.
 
 | Variable | Meaning |
 |---|---|
