@@ -28,7 +28,8 @@ CREATE TABLE stacks (
   present     INTEGER NOT NULL DEFAULT 1,   -- 0 = directory missing (vanished, or imported stack not restored yet)
   seen_present INTEGER NOT NULL DEFAULT 1,  -- migration 0017 (issue #27): the directory existed at some point; 0 only for an imported stack never restored here
   source_host TEXT NOT NULL DEFAULT '',     -- migration 0012: whose snapshots it lists/restores; '' = this host
-  repository_id INTEGER REFERENCES repositories(id) -- migration 0018 (issue #39): NULL = no repository
+  repository_id INTEGER REFERENCES repositories(id), -- migration 0018 (issue #39): NULL = no repository
+  notify_muted INTEGER NOT NULL DEFAULT 0   -- migration 0019 (issue #47): 1 = no event messages for the stack
 );
 
 CREATE TABLE repositories (                 -- global since migration 0018 (issue #39); stacks pick one
@@ -122,6 +123,20 @@ CREATE TABLE audit_log (
   stack_id   INTEGER REFERENCES stacks(id),
   detail     TEXT                           -- never contains secrets
 );
+
+CREATE TABLE notify_settings (            -- migration 0019 (issue #47): exactly one row
+  id         INTEGER PRIMARY KEY CHECK (id = 1),
+  server_url TEXT NOT NULL DEFAULT 'https://ntfy.sh',
+  topic      TEXT NOT NULL DEFAULT '',      -- '' = notifications off
+  auth_enc   BLOB,                          -- AES-GCM: {"token"} or {"user","password"}; NULL = no auth
+  events     TEXT NOT NULL DEFAULT '{}'     -- JSON: event key -> on/off; a missing key has its default
+) STRICT;
+
+CREATE TABLE notify_events (              -- migration 0019: outbox of the notifier
+  id         INTEGER PRIMARY KEY,
+  created_at TEXT NOT NULL,
+  job_id     TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE
+) STRICT;
 ```
 
 ## Authorization rules
@@ -169,6 +184,12 @@ CREATE TABLE audit_log (
 - Changing a repository's `location` deletes its cached snapshots. A
   repository can be deleted only while no stack references it
   (`store.ErrInUse`); its cached snapshots go with it.
+- `notify_settings.auth_enc`: AES-256-GCM of the ntfy credentials with
+  associated data `notify_settings:id=1`.
+- `notify_events` is written in the same transaction that records a job's
+  final state (`FinishJob`, and `ImportJob` for a final job), so no
+  finished job is missed; the notifier deletes the rows once sent or
+  dropped (see `docs/architecture.md`, "Notifications").
 - Snapshot cache refresh marks snapshots no longer in the repository as
   `missing = 1` instead of deleting them.
 - All tables are `STRICT` (SQLite enforces column types). Connections enable

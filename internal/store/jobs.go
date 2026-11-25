@@ -209,12 +209,20 @@ func (s *Store) ImportJob(ctx context.Context, j Job, requesterName string) erro
 	opt := func(t time.Time) sql.NullString {
 		return sql.NullString{String: formatTime(t), Valid: !t.IsZero()}
 	}
-	_, err = s.db.ExecContext(ctx,
-		`INSERT INTO jobs (id, stack_id, type, trigger, requested_by, state, options, snapshot_id, error, result,
-		                   queued_at, started_at, finished_at)
-		 VALUES (?, ?, ?, ?, (SELECT id FROM users WHERE username = ? AND ? != ''), ?, ?, NULLIF(?, ''), NULLIF(?, ''), ?, ?, ?, ?)`,
-		j.ID, nullID(j.StackID), j.Type, j.Trigger, requesterName, requesterName, j.State, string(opts), j.Snapshot,
-		truncateRunes(j.Error, 2000), string(res), formatTime(j.QueuedAt), opt(j.StartedAt), opt(j.FinishedAt))
+	err = s.inTx(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx,
+			`INSERT INTO jobs (id, stack_id, type, trigger, requested_by, state, options, snapshot_id, error, result,
+			                   queued_at, started_at, finished_at)
+			 VALUES (?, ?, ?, ?, (SELECT id FROM users WHERE username = ? AND ? != ''), ?, ?, NULLIF(?, ''), NULLIF(?, ''), ?, ?, ?, ?)`,
+			j.ID, nullID(j.StackID), j.Type, j.Trigger, requesterName, requesterName, j.State, string(opts), j.Snapshot,
+			truncateRunes(j.Error, 2000), string(res), formatTime(j.QueuedAt), opt(j.StartedAt), opt(j.FinishedAt))
+		if err != nil || !j.State.Final() {
+			return err
+		}
+		// A job that finished while the manager was down (e.g. after it
+		// restored its own stack) is reported like any other.
+		return addNotifyEvent(ctx, tx, j.ID, j.FinishedAt)
+	})
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
 			return fmt.Errorf("importing job %s: %w", j.ID, ErrConflict)
@@ -488,14 +496,21 @@ func (s *Store) FinishJob(ctx context.Context, id string, state jobs.State, snap
 	if err != nil {
 		return fmt.Errorf("encoding job result: %w", err)
 	}
-	r, err := s.db.ExecContext(ctx,
-		`UPDATE jobs SET state = ?, snapshot_id = NULLIF(?, ''), error = NULLIF(?, ''), result = ?, finished_at = ?
-		 WHERE id = ? AND state IN (?, ?)`,
-		state, snapshot, truncateRunes(errMsg, 2000), string(res), formatTime(at), id, jobs.StateQueued, jobs.StateRunning)
-	if err != nil {
-		return fmt.Errorf("finishing job %s: %w", id, err)
-	}
-	return expectOneRow(r, fmt.Sprintf("unfinished job %s", id))
+	// The notification event is written in the same transaction, so a
+	// finished job always gets its event (issue #47).
+	return s.inTx(ctx, func(tx *sql.Tx) error {
+		r, err := tx.ExecContext(ctx,
+			`UPDATE jobs SET state = ?, snapshot_id = NULLIF(?, ''), error = NULLIF(?, ''), result = ?, finished_at = ?
+			 WHERE id = ? AND state IN (?, ?)`,
+			state, snapshot, truncateRunes(errMsg, 2000), string(res), formatTime(at), id, jobs.StateQueued, jobs.StateRunning)
+		if err != nil {
+			return fmt.Errorf("finishing job %s: %w", id, err)
+		}
+		if err := expectOneRow(r, fmt.Sprintf("unfinished job %s", id)); err != nil {
+			return err
+		}
+		return addNotifyEvent(ctx, tx, id, at)
+	})
 }
 
 // truncateRunes makes s valid UTF-8 and cuts it to at most n characters.
