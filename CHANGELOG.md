@@ -6,6 +6,15 @@ All notable changes to StackBelay. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **Notifications** through ntfy (#47): a message per failed backup,
+  update, compose change, restore, stack operation or host cleanup, per
+  rollback, and an urgent one when a failed job left services down that
+  ran before it; successes optional. Jobs that finish together are sent
+  as one message. Settings on the new Notifications admin page, with a
+  test message; stacks can be muted on their Settings tab.
+
 ## [0.1.0] - 2026-11-24
 
 First release. StackBelay backs up Docker Compose stacks to

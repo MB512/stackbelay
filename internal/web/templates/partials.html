@@ -44,13 +44,14 @@
 </nav>
 {{end}}
 
-{{- /* Tabs of the admin pages. Dot is the active tab: "users", "jobs", "host", "import", "audit". */}}
+{{- /* Tabs of the admin pages. Dot is the active tab: "users", "jobs", "host", "repositories", "notifications", "import", "audit". */}}
 {{define "admin-tabs"}}
 <nav class="tabs" aria-label="Administration sections">
   <a href="/admin/users"{{if eq . "users"}} aria-current="page"{{end}}>Users</a>
   <a href="/admin/jobs"{{if eq . "jobs"}} aria-current="page"{{end}}>Jobs</a>
   <a href="/admin/host"{{if eq . "host"}} aria-current="page"{{end}}>Host</a>
   <a href="/admin/repositories"{{if eq . "repositories"}} aria-current="page"{{end}}>Repositories</a>
+  <a href="/admin/notifications"{{if eq . "notifications"}} aria-current="page"{{end}}>Notifications</a>
   <a href="/admin/import"{{if eq . "import"}} aria-current="page"{{end}}>Import stack</a>
   <a href="/admin/audit"{{if eq . "audit"}} aria-current="page"{{end}}>Audit log</a>
 </nav>

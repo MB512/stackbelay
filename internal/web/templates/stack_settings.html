@@ -43,6 +43,22 @@
 </section>
 
 <section>
+  <h2>Notifications</h2>
+  <form method="post" action="/stacks/{{.Stack.Name}}/notify-muted" class="inline">
+    <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+    {{- if .NotifyMuted}}
+    <input type="hidden" name="muted" value="false">
+    <span class="badge warn">muted</span> <button type="submit" class="secondary">Unmute</button>
+    {{- else}}
+    <input type="hidden" name="muted" value="true">
+    <button type="submit" class="secondary">Mute notifications</button>
+    {{- end}}
+  </form>
+  <p class="hint">A muted stack sends no notifications, e.g. a test stack. The other settings are on the
+    <a href="/admin/notifications">Notifications</a> page.</p>
+</section>
+
+<section>
   <h2>Schedules</h2>
   {{- if .Schedules}}
   <div class="actions-row">

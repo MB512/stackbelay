@@ -93,6 +93,9 @@ type Server struct {
 	// snapshots of a stack made on this host are listed and restorable.
 	// Empty: snapshots of all hosts.
 	Hostname string
+	// Notify sends the test message of the notification settings; nil
+	// disables the button.
+	Notify NotifySender
 	// Now returns the current time; defaults to time.Now (tests override it).
 	Now func() time.Time
 	// Location is the time zone all times are shown in (the manager's TZ);
@@ -237,6 +240,10 @@ func (s *Server) Handler() (http.Handler, error) {
 				r.Get("/admin/import", s.adminImport)
 				r.Post("/admin/import", s.listImport)
 				r.Post("/admin/import/confirm", s.confirmImport)
+				r.Get("/admin/notifications", s.adminNotifications)
+				r.Post("/admin/notifications", s.saveNotifications)
+				r.Post("/admin/notifications/test", s.testNotification)
+				r.Post("/stacks/{name}/notify-muted", s.setStackNotifyMuted)
 				r.Get("/admin/host", s.adminHost)
 				r.Post("/admin/host/cleanup", s.startCleanup)
 				r.Post("/admin/host/schedules", s.createHostSchedule)

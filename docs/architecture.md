@@ -74,7 +74,7 @@ compose, so they are never affected by stopping a stack.
 | Variable | Meaning |
 |---|---|
 | `STACKS_ROOT` | absolute stacks root, mounted at the same path as on the host (required) |
-| `STACKBELAY_HOSTNAME` | name of the Docker host, passed to workers for `restic --host` (required) |
+| `STACKBELAY_HOSTNAME` | name of the Docker host, passed to workers for `restic --host` (required); notifications name the host by it, up to the first dot |
 | `STACKBELAY_SECRET_KEY` / `STACKBELAY_SECRET_KEY_FILE` | 32-byte key, base64 (`openssl rand -base64 32`); at most one may be set. Neither set: `<STACKBELAY_DATA_DIR>/secret.key`, created on a fresh install. See "Secret key" |
 | `STACKBELAY_DATA_DIR` | database and job directories, default `/data` |
 | `STACKBELAY_LISTEN` | listen address, default `:8080` |
@@ -1092,7 +1092,8 @@ so HTMX loads the login page instead of swapping it into the fragment.
 The header shows admins an "Admin" link to pages outside the stacks, with
 their own tabs (`admin-tabs` in `partials.html`): "Users" (`/admin/users`),
 "Jobs" (`/admin/jobs`; host jobs show "host" as stack), "Repositories"
-(`/admin/repositories`, see "Repositories"), "Import stack"
+(`/admin/repositories`, see "Repositories"), "Notifications"
+(`/admin/notifications`, see "Notifications"), "Import stack"
 (`/admin/import`, see "Restore from another host"), "Host"
 (`/admin/host`, the host cleanup: preview, "Clean up now", recent cleanups,
 schedules; see "Host cleanup") and "Audit log" (`/admin/audit`, read-only,
@@ -1400,6 +1401,66 @@ A removal that fails is logged and the cleanup continues; the job then
 ends `failed`. The result records `removed_containers`, `removed_images`
 and `freed_bytes` (the sizes of the removed images; shared layers are
 counted per image, so the space freed on disk may be smaller).
+
+## Notifications
+
+Push notifications through [ntfy](https://ntfy.sh) (issue #47), to ntfy.sh
+or a self-hosted server. Admins set them up on the Notifications page
+(`/admin/notifications`): server URL, topic, optional authentication
+(access token or user/password, stored encrypted like repository
+secrets), and which messages to send. Notifications are off while the
+topic is empty. "Send test" sends a message with the saved settings.
+
+**Outbox.** `store.FinishJob` (and `ImportJob` for a job that finished
+while the manager was down) writes a `notify_events` row in the same
+transaction as the job's result, for every finished job. The notifier
+(`internal/notify`, one goroutine in the manager) reads the outbox every
+10 s and decides there whether a row becomes a message; rows that do not
+are deleted, so the outbox drains also while notifications are off. Since
+the outbox is in the database, a message survives a restart of the
+manager, e.g. one stopped by the backup of its own stack.
+
+**Event types** (`notify.Classify`): a matrix of job type (backup,
+update, compose change, restore, stack operation, host cleanup) x
+outcome (failed, succeeded), plus:
+
+- *rolled back*: an update or compose change failed and was rolled back;
+- *stack left down*: a failed backup, update, compose change or restore
+  left services down that ran before it. The worker reads the running
+  services before such a job and, after a failure, again
+  (`result.services_down`); only it knows the state before, so a failed
+  backup of a stack that was already stopped raises no alarm.
+
+Cancelled jobs (someone cancelled them on purpose) and updates that
+found nothing to change send nothing. By default the failures, rollbacks
+and left-down are on, successes off; each type can be switched on its own
+(`notify_settings.events`, a missing key has its default). A muted stack
+(Settings tab) sends nothing.
+
+**Priority**: ntfy's *urgent* passes Do Not Disturb on Android, so only
+"stack left down" uses it; failures and rollbacks are *high*, a failed
+host cleanup *default*, successes *low*.
+
+**Grouping.** The notifier waits until no new event arrived for 60 s (at
+most 5 min after the first), so stacks scheduled at the same time produce
+one message: a single event gets a detailed message, several get one line
+each (`❌ 3× Backup failed · nas01`), cut below ntfy's 4 KB limit with
+"… and N more". The combined message has the highest priority of its
+events.
+
+**Content.** Title `<emoji> <event> · <stack>`; body: host, manual or
+scheduled, time range (manager's `TZ`), the state the job left the stack
+in ("Stack is DOWN. Not running: db", "Stack runs the previous version.",
+"Services that ran before are running.", the services an update changed)
+and, for a failure, a classified reason (`notify.Reason`: "repository
+unreachable", "service gitea (unhealthy)", "downtime timeout", …, else
+"see job log"). The host is `STACKBELAY_HOSTNAME` up to the first dot.
+Messages contain no links, user names, image tags or digests, and never
+the raw error (see `docs/security.md`, rule 14).
+
+**Delivery.** `notify.NTFY` posts ntfy's JSON format (UTF-8 titles) to
+the server. A failed send is retried with a backoff from 1 min doubling
+to 30 min; events older than 24 h are dropped with a log entry.
 
 ## Scheduler
 

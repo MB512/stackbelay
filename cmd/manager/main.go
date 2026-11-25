@@ -24,6 +24,7 @@ import (
 	"github.com/MB512/stackbelay/internal/config"
 	"github.com/MB512/stackbelay/internal/dispatch"
 	"github.com/MB512/stackbelay/internal/docker"
+	"github.com/MB512/stackbelay/internal/notify"
 	"github.com/MB512/stackbelay/internal/restic"
 	"github.com/MB512/stackbelay/internal/scheduler"
 	"github.com/MB512/stackbelay/internal/secrets"
@@ -84,6 +85,7 @@ func run(ctx context.Context, getenv func(string) string, readFile func(string) 
 		// shown as unavailable with this reason.
 		log.Error("backups and restores are unavailable", "error", jobsErr)
 	}
+	ntfy := &notify.NTFY{}
 	srv := &web.Server{
 		Store: st, Logger: log, SessionTTL: cfg.SessionTTL, SecureCookies: !cfg.AllowInsecureHTTP,
 		// The manager runs only read-only restic commands itself, plus
@@ -117,6 +119,8 @@ func run(ctx context.Context, getenv func(string) string, readFile func(string) 
 		CleanupImageMinAge: cfg.CleanupImageMinAge,
 		Shells:             &docker.CLI{},
 		Hostname:           cfg.Hostname,
+		// "Send test" on the notification settings page.
+		Notify: ntfy,
 		// All times in the UI are shown in the manager's time zone (TZ).
 		Location: cfg.TimeZone,
 		// On SIGTERM open live streams end at once (clients reconnect)
@@ -178,6 +182,11 @@ func run(ctx context.Context, getenv func(string) string, readFile func(string) 
 		log.Info("scheduler started", "time_zone", time.Now().Format("MST -07:00"))
 		go sched.Run(ctx)
 	}
+	// Notifications (issue #47): sends the outbox the job results fill.
+	// It runs even while notifications are off, to drain the outbox.
+	notifier := &notify.Notifier{Store: st, Sender: ntfy, Host: notify.ShortHost(cfg.Hostname),
+		Logger: log, Location: cfg.TimeZone}
+	go notifier.Run(ctx)
 
 	select {
 	case err := <-serveErr:

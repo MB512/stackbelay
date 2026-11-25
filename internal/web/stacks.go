@@ -170,6 +170,8 @@ type settingsTab struct {
 	// Forgettable: the stack's directory is gone, so its record can be
 	// reset (ForgetStack, issue #38).
 	Forgettable bool
+	// NotifyMuted: the stack sends no notifications (issue #47).
+	NotifyMuted bool
 }
 
 // permRow is one user in the permission table of a stack (admin view). It
@@ -386,6 +388,12 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, st store
 	}
 	page.SourceHost, page.ThisHost = s.snapshotHost(st), s.Hostname
 	page.Forgettable = !st.Present && !s.pathExists(st.Name)
+	muted, err := s.Store.MutedStacks(r.Context())
+	if err != nil {
+		s.internalError(w, r, "listing muted stacks", err)
+		return
+	}
+	page.NotifyMuted = muted[st.ID]
 	s.render(w, r, v.Status, "stack_settings.html",
 		pageData{Title: st.Name + " settings", Info: v.Info, Error: v.Error, Data: page})
 }

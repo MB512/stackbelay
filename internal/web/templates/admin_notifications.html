@@ -1,0 +1,94 @@
+{{define "content"}}
+<h1>Administration</h1>
+{{template "admin-tabs" "notifications"}}
+{{- with .Data}}
+<p class="hint">Push notifications through <a href="https://ntfy.sh" rel="noreferrer">ntfy</a>, to ntfy.sh or your own
+  ntfy server. Messages name this host as <strong>{{if .Host}}{{.Host}}{{else}}(STACKBELAY_HOSTNAME not set){{end}}</strong>
+  and contain stack and service names, but no links, user names, image versions or error output.</p>
+
+<section>
+  <h2>Settings</h2>
+  {{- with .Form}}
+  <form method="post" action="/admin/notifications" class="card wide">
+    <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+    <label>Server
+      <input name="server_url" value="{{.ServerURL}}" spellcheck="false" autocomplete="off" placeholder="https://ntfy.sh">
+    </label>
+    <label>Topic
+      <input name="topic" value="{{.Topic}}" maxlength="64" spellcheck="false" autocomplete="off" placeholder="e.g. stackbelay-7f3k9q2x">
+    </label>
+    <p class="hint">Notifications are off while the topic is empty. On the public ntfy.sh anyone who knows the topic
+      can read it unless access control is set up: pick a name that is hard to guess, or use authentication.</p>
+
+    <fieldset>
+      <legend>Authentication</legend>
+      <label class="check"><input type="radio" name="auth" value="none"{{if eq .AuthType "none"}} checked{{end}}> None</label>
+      <label class="check"><input type="radio" name="auth" value="token"{{if eq .AuthType "token"}} checked{{end}}> Access token</label>
+      <label>Access token
+        <input name="token" type="password" spellcheck="false" autocomplete="new-password"
+               {{- if .TokenStored}} placeholder="•••••••• stored – type to change"{{else}} placeholder="tk_…"{{end}}>
+      </label>
+      <label class="check"><input type="radio" name="auth" value="basic"{{if eq .AuthType "basic"}} checked{{end}}> User and password</label>
+      <label>User
+        <input name="user" value="{{.User}}" spellcheck="false" autocomplete="off">
+      </label>
+      <label>Password
+        <input name="password" type="password" autocomplete="new-password"
+               {{- if .PasswordStored}} placeholder="•••••••• stored – type to change"{{end}}>
+      </label>
+      <p class="hint">Only the fields of the chosen kind are used. An empty token or password field keeps the stored one.
+        Credentials are stored encrypted.</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>Messages</legend>
+      <table>
+        <thead><tr><th>Job</th><th>Failed</th><th>Succeeded</th></tr></thead>
+        <tbody>
+          {{- range .Rows}}
+          <tr>
+            <td>{{.Label}}</td>
+            <td>{{template "notify-check" .Failed}}</td>
+            <td>{{template "notify-check" .Succeeded}}</td>
+          </tr>
+          {{- end}}
+        </tbody>
+      </table>
+      {{- range .Single}}
+      <label class="check"><input type="checkbox" name="event" value="{{.Key}}"{{if .On}} checked{{end}}> {{.Label}}
+        {{- if .Urgent}} <span class="badge err">urgent</span>{{end}}</label>
+      {{- end}}
+      <p class="hint"><strong>Rolled back</strong>: an update or compose change failed and the stack runs the previous
+        version again. <strong>Stack left down</strong>: a failed backup, update, compose change or restore left services
+        down that ran before it; sent as urgent, which passes Do Not Disturb on Android. Cancelled jobs and updates that
+        found nothing to change send no message. Jobs that finish within a minute of each other are sent as one message.</p>
+    </fieldset>
+    <div><button type="submit">Save</button></div>
+  </form>
+  {{- end}}
+</section>
+
+<section>
+  <h2>Test</h2>
+  <form method="post" action="/admin/notifications/test" class="inline">
+    <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+    <button type="submit" class="secondary"{{if or (not .CanTest) (not .Form.Topic)}} disabled{{end}}>Send test notification</button>
+  </form>
+  <span class="hint">Sends a message with the saved settings.</span>
+</section>
+
+<section>
+  <h2>Muted stacks</h2>
+  {{- if .MutedStacks}}
+  <p>{{range $i, $n := .MutedStacks}}{{if $i}}, {{end}}<a href="/stacks/{{$n}}/settings">{{$n}}</a>{{end}}</p>
+  {{- else}}
+  <p class="hint">None. A stack's notifications can be muted on its Settings tab, e.g. for test stacks.</p>
+  {{- end}}
+</section>
+{{- end}}
+{{end}}
+
+{{- /* One checkbox of the message matrix. Dot is a notifyEvent. */}}
+{{define "notify-check"}}
+<input type="checkbox" name="event" value="{{.Key}}"{{if .On}} checked{{end}} aria-label="{{.Label}}">
+{{- end}}

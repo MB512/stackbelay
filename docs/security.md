@@ -138,7 +138,9 @@ attackers reaching the UI, a leaked database file.
    and the store refuses changes that leave no active admin.
 9. **Audit log.** Login, failed login, job creation (manual and scheduled),
    restore, permission, schedule and repository changes (create, change,
-   initialize, delete, a stack's choice). No secrets in entries.
+   initialize, delete, a stack's choice), notification settings, test
+   messages and per-stack mutes. No secrets in entries; the ntfy topic is
+   left out too (on a public server it is the only secret).
 10. **TLS.** The app speaks plain HTTP and is meant to run behind a reverse
     proxy that terminates TLS; the README says so prominently. Login over
     plain HTTP is refused unless `STACKBELAY_ALLOW_INSECURE_HTTP=true`.
@@ -171,6 +173,20 @@ attackers reaching the UI, a leaked database file.
     login becomes invalid. Start and end are audited; keystrokes are not
     recorded (they may contain secrets). At most 2 sessions per admin, 10
     in total.
+
+14. **Notifications** (issue #47). The manager sends HTTPS (or HTTP)
+    requests to the ntfy server an admin configured; that is its only
+    outbound connection besides registries and repositories. The URL must
+    be http(s) without credentials, query or fragment; credentials
+    (access token or user/password) are sealed with the secret key
+    (associated data `notify_settings:id=1`), sent only in the
+    `Authorization` header, never logged, never shown in the form. Since
+    people other than admins may read a topic (and anyone who knows a
+    topic on the public ntfy.sh, unless access control is set up),
+    messages contain only the short host name, stack and service names,
+    job types, times and a classified reason: no links, no user names, no
+    image references or digests, no raw errors (they can contain
+    repository locations, paths or tool output).
 
 ## Reporting vulnerabilities
 

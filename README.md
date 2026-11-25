@@ -50,6 +50,9 @@ already trust until it has proven itself on your hosts.
   **global log view** of several stacks.
 - **Host cleanup**: removes stopped orphan containers and old unused
   images, with a preview; never volumes.
+- **Notifications** through [ntfy](https://ntfy.sh) for failed jobs,
+  rollbacks and stacks a job left down (successes optional), grouped when
+  several jobs finish together; per-stack mute.
 - **Compose editor** and an opt-in **container shell** for admins.
 - **Multi-user** with per-stack rights (backup, restore, update, operate,
   logs);
@@ -165,7 +168,7 @@ Environment variables only.
 | Variable | Meaning |
 |---|---|
 | `STACKS_ROOT` | absolute stacks root, mounted at the **same path** in the container (required) |
-| `STACKBELAY_HOSTNAME` | name of this Docker host, recorded in every snapshot (required) |
+| `STACKBELAY_HOSTNAME` | name of this Docker host, recorded in every snapshot and named in notifications (required) |
 | `STACKBELAY_SECRET_KEY_FILE` / `STACKBELAY_SECRET_KEY` | 32-byte key, base64; at most one. Default: `<STACKBELAY_DATA_DIR>/secret.key`, generated on the first start |
 | `STACKBELAY_DATA_DIR` | database and job files, default `/data` |
 | `STACKBELAY_LISTEN` | listen address, default `:8080` |
