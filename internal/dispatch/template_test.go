@@ -11,7 +11,7 @@ import (
 
 func TestNewTemplate(t *testing.T) {
 	cfg := TemplateConfig{StacksRoot: "/home/docker", JobsDir: "/data/jobs", Hostname: "host-a", JobTimeout: 72 * time.Hour,
-		DowntimeTimeout: 90 * time.Minute}
+		DowntimeTimeout: 90 * time.Minute, LockWait: "0s"}
 	stacksMount := docker.Mount{Type: "bind", Source: "/home/docker", Target: "/home/docker"}
 	socket := docker.Mount{Type: "bind", Source: "/run/user/1000/docker.sock", Target: "/var/run/docker.sock"}
 
@@ -46,7 +46,8 @@ func TestNewTemplate(t *testing.T) {
 	if cs.Mounts[2] != (docker.Mount{Type: "volume", Source: "stackbelay_data", Target: "/job", SubPath: "jobs/01ABCDEFGHJKMNPQRSTVWXYZ01"}) {
 		t.Fatalf("job mount: %+v", cs.Mounts[2])
 	}
-	if cs.Env["STACKBELAY_JOB_TIMEOUT"] != "72h0m0s" || cs.Env["STACKBELAY_DOWNTIME_TIMEOUT"] != "1h30m0s" {
+	if cs.Env["STACKBELAY_JOB_TIMEOUT"] != "72h0m0s" || cs.Env["STACKBELAY_DOWNTIME_TIMEOUT"] != "1h30m0s" ||
+		cs.Env["STACKBELAY_LOCK_WAIT"] != "0s" {
 		t.Fatalf("timeout env: %q %q", cs.Env["STACKBELAY_JOB_TIMEOUT"], cs.Env["STACKBELAY_DOWNTIME_TIMEOUT"])
 	}
 

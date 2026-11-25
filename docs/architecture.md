@@ -31,6 +31,28 @@ app therefore only uses operations that work there: `init`, `backup`,
 the responsibility of the repository owner on the server. Deleting stale lock
 files is allowed in append-only mode.
 
+**Locks of maintenance** (issue #46). The repository owner's `forget`,
+`prune` and `check` (e.g. by BelayPoint) lock the repository exclusively,
+`prune` possibly for long. Workers therefore run restic with
+`--retry-lock` (`STACKBELAY_LOCK_WAIT`, default `30m`, `0` = fail at
+once): restic waits for the lock and says so in the job log ("repo
+already locked, waiting up to …"). BelayPoint waits as long for
+StackBelay's locks. If restic still finds the repository locked (exit
+code 11, `restic.IsLocked`), the error says that the repository is locked
+by another process, and notifications give the reason "repository locked
+(maintenance running?)". The manager's own read-only restic commands
+(snapshot list, repository check) do not wait: a web request must not
+hang for half an hour.
+
+The wait mostly happens while the stack still runs: backups and updates
+take the pre-stop snapshot first. If that snapshot gives up because of
+the lock, the job ends **before** the stack is stopped (the final
+snapshot would wait for the same lock with the stack down); any other
+pre-stop failure only warns as before. A lock taken after the pre-stop
+snapshot makes the final snapshot wait within the downtime timeout
+(`STACKBELAY_DOWNTIME_TIMEOUT`), so the downtime stays bounded. Schedule
+maintenance outside the backup and update windows to avoid both.
+
 ## Repositories
 
 Decided in issue #39: repositories are **global**. An admin adds them on
@@ -84,6 +106,7 @@ compose, so they are never affected by stopping a stack.
 | `STACKBELAY_MAX_JOBS` | jobs running at the same time across all stacks (disk and network load), default `3`; restores count too (issue #36) |
 | `STACKBELAY_MAX_DOWNTIMES` | jobs that may keep a stack stopped at the same time (downtime slots, see "Downtime slots"), default `1` |
 | `STACKBELAY_DOWNTIME_TIMEOUT` | limit for stop -> final snapshot of a backup, update or compose apply (Go duration, at least `1m`), default `1h`; passed to every worker |
+| `STACKBELAY_LOCK_WAIT` | how long a worker's restic waits for a repository lock held by another process, e.g. a prune (`--retry-lock`; Go duration up to `24h`), default `30m`, `0` = fail at once; passed to every worker (issue #46) |
 | `STACKBELAY_JOB_TIMEOUT` | hard limit for one job (Go duration, at least `1m`), default `48h`; passed to every worker (issue #32) |
 | `STACKBELAY_JOB_LOG_RETENTION` | job directories (logs) of jobs finished longer ago are deleted, the job rows stay; Go duration, at least `24h`, default `2160h` (90 days), `0` keeps them (issue #16) |
 | `STACKBELAY_CLEANUP_IMAGE_MIN_AGE` | host cleanup: keep dangling images pulled, tagged or replaced by an update less than this long ago, whole hours, default `168h`; see "Host cleanup" |
@@ -256,7 +279,7 @@ docker run --detach --name stackbelay-job-<id>
   --mount type=volume,source=stackbelay-restic-cache,target=/cache
   [--mount <manager's /root/.docker or /root/.docker/config.json>,readonly]
   --env STACKS_ROOT --env STACKBELAY_HOSTNAME --env RESTIC_CACHE_DIR
-  --env STACKBELAY_JOB_TIMEOUT --env STACKBELAY_DOWNTIME_TIMEOUT [--env STACKBELAY_LOG_LEVEL]
+  --env STACKBELAY_JOB_TIMEOUT --env STACKBELAY_DOWNTIME_TIMEOUT --env STACKBELAY_LOCK_WAIT [--env STACKBELAY_LOG_LEVEL]
   --env RESTIC_REPOSITORY --env RESTIC_PASSWORD --env <backend variables>
   <image> /app/worker run /job
 ```
@@ -1714,6 +1737,7 @@ The repository always comes from the environment:
 | backend variables (`AWS_*`, `B2_*`, `AZURE_*`, `GOOGLE_*`, `RESTIC_REST_*`) | passed to restic; values are redacted from output |
 | `STACKBELAY_JOB_TIMEOUT` | hard job timeout, Go duration (at least `1m`), default `48h` |
 | `STACKBELAY_DOWNTIME_TIMEOUT` | limit for stop -> final snapshot, Go duration (at least `1m`), default `1h` |
+| `STACKBELAY_LOCK_WAIT` | restic `--retry-lock`: wait for locks of other processes, Go duration up to `24h`, default `30m`, `0` = fail at once |
 | `STACKBELAY_LOG_LEVEL` | `debug`, `info`, `warn`, `error` |
 
 restic never inherits the full process environment: it gets an allow-list

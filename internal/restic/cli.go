@@ -83,16 +83,25 @@ func (c *CLI) command(ctx context.Context, repo Repo, args ...string) (*exec.Cmd
 // stopGrace is how long restic may take to clean up after an interrupt.
 const stopGrace = 30 * time.Second
 
-// withLimits puts the repository's global options (download limit) in
-// front of args.
+// withLimits puts the repository's global options (download limit, lock
+// wait) in front of args.
 func withLimits(repo Repo, args []string) ([]string, error) {
+	var global []string
 	switch {
-	case repo.LimitDownloadKiB == 0:
-		return args, nil
 	case repo.LimitDownloadKiB < 0 || repo.LimitDownloadKiB > MaxLimitKiB:
 		return nil, fmt.Errorf("invalid download limit %d KiB/s", repo.LimitDownloadKiB)
+	case repo.LimitDownloadKiB > 0:
+		global = append(global, "--limit-download", strconv.Itoa(repo.LimitDownloadKiB))
 	}
-	return append([]string{"--limit-download", strconv.Itoa(repo.LimitDownloadKiB)}, args...), nil
+	switch {
+	case repo.LockWait < 0:
+		return nil, fmt.Errorf("invalid lock wait %s", repo.LockWait)
+	case repo.LockWait > 0:
+		// restic retries for this long while another process (e.g. a prune
+		// on the server side) holds an exclusive lock, and says so on stderr.
+		global = append(global, "--retry-lock", repo.LockWait.String())
+	}
+	return append(global, args...), nil
 }
 
 // passThroughEnv are the only variables restic inherits from our own
@@ -322,6 +331,10 @@ type Error struct {
 }
 
 func (e *Error) Error() string {
+	if e.ExitCode() == exitLocked {
+		return fmt.Sprintf("restic %s: the repository is locked by another process (maintenance such as prune running?): %s",
+			e.Op, e.Stderr)
+	}
 	return fmt.Sprintf("restic %s: %v: %s", e.Op, e.Err, e.Stderr)
 }
 
@@ -351,6 +364,17 @@ func (e *Error) Message() string {
 // exitNoRepository is restic's exit code for "repository does not exist"
 // (restic >= 0.17).
 const exitNoRepository = 10
+
+// exitLocked is restic's exit code for "repository is already locked"
+// (restic >= 0.17), also after --retry-lock gave up.
+const exitLocked = 11
+
+// IsLocked reports whether err means that restic could not lock the
+// repository because another process holds a lock (issue #46).
+func IsLocked(err error) bool {
+	var re *Error
+	return errors.As(err, &re) && re.ExitCode() == exitLocked
+}
 
 // IsNoRepository reports whether err means that there is no repository at
 // the location (as opposed to e.g. a wrong password or a network error).

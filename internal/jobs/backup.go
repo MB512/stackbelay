@@ -63,7 +63,9 @@ func (p *Pipeline) Backup(ctx context.Context, stack stacks.Stack) (res BackupRe
 	// 3. Pre-stop snapshot while the stack runs (nothing running: the
 	// final snapshot is the only one). Failure is not fatal.
 	if len(running) > 0 {
-		res.PreStopSnapshot = p.preStopSnapshot(ctx, log, stack)
+		if res.PreStopSnapshot, err = p.preStopSnapshot(ctx, log, stack); err != nil {
+			return res, err
+		}
 	}
 	if err := ctx.Err(); err != nil {
 		return res, err // cancelled before anything was stopped
@@ -216,14 +218,22 @@ func fileSHA256(path string) (string, error) {
 // preStopSnapshot takes the snapshot of the running stack that becomes the
 // parent of the final one. It returns "" if it failed: the backup then
 // continues without parent (the final snapshot takes longer).
-func (p *Pipeline) preStopSnapshot(ctx context.Context, log *slog.Logger, stack stacks.Stack) string {
+//
+// A failure is not fatal, except when the repository stayed locked by
+// another process (issue #46, e.g. a prune on the server): the final
+// snapshot would wait for the same lock with the stack stopped, so the job
+// ends before stopping anything.
+func (p *Pipeline) preStopSnapshot(ctx context.Context, log *slog.Logger, stack stacks.Stack) (string, error) {
 	log.Info("taking pre-stop snapshot")
 	p.phase("pre-stop snapshot")
 	id, err := p.Restic.Backup(ctx, p.Repo, stack.Dir, restic.BackupOptions{Host: p.Host, Tags: []string{TagPreStop}})
-	if err != nil {
+	switch {
+	case restic.IsLocked(err):
+		return "", fmt.Errorf("pre-stop snapshot (the stack was not stopped): %w", err)
+	case err != nil:
 		log.Warn("pre-stop snapshot failed; continuing without parent", "error", err)
-		return ""
+		return "", nil
 	}
 	log.Info("pre-stop snapshot done", "snapshot", id)
-	return id
+	return id, nil
 }

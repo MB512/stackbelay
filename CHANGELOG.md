@@ -6,6 +6,15 @@ All notable changes to StackBelay. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **Repository locks of maintenance** (#46): backups, restores and
+  updates no longer fail at once while the repository owner's `prune`,
+  `forget` or `check` (e.g. BelayPoint) holds an exclusive lock. restic
+  waits up to `STACKBELAY_LOCK_WAIT` (default 30 min, `0` = as before) and
+  says so in the job log. A backup or update that still finds the
+  repository locked ends before stopping the stack, with a clear error.
+
 ### Added
 
 - **Notifications** through ntfy (#47): a message per failed backup,

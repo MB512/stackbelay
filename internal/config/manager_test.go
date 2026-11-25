@@ -64,6 +64,7 @@ func TestLoadManagerKeyFile(t *testing.T) {
 		"STACKBELAY_JOB_TIMEOUT":           "72h",
 		"STACKBELAY_MAX_DOWNTIMES":         "2",
 		"STACKBELAY_DOWNTIME_TIMEOUT":      "30m",
+		"STACKBELAY_LOCK_WAIT":             "45m",
 		"TZ":                               ":Europe/Berlin",
 	}), read)
 	if err != nil {
@@ -74,7 +75,7 @@ func TestLoadManagerKeyFile(t *testing.T) {
 	}
 	if len(c.SecretKey) != 32 || c.DataDir != "/srv/sv" || !c.AllowInsecureHTTP || c.SessionTTL != 30*time.Minute || c.MaxJobs != 5 || !c.EnableShell ||
 		c.CleanupImageMinAge != 48*time.Hour || c.JobTimeout != 72*time.Hour || c.MaxDowntimes != 2 ||
-		c.DowntimeTimeout != 30*time.Minute {
+		c.DowntimeTimeout != 30*time.Minute || c.LockWait != 45*time.Minute {
 		t.Fatalf("unexpected config %+v", c)
 	}
 }
@@ -96,6 +97,7 @@ func TestLoadManagerErrors(t *testing.T) {
 		{"short log retention", map[string]string{"STACKBELAY_JOB_LOG_RETENTION": "1h"}, []string{"STACKBELAY_JOB_LOG_RETENTION"}},
 		{"bad max downtimes", map[string]string{"STACKBELAY_MAX_DOWNTIMES": "33"}, []string{"STACKBELAY_MAX_DOWNTIMES"}},
 		{"bad downtime timeout", map[string]string{"STACKBELAY_DOWNTIME_TIMEOUT": "10s"}, []string{"STACKBELAY_DOWNTIME_TIMEOUT"}},
+		{"bad lock wait", map[string]string{"STACKBELAY_LOCK_WAIT": "2d"}, []string{"STACKBELAY_LOCK_WAIT"}},
 		{"bad cleanup age", map[string]string{"STACKBELAY_CLEANUP_IMAGE_MIN_AGE": "90m"}, []string{"STACKBELAY_CLEANUP_IMAGE_MIN_AGE"}},
 		{"negative cleanup age", map[string]string{"STACKBELAY_CLEANUP_IMAGE_MIN_AGE": "-1h"}, []string{"STACKBELAY_CLEANUP_IMAGE_MIN_AGE"}},
 		{"bad shell flag", map[string]string{"STACKBELAY_ENABLE_SHELL": "maybe"}, []string{"STACKBELAY_ENABLE_SHELL"}},

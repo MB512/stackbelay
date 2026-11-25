@@ -124,7 +124,8 @@ func run(args []string, getenv func(string) string, stderr io.Writer) int {
 	p := &jobs.Pipeline{
 		Docker: dockerCLI,
 		Restic: resticCLI,
-		Repo:   restic.Repo{Location: cfg.RepoLocation, Env: cfg.RepoEnv},
+		// Waits for locks of other processes, e.g. a prune (issue #46).
+		Repo:   restic.Repo{Location: cfg.RepoLocation, Env: cfg.RepoEnv, LockWait: cfg.LockWait},
 		Host:   cfg.Hostname,
 		Logger: log,
 		// Bounds stop -> final snapshot (issue #36).

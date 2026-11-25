@@ -20,17 +20,40 @@ func TestLoadWorker(t *testing.T) {
 		"AWS_SECRET_ACCESS_KEY":  "aws-secret",
 		"STACKBELAY_JOB_TIMEOUT": "30m",
 		"STACKBELAY_LOG_LEVEL":   "debug",
+		"STACKBELAY_LOCK_WAIT":   "0s",
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.StacksRoot != "/home/docker" || c.Hostname != "host-a" || c.JobTimeout != 30*time.Minute ||
+	if c.StacksRoot != "/home/docker" || c.Hostname != "host-a" || c.JobTimeout != 30*time.Minute || c.LockWait != 0 ||
 		c.LogLevel != slog.LevelDebug || c.RepoLocation != "rest:https://backup.example/web" {
 		t.Fatalf("unexpected config %+v", c)
 	}
 	want := []string{"RESTIC_PASSWORD_FILE=/run/secrets/pw", "AWS_SECRET_ACCESS_KEY=aws-secret"}
 	if strings.Join(c.RepoEnv, "|") != strings.Join(want, "|") {
 		t.Fatalf("RepoEnv = %v, want %v", c.RepoEnv, want)
+	}
+}
+
+func TestLockWait(t *testing.T) {
+	tests := []struct {
+		value   string
+		want    time.Duration
+		wantErr bool
+	}{
+		{"", DefaultLockWait, false},
+		{"0", 0, false},
+		{"45m", 45 * time.Minute, false},
+		{"24h", 24 * time.Hour, false},
+		{"25h", DefaultLockWait, true},
+		{"-1m", DefaultLockWait, true},
+		{"soon", DefaultLockWait, true},
+	}
+	for _, tt := range tests {
+		got, errs := lockWait(lookup(map[string]string{"STACKBELAY_LOCK_WAIT": tt.value}), nil)
+		if got != tt.want || (len(errs) > 0) != tt.wantErr {
+			t.Errorf("%q: got %v, errors %v", tt.value, got, errs)
+		}
 	}
 }
 

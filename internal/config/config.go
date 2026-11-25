@@ -22,7 +22,10 @@ type Worker struct {
 	// compose apply (STACKBELAY_DOWNTIME_TIMEOUT, default
 	// DefaultDowntimeTimeout).
 	DowntimeTimeout time.Duration
-	LogLevel        slog.Level // STACKBELAY_LOG_LEVEL, default info
+	// LockWait: how long restic waits for a repository lock held by
+	// another process (STACKBELAY_LOCK_WAIT, default DefaultLockWait).
+	LockWait time.Duration
+	LogLevel slog.Level // STACKBELAY_LOG_LEVEL, default info
 
 	// RepoLocation is RESTIC_REPOSITORY.
 	RepoLocation string
@@ -72,6 +75,7 @@ func LoadWorker(getenv func(string) string) (Worker, error) {
 
 	c.JobTimeout, errs = jobTimeout(getenv, errs)
 	c.DowntimeTimeout, errs = downtimeTimeout(getenv, errs)
+	c.LockWait, errs = lockWait(getenv, errs)
 
 	c.LogLevel, errs = logLevel(getenv, errs)
 
@@ -87,6 +91,30 @@ const DefaultJobTimeout = 48 * time.Hour
 // compose apply keeps a stack stopped until its final snapshot is done
 // (issue #36).
 const DefaultDowntimeTimeout = time.Hour
+
+// DefaultLockWait is how long a worker's restic waits for a repository lock
+// that another process holds (issue #46): BelayPoint's forget, prune and
+// check lock the repository exclusively. BelayPoint waits as long for
+// StackBelay's locks.
+const DefaultLockWait = 30 * time.Minute
+
+// maxLockWait bounds STACKBELAY_LOCK_WAIT.
+const maxLockWait = 24 * time.Hour
+
+// lockWait reads STACKBELAY_LOCK_WAIT: a Go duration up to 24h, "0" = do
+// not wait (fail at once). The manager reads it to pass it on to its
+// workers, the worker to apply it.
+func lockWait(getenv func(string) string, errs []error) (time.Duration, []error) {
+	v := getenv("STACKBELAY_LOCK_WAIT")
+	if v == "" {
+		return DefaultLockWait, errs
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil || d < 0 || d > maxLockWait {
+		return DefaultLockWait, append(errs, fmt.Errorf("STACKBELAY_LOCK_WAIT: invalid duration %q (0 to 24h, e.g. 30m)", v))
+	}
+	return d, errs
+}
 
 // jobTimeout reads STACKBELAY_JOB_TIMEOUT (Go duration, at least 1m). The
 // manager reads it to pass it on to its workers, the worker to apply it.

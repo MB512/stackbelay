@@ -177,6 +177,40 @@ func TestWithLimits(t *testing.T) {
 			t.Errorf("limit %d accepted", bad)
 		}
 	}
+	// Lock wait (issue #46).
+	args, err = withLimits(Repo{LimitDownloadKiB: 2048, LockWait: 30 * time.Minute}, []string{"--json", "backup"})
+	if err != nil || strings.Join(args, " ") != "--limit-download 2048 --retry-lock 30m0s --json backup" {
+		t.Fatalf("lock wait: %v %v", args, err)
+	}
+	if _, err := withLimits(Repo{LockWait: -time.Second}, nil); err == nil {
+		t.Error("negative lock wait accepted")
+	}
+}
+
+// A lock held by another process (exit code 11, also after --retry-lock
+// gave up) is recognised and explained (issue #46).
+func TestLockedRepository(t *testing.T) {
+	bin := filepath.Join(t.TempDir(), "restic")
+	script := "#!/bin/sh\n" +
+		`echo "$@" > "$0.args"` + "\n" +
+		"echo 'repo already locked, waiting up to 1s for the lock' >&2\n" +
+		`printf '{"message_type":"exit_error","code":11,"message":"Fatal: repository is already locked exclusively by PID 1 on nas by root"}' >&2` + "\n" +
+		"exit 11\n"
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil { //nolint:gosec // test script must be executable
+		t.Fatal(err)
+	}
+	c := &CLI{Binary: bin, Logger: slog.New(slog.DiscardHandler)}
+	_, err := c.Backup(context.Background(), Repo{Location: "/r", LockWait: time.Second}, "/stacks/web", BackupOptions{Host: "h"})
+	if !IsLocked(err) || IsNoRepository(err) || !strings.Contains(err.Error(), "locked by another process (maintenance") {
+		t.Fatalf("err = %v", err)
+	}
+	args, _ := os.ReadFile(bin + ".args")
+	if !strings.HasPrefix(string(args), "--retry-lock 1s ") {
+		t.Errorf("args %q", args)
+	}
+	if IsLocked(errors.New("other")) {
+		t.Error("a plain error is not a lock error")
+	}
 }
 
 // TestCancelInterruptsRestic checks that an ended context interrupts

@@ -29,6 +29,11 @@ type Repo struct {
 	// --limit-download, KiB/s); 0 = no limit. Used for long restores from
 	// another host (issue #1).
 	LimitDownloadKiB int
+	// LockWait is how long restic waits for a lock that another process
+	// holds, e.g. BelayPoint's prune (restic --retry-lock, issue #46); 0
+	// fails at once. Only workers wait; the manager's read-only commands
+	// must not hold up a web request.
+	LockWait time.Duration
 }
 
 // MaxLimitKiB is the largest accepted download limit (about 10 GiB/s).

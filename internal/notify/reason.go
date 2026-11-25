@@ -17,6 +17,7 @@ var reasons = []struct {
 	{[]string{"not rolled back (no repository)"}, "failed without rollback (no repository)"},
 	{[]string{"downtime timeout"}, "downtime timeout"},
 	{[]string{"job timeout"}, "job timeout"},
+	{[]string{"locked by another process"}, "repository locked (maintenance running?)"},
 	{[]string{"repository not reachable"}, "repository unreachable"},
 	{[]string{"stack has no repository"}, "no repository"},
 	{[]string{"stack is not healthy"}, "services did not become healthy"},

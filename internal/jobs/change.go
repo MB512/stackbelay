@@ -132,7 +132,9 @@ func (p *Pipeline) runChange(ctx context.Context, stack stacks.Stack, c change) 
 
 	// 3. Pre-stop snapshot (parent of the final one). Failure is not fatal.
 	if c.backup && len(running) > 0 {
-		res.PreStopSnapshot = p.preStopSnapshot(ctx, log, stack)
+		if res.PreStopSnapshot, err = p.preStopSnapshot(ctx, log, stack); err != nil {
+			return res, err
+		}
 	}
 	if err := ctx.Err(); err != nil {
 		return res, err // cancelled before anything was stopped

@@ -43,6 +43,9 @@ type Manager struct {
 	// DowntimeTimeout is passed to every worker (STACKBELAY_DOWNTIME_TIMEOUT,
 	// default DefaultDowntimeTimeout).
 	DowntimeTimeout time.Duration
+	// LockWait is passed to every worker (STACKBELAY_LOCK_WAIT, default
+	// DefaultLockWait; issue #46).
+	LockWait time.Duration
 	// JobTimeout is the hard limit for one job, passed to every worker
 	// (STACKBELAY_JOB_TIMEOUT, default DefaultJobTimeout).
 	JobTimeout time.Duration
@@ -99,6 +102,7 @@ func LoadManager(getenv func(string) string, readFile func(string) ([]byte, erro
 	c.LogLevel, errs = logLevel(getenv, errs)
 	c.JobTimeout, errs = jobTimeout(getenv, errs)
 	c.DowntimeTimeout, errs = downtimeTimeout(getenv, errs)
+	c.LockWait, errs = lockWait(getenv, errs)
 
 	if c.Hostname == "" {
 		errs = append(errs, errors.New("STACKBELAY_HOSTNAME is required (name of the Docker host, used as restic --host)"))

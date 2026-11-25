@@ -56,6 +56,10 @@ type Template struct {
 	// JobTimeout and DowntimeTimeout are passed as STACKBELAY_JOB_TIMEOUT
 	// and STACKBELAY_DOWNTIME_TIMEOUT; 0 leaves the worker's default.
 	JobTimeout, DowntimeTimeout time.Duration
+	// LockWait is passed as STACKBELAY_LOCK_WAIT (issue #46); "" leaves the
+	// worker's default. A string, because "0s" (do not wait) differs from
+	// unset.
+	LockWait string
 	// DockerConfig is the manager's own mount of the docker client
 	// configuration (registry credentials, issue #14), passed read-only to
 	// every worker at the same path; nil if the manager has none.
@@ -94,6 +98,9 @@ func (t Template) Spec(jobID string, repo restic.Repo) (docker.ContainerSpec, er
 	}
 	if t.DowntimeTimeout > 0 {
 		env["STACKBELAY_DOWNTIME_TIMEOUT"] = t.DowntimeTimeout.String()
+	}
+	if t.LockWait != "" {
+		env["STACKBELAY_LOCK_WAIT"] = t.LockWait
 	}
 	for _, kv := range repo.Env {
 		k, v, ok := strings.Cut(kv, "=")
@@ -145,8 +152,9 @@ type TemplateConfig struct {
 	JobsDir     string // the jobs directory as the manager sees it
 	Hostname    string
 	LogLevel    string
-	// JobTimeout, DowntimeTimeout: see Template.
+	// JobTimeout, DowntimeTimeout, LockWait: see Template.
 	JobTimeout, DowntimeTimeout time.Duration
+	LockWait                    string
 }
 
 // NewTemplate builds the worker template. self describes the manager's own
@@ -156,8 +164,8 @@ func NewTemplate(cfg TemplateConfig, self *docker.SelfInfo) (Template, error) {
 	t := Template{
 		Image: cfg.WorkerImage, StacksRoot: cfg.StacksRoot, Socket: dockerSocket,
 		Hostname: cfg.Hostname, LogLevel: cfg.LogLevel, JobTimeout: cfg.JobTimeout,
-		DowntimeTimeout: cfg.DowntimeTimeout,
-		Jobs:            docker.Mount{Type: "bind", Source: cfg.JobsDir},
+		DowntimeTimeout: cfg.DowntimeTimeout, LockWait: cfg.LockWait,
+		Jobs: docker.Mount{Type: "bind", Source: cfg.JobsDir},
 	}
 	if self == nil {
 		if t.Image == "" {
