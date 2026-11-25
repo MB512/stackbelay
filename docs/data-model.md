@@ -138,10 +138,25 @@ CREATE TABLE notify_settings (            -- migration 0019 (issue #47): exactly
   summary_sent_at TEXT                                -- start of the next summary's period; NULL until notifications are set up
 ) STRICT;
 
-CREATE TABLE notify_events (              -- migration 0019: outbox of the notifier
+CREATE TABLE notify_events (              -- migration 0019, rebuilt by 0021: outbox of the notifier
   id         INTEGER PRIMARY KEY,
   created_at TEXT NOT NULL,
-  job_id     TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE
+  job_id     TEXT REFERENCES jobs(id) ON DELETE CASCADE,       -- a finished job (kind '')
+  stack_id   INTEGER REFERENCES stacks(id) ON DELETE CASCADE,  -- stack events; NULL = the whole host
+  kind       TEXT NOT NULL DEFAULT '',      -- '' = job event, else the monitor's event key (stack.degraded, ...)
+  detail     TEXT NOT NULL DEFAULT '{}',    -- JSON for the message (services running, problems, ...)
+  CHECK ((job_id IS NOT NULL) = (kind = ''))
+) STRICT;
+
+CREATE TABLE stack_health (               -- migration 0021 (issue #49): the stack monitor's view
+  stack_id        INTEGER PRIMARY KEY REFERENCES stacks(id) ON DELETE CASCADE,
+  state           TEXT NOT NULL,             -- confirmed: started, degraded, stopped, unknown, missing
+  since           TEXT NOT NULL,
+  alerted         INTEGER NOT NULL DEFAULT 0, -- an alert went out for the current bad state
+  candidate       TEXT NOT NULL DEFAULT '',  -- a different state seen in the last polls
+  candidate_since TEXT NOT NULL DEFAULT '',
+  candidate_count INTEGER NOT NULL DEFAULT 0,
+  last_job_id     TEXT NOT NULL DEFAULT ''   -- newest finished job the monitor has seen
 ) STRICT;
 ```
 

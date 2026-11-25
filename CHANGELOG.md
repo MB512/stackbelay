@@ -20,6 +20,11 @@ All notable changes to StackBelay. The format is based on
   updates), then backups, downtime, updates, changes, restores, security
   events and the data added per repository. Sent even when nothing
   happened, so a missing summary means StackBelay is not running.
+- **Stack monitor** (#49): every minute the state of each stack is read;
+  a stack that becomes degraded, stops without a Stop job, cannot be read
+  or whose directory is gone is reported once (after three polls), and
+  again when it runs. One host message instead when Docker answers for no
+  stack.
 
 ## [0.1.0] - 2026-11-24
 

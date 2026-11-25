@@ -65,6 +65,20 @@
     </fieldset>
 
     <fieldset>
+      <legend>Stack monitor</legend>
+      {{- range .Monitor}}
+      <label class="check"><input type="checkbox" name="event" value="{{.Key}}"{{if .On}} checked{{end}}> {{.Label}}</label>
+      {{- end}}
+      <p class="hint">Every minute StackBelay reads the state of each stack and reports changes outside its jobs: a stack
+        that becomes degraded (a service stopped, restarts or is unhealthy), stops without a Stop job, cannot be read, or
+        whose directory is gone; and when it runs again after such a message. A state counts once it was seen three
+        times in a row (two for "running again"), so restarts of a minute stay quiet. There is one message per change,
+        no reminders; the summary lists stacks that stay degraded. Stacks that were already stopped when StackBelay
+        first saw them, or were stopped by a Stop job, stay quiet. If Docker answers for no stack, one message names
+        the host instead of every stack.</p>
+    </fieldset>
+
+    <fieldset>
       <legend>Summary</legend>
       <label class="check"><input type="checkbox" name="event" value="{{.Summary.Key}}"{{if .Summary.On}} checked{{end}}> Send a summary</label>
       <label>When

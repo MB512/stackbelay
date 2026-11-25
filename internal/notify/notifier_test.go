@@ -57,7 +57,7 @@ func harness() (*Notifier, *fakeStore, *fakeSender, *time.Time) {
 }
 
 func event(id, stackID int64, state jobs.State, at time.Time) store.NotifyEvent {
-	return store.NotifyEvent{ID: id, CreatedAt: at, Job: store.Job{ID: "job", StackID: stackID, StackName: "web",
+	return store.NotifyEvent{ID: id, CreatedAt: at, StackID: stackID, StackName: "web", Job: store.Job{ID: "job", StackID: stackID, StackName: "web",
 		Type: jobs.TypeBackup, State: state, Trigger: store.TriggerSchedule, StartedAt: at, FinishedAt: at}}
 }
 

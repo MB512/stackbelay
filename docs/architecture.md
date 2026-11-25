@@ -1511,6 +1511,49 @@ event messages (short host, no links, no user names, no image tags):
 The attention section is never cut; the others are, below ntfy's 4 KB
 limit.
 
+### Stack monitor
+
+`notify.Monitor` (issue #49), a goroutine in the manager, reads the state
+of every present stack once a minute: `stacks.Discover` once per poll
+(a stack whose directory is gone is "missing"), then
+`docker.CLI.StackOverview` per stack (read-only `compose config` and
+`compose ps`; no `docker events`) and `Overview.Condition`. It polls on
+its own, without the stack list's 5 s cache. Stacks with a running job
+are skipped: their state is the job's business.
+
+It reports transitions, not states. Its view of each stack is in
+`stack_health` (confirmed state, a candidate state with a counter,
+whether an alert went out, the newest finished job it has seen), so a
+restart neither repeats nor misses an alert. A different state is
+confirmed after 3 polls in a row (2 for "started"); the confirmation
+raises at most one event, written into the outbox (`notify_events` with
+`kind` = the event key) and sent like job events (grouping, mute,
+toggles):
+
+| Confirmed transition | Event |
+|---|---|
+| any → degraded (not yet alerted) | `stack.degraded`, with running/total services and the problems |
+| started → stopped or not created | `stack.stopped` ("stopped outside StackBelay") |
+| started → state unreadable | `stack.unreadable` |
+| any → directory missing | `stack.missing` |
+| bad → started, after an alert | `stack.recovered`, with the bad state and how long it lasted |
+
+There are no reminders: a stack that stays bad raises one alert (the
+summary lists it). The first time the monitor sees a stack, its state is
+the baseline, without a message, so stacks that are stopped on purpose
+stay quiet. A newly finished job (`LatestFinishedJobs`) sets a new
+baseline without a message when it leaves the stack stopped on purpose
+(a succeeded stop or down, a restore without start) or when it failed
+and left services down (`result.services_down`; its own message reported
+it, and the monitor still reports the recovery). After any other job the
+expectation stays, so a stack that does not come back after a
+"successful" job is reported.
+
+If no stack can be read in a poll (at least two stacks), Docker itself is
+taken to be down: the stacks keep their state, and after 3 such polls one
+host event ("cannot read stack states") goes out, and one when Docker
+answers again. This host state lives in memory only.
+
 ## Scheduler
 
 `internal/scheduler`, using `robfig/cron/v3` in the manager. A schedule only

@@ -50,7 +50,9 @@ func TestEnabledDefaults(t *testing.T) {
 	// Defaults (issue #47): failures, rollbacks and left-down are on,
 	// successes off.
 	for _, e := range Events {
-		want := e.Key == KeyRollback || e.Key == KeyLeftDown || e.Key == KeySummary || strings.HasSuffix(e.Label, "failed")
+		// Monitor events (issue #49) are all on by default.
+		want := e.Key == KeyRollback || e.Key == KeyLeftDown || e.Key == KeySummary ||
+			strings.HasSuffix(e.Label, "failed") || strings.HasPrefix(string(e.Key), "stack.")
 		if got := Enabled(nil, e.Key); got != want {
 			t.Errorf("%s: default %v, want %v", e.Key, got, want)
 		}

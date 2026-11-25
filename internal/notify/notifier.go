@@ -2,6 +2,7 @@ package notify
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"time"
 
@@ -106,23 +107,24 @@ func (n *Notifier) Step(ctx context.Context) {
 	var drop, send []int64
 	var batch []Event
 	var oldest, newest time.Time
-	for _, ev := range events {
-		key, ok := Classify(ev.Job)
+	for _, row := range events {
+		ev, ok := toEvent(row)
+		key := ev.Key
 		switch {
-		case !on || !ok || !Enabled(settings.Events, key) || muted[ev.Job.StackID]:
-			drop = append(drop, ev.ID)
-		case now.Sub(ev.CreatedAt) > giveUp:
+		case !on || !ok || !Enabled(settings.Events, key) || muted[row.StackID]:
+			drop = append(drop, row.ID)
+		case now.Sub(row.CreatedAt) > giveUp:
 			n.Logger.Warn("notifications: dropping an event that could not be sent for too long",
-				"job_id", ev.Job.ID, "event", key, "since", ev.CreatedAt)
-			drop = append(drop, ev.ID)
+				"job_id", row.Job.ID, "stack", row.StackName, "event", key, "since", row.CreatedAt)
+			drop = append(drop, row.ID)
 		default:
-			send = append(send, ev.ID)
-			batch = append(batch, Event{Key: key, Job: ev.Job})
-			if oldest.IsZero() || ev.CreatedAt.Before(oldest) {
-				oldest = ev.CreatedAt
+			send = append(send, row.ID)
+			batch = append(batch, ev)
+			if oldest.IsZero() || row.CreatedAt.Before(oldest) {
+				oldest = row.CreatedAt
 			}
-			if ev.CreatedAt.After(newest) {
-				newest = ev.CreatedAt
+			if row.CreatedAt.After(newest) {
+				newest = row.CreatedAt
 			}
 		}
 	}
@@ -177,4 +179,21 @@ func (n *Notifier) delete(ctx context.Context, ids []int64) {
 	if err := n.Store.DeleteNotifyEvents(ctx, ids); err != nil {
 		n.Logger.Error("notifications: deleting events", "error", err)
 	}
+}
+
+// toEvent turns an outbox row into an event. ok is false for a row that
+// never becomes a message (see Classify) or has an unknown kind.
+func toEvent(row store.NotifyEvent) (Event, bool) {
+	if row.Kind == "" {
+		key, ok := Classify(row.Job)
+		return Event{Key: key, Job: row.Job}, ok
+	}
+	key := Key(row.Kind)
+	if _, ok := Info(key); !ok {
+		return Event{}, false
+	}
+	ev := Event{Key: key, Stack: row.StackName}
+	// A detail that does not parse only leaves the message shorter.
+	_ = json.Unmarshal([]byte(row.Detail), &ev.Detail)
+	return ev, true
 }

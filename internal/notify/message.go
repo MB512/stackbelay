@@ -20,10 +20,29 @@ type Message struct {
 // messages become attachments, which a phone does not show inline).
 const maxBodyBytes = 3900
 
-// Event is a finished job with its event type.
+// Event is a finished job, or a finding of the stack monitor, with its
+// event type.
 type Event struct {
 	Key Key
-	Job store.Job
+	Job store.Job // a job event; zero for a stack event
+	// Stack events (issue #49): the stack ("" = the whole host) and what
+	// the monitor saw.
+	Stack  string
+	Detail StackDetail
+}
+
+// isStack reports whether ev is an event of the stack monitor.
+func (ev Event) isStack() bool { return ev.Job.Type == "" }
+
+// subject is the stack the event is about, or "host".
+func (ev Event) subject() string {
+	if ev.isStack() {
+		if ev.Stack == "" {
+			return "host"
+		}
+		return ev.Stack
+	}
+	return subject(ev.Job)
 }
 
 // ShortHost returns host up to its first dot: messages name the host, not
@@ -45,6 +64,9 @@ func Format(host string, events []Event, loc *time.Location) Message {
 }
 
 func formatOne(host string, ev Event, loc *time.Location) Message {
+	if ev.isStack() {
+		return formatStackEvent(host, ev)
+	}
 	info, _ := Info(ev.Key)
 	j := ev.Job
 	title := fmt.Sprintf("%s %s · %s", info.Emoji, eventLabel(ev), subject(j))
@@ -79,7 +101,7 @@ func formatMany(host string, events []Event) Message {
 	lines := make([]string, 0, len(events))
 	for _, ev := range events {
 		info, _ := Info(ev.Key)
-		line := fmt.Sprintf("%s %s: %s", info.Emoji, subject(ev.Job), strings.ToLower(eventLabel(ev)))
+		line := fmt.Sprintf("%s %s: %s", info.Emoji, ev.subject(), lowerFirst(eventLabel(ev)))
 		if detail := shortDetail(ev); detail != "" {
 			line += " (" + detail + ")"
 		}
@@ -160,6 +182,9 @@ func stateLine(ev Event) string {
 
 // shortDetail is the part in parentheses of a line of a combined message.
 func shortDetail(ev Event) string {
+	if ev.isStack() {
+		return ev.Detail.short(ev.Key)
+	}
 	j := ev.Job
 	switch {
 	case ev.Key == KeyLeftDown:
@@ -254,4 +279,13 @@ func formatBytes(n int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %ciB", float64(n)/float64(div), "KMGTPE"[exp])
+}
+
+// lowerFirst lowercases the first letter of a label ("Backup failed" ->
+// "backup failed"), keeping names like StackBelay.
+func lowerFirst(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToLower(s[:1]) + s[1:]
 }

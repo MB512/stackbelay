@@ -54,7 +54,9 @@ already trust until it has proven itself on your hosts.
   rollbacks and stacks a job left down (successes optional), grouped when
   several jobs finish together; per-stack mute. A daily or weekly
   **summary** of what needs attention, backups, downtime, updates,
-  changes, security events and the data added per repository.
+  changes, security events and the data added per repository. A
+  **stack monitor** reports stacks that degrade, stop or vanish outside
+  StackBelay's jobs, and when they run again.
 - **Compose editor** and an opt-in **container shell** for admins.
 - **Multi-user** with per-stack rights (backup, restore, update, operate,
   logs);

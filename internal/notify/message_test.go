@@ -37,41 +37,41 @@ func TestFormatOne(t *testing.T) {
 		wantPrio  int
 	}{
 		{"backup failed, stack running again",
-			Event{KeyBackupFailed, finished("immich", jobs.TypeBackup, jobs.StateFailed, "repository not reachable: x", store.JobResult{})},
+			Event{Key: KeyBackupFailed, Job: finished("immich", jobs.TypeBackup, jobs.StateFailed, "repository not reachable: x", store.JobResult{})},
 			"❌ Backup failed · immich",
 			[]string{"nas01 · scheduled · 25 Nov 03:00–03:14", "Services that ran before are running.", "Reason: repository unreachable"},
 			PriorityHigh},
 		{"update left the stack down",
-			Event{KeyLeftDown, finished("gitea", jobs.TypeUpdate, jobs.StateFailed,
+			Event{Key: KeyLeftDown, Job: finished("gitea", jobs.TypeUpdate, jobs.StateFailed,
 				"update failed: x\nrollback to snapshot 1a2b3c4d failed: y", store.JobResult{ServicesDown: []string{"gitea", "db"}})},
 			"🚨 Update failed · gitea",
 			[]string{"nas01 · scheduled · 25 Nov 03:00–03:14", "Stack is DOWN. Not running: gitea, db", "Reason: rollback failed"},
 			PriorityUrgent},
 		{"update rolled back",
-			Event{KeyRollback, finished("gitea", jobs.TypeUpdate, jobs.StateFailed,
+			Event{Key: KeyRollback, Job: finished("gitea", jobs.TypeUpdate, jobs.StateFailed,
 				"update failed and was rolled back to snapshot 1a2b3c4d: stack is not healthy: services failed: gitea (unhealthy)",
 				store.JobResult{RolledBack: true})},
 			"↩️ Update rolled back · gitea",
 			[]string{"nas01 · scheduled · 25 Nov 03:00–03:14", "Stack runs the previous version.", "Reason: service gitea (unhealthy)"},
 			PriorityHigh},
 		{"update applied",
-			Event{KeyUpdateSucceeded, finished("immich", jobs.TypeUpdate, jobs.StateSucceeded, "",
+			Event{Key: KeyUpdateSucceeded, Job: finished("immich", jobs.TypeUpdate, jobs.StateSucceeded, "",
 				store.JobResult{ImagesChanged: []string{"server", "machine-learning"}})},
 			"✅ Update applied · immich",
 			[]string{"nas01 · scheduled · 25 Nov 03:00–03:14", "Changed: server, machine-learning"},
 			PriorityLow},
 		{"stop failed: no state line",
-			Event{KeyOperationFailed, finished("web", jobs.TypeStop, jobs.StateFailed, "stopping stack: exit status 1", store.JobResult{})},
+			Event{Key: KeyOperationFailed, Job: finished("web", jobs.TypeStop, jobs.StateFailed, "stopping stack: exit status 1", store.JobResult{})},
 			"❌ Stop failed · web",
 			[]string{"nas01 · scheduled · 25 Nov 03:00–03:14", "Reason: stop failed"},
 			PriorityHigh},
 		{"worker lost: state unknown",
-			Event{KeyBackupFailed, finished("web", jobs.TypeBackup, jobs.StateFailed, "the worker container disappeared without reporting a result", store.JobResult{})},
+			Event{Key: KeyBackupFailed, Job: finished("web", jobs.TypeBackup, jobs.StateFailed, "the worker container disappeared without reporting a result", store.JobResult{})},
 			"❌ Backup failed · web",
 			[]string{"nas01 · scheduled · 25 Nov 03:00–03:14", "Reason: worker lost"},
 			PriorityHigh},
 		{"host cleanup",
-			Event{KeyCleanupSucceeded, finished("", jobs.TypeCleanup, jobs.StateSucceeded, "",
+			Event{Key: KeyCleanupSucceeded, Job: finished("", jobs.TypeCleanup, jobs.StateSucceeded, "",
 				store.JobResult{RemovedImages: 3, RemovedContainers: 1, FreedBytes: 3 << 29})},
 			"✅ Host cleanup succeeded · host",
 			[]string{"nas01 · scheduled · 25 Nov 03:00–03:14", "Removed 3 images and 1 containers, freed 1.5 GiB."},
@@ -90,7 +90,7 @@ func TestFormatOne(t *testing.T) {
 func TestFormatManualAndOvernight(t *testing.T) {
 	j := finished("web", jobs.TypeBackup, jobs.StateSucceeded, "", store.JobResult{})
 	j.Trigger, j.StartedAt, j.FinishedAt = store.TriggerManual, t0.Add(-4*time.Hour), t0.Add(time.Minute)
-	m := Format("nas01", []Event{{KeyBackupSucceeded, j}}, utc)
+	m := Format("nas01", []Event{{Key: KeyBackupSucceeded, Job: j}}, utc)
 	if m.Body != "nas01 · manual · 24 Nov 23:00–25 Nov 03:01" {
 		t.Errorf("body %q", m.Body)
 	}
@@ -98,8 +98,8 @@ func TestFormatManualAndOvernight(t *testing.T) {
 
 func TestFormatMany(t *testing.T) {
 	backups := []Event{
-		{KeyBackupFailed, finished("immich", jobs.TypeBackup, jobs.StateFailed, "repository not reachable: x", store.JobResult{})},
-		{KeyBackupFailed, finished("gitea", jobs.TypeBackup, jobs.StateFailed, "repository not reachable: x", store.JobResult{})},
+		{Key: KeyBackupFailed, Job: finished("immich", jobs.TypeBackup, jobs.StateFailed, "repository not reachable: x", store.JobResult{})},
+		{Key: KeyBackupFailed, Job: finished("gitea", jobs.TypeBackup, jobs.StateFailed, "repository not reachable: x", store.JobResult{})},
 	}
 	m := Format("nas01", backups, utc)
 	if m.Title != "❌ 2× Backup failed · nas01" || m.Priority != PriorityHigh ||
@@ -107,7 +107,7 @@ func TestFormatMany(t *testing.T) {
 		t.Errorf("same type: %q\n%s", m.Title, m.Body)
 	}
 
-	mixed := append(backups, Event{KeyLeftDown, finished("db", jobs.TypeBackup, jobs.StateFailed, "restarting stack: x",
+	mixed := append(backups, Event{Key: KeyLeftDown, Job: finished("db", jobs.TypeBackup, jobs.StateFailed, "restarting stack: x",
 		store.JobResult{ServicesDown: []string{"postgres"}})})
 	m = Format("nas01", mixed, utc)
 	if m.Title != "🚨 3 events · nas01" || m.Priority != PriorityUrgent ||
@@ -119,8 +119,7 @@ func TestFormatMany(t *testing.T) {
 func TestFormatLimit(t *testing.T) {
 	var many []Event
 	for i := range 200 {
-		many = append(many, Event{KeyBackupSucceeded,
-			finished(fmt.Sprintf("stack-with-a-long-name-%03d", i), jobs.TypeBackup, jobs.StateSucceeded, "", store.JobResult{})})
+		many = append(many, Event{Key: KeyBackupSucceeded, Job: finished(fmt.Sprintf("stack-with-a-long-name-%03d", i), jobs.TypeBackup, jobs.StateSucceeded, "", store.JobResult{})})
 	}
 	m := Format("nas01", many, utc)
 	if len(m.Body) > maxBodyBytes || !strings.HasSuffix(m.Body, " more") || !strings.Contains(m.Body, "stack-with-a-long-name-000") {

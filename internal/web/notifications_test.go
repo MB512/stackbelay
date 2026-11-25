@@ -34,6 +34,7 @@ func TestNotificationSettings(t *testing.T) {
 
 	r := e.get("/admin/notifications")
 	if r.status != http.StatusOK || !strings.Contains(r.body, "<strong>nas01</strong>") ||
+		!strings.Contains(r.body, `value="stack.degraded" checked`) ||
 		!strings.Contains(r.body, `value="backup.failed" checked`) || strings.Contains(r.body, `value="backup.succeeded" checked`) {
 		t.Fatalf("page:\n%s", r.body)
 	}
@@ -75,7 +76,8 @@ func TestNotificationSettings(t *testing.T) {
 	}
 	ns, err := e.st.NotifySettings(ctx)
 	if err != nil || ns.ServerURL != "https://ntfy.example.com" || ns.Topic != "stackbelay-x1" || ns.Auth.Token != "tk_secret" ||
-		!ns.Events["backup.failed"] || !ns.Events["left_down"] || ns.Events["rollback"] || ns.Events["bogus"] {
+		!ns.Events["backup.failed"] || !ns.Events["left_down"] || ns.Events["rollback"] || ns.Events["bogus"] ||
+		ns.Events["stack.degraded"] {
 		t.Fatalf("stored: %+v, %v", ns, err)
 	}
 

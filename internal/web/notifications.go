@@ -36,6 +36,7 @@ type notifyForm struct {
 	PasswordStored   bool
 	Rows             []notifyRow   // the job type x outcome matrix
 	Single           []notifyEvent // rollback, left down
+	Monitor          []notifyEvent // stack monitor (issue #49)
 	// Summary (issue #48): on/off, schedule (a preset or a custom cron
 	// expression) and the stale threshold.
 	Summary         notifyEvent
@@ -111,6 +112,10 @@ func newNotifyForm(ns store.NotifySettings) notifyForm {
 	}
 	f.Single = []notifyEvent{event(notify.KeyRollback), event(notify.KeyLeftDown)}
 	f.Summary = event(notify.KeySummary)
+	for _, key := range []notify.Key{notify.KeyStackDegraded, notify.KeyStackStopped, notify.KeyStackRecovered,
+		notify.KeyStackUnreadable, notify.KeyStackMissing} {
+		f.Monitor = append(f.Monitor, event(key))
+	}
 	f.SummaryCron, f.StaleDays, f.SummarySchedule = ns.SummaryCron, ns.StaleDays, summaryCustom
 	for preset, expr := range summaryPresets {
 		if ns.SummaryCron == expr {

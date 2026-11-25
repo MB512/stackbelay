@@ -33,6 +33,12 @@ const (
 	KeyLeftDown Key = "left_down"
 	// KeySummary: the periodic summary (issue #48).
 	KeySummary Key = "summary"
+	// Stack monitor (issue #49): a stack's state changed outside a job.
+	KeyStackDegraded   Key = "stack.degraded"
+	KeyStackStopped    Key = "stack.stopped" // stopped outside StackBelay
+	KeyStackRecovered  Key = "stack.recovered"
+	KeyStackUnreadable Key = "stack.unreadable" // also for the whole host (docker unreachable)
+	KeyStackMissing    Key = "stack.missing"    // the stack directory vanished
 )
 
 // ntfy priorities (1 = min ... 5 = urgent). Urgent breaks through Do Not
@@ -71,6 +77,11 @@ var Events = []EventInfo{
 	{KeyRollback, "Rolled back", true, PriorityHigh, "↩️"},
 	{KeyLeftDown, "Stack left down", true, PriorityUrgent, "🚨"},
 	{KeySummary, "Summary", true, PriorityDefault, "📊"},
+	{KeyStackDegraded, "Stack degraded", true, PriorityHigh, "⚠️"},
+	{KeyStackStopped, "Stopped outside StackBelay", true, PriorityHigh, "⚠️"},
+	{KeyStackRecovered, "Stack recovered", true, PriorityDefault, "✅"},
+	{KeyStackUnreadable, "State unreadable", true, PriorityDefault, "❔"},
+	{KeyStackMissing, "Directory missing", true, PriorityHigh, "⚠️"},
 }
 
 // Info returns the description of key; ok is false for an unknown key.

@@ -192,6 +192,10 @@ func run(ctx context.Context, getenv func(string) string, readFile func(string) 
 	summarizer := &notify.Summarizer{Store: st, Sender: ntfy, Docker: &docker.CLI{}, StacksRoot: cfg.StacksRoot,
 		Hostname: cfg.Hostname, Logger: log, Location: cfg.TimeZone}
 	go summarizer.Run(ctx)
+	// The stack monitor (issue #49): read-only "docker compose ps" of
+	// every stack once a minute; its events go through the outbox.
+	monitor := &notify.Monitor{Store: st, Docker: &docker.CLI{}, StacksRoot: cfg.StacksRoot, Logger: log}
+	go monitor.Run(ctx)
 
 	select {
 	case err := <-serveErr:

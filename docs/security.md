@@ -189,7 +189,8 @@ attackers reaching the UI, a leaked database file.
     repository locations, paths or tool output). The summary (issue #48)
     uses only read-only Docker commands the manager already runs for the
     stack list and the update check (`compose ps`, `image inspect`,
-    `buildx imagetools inspect`).
+    `buildx imagetools inspect`); so does the stack monitor (issue #49:
+    `compose config` and `compose ps` once a minute per stack).
 
 ## Reporting vulnerabilities
 

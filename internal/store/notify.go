@@ -1,10 +1,13 @@
 package store
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"slices"
 	"time"
 )
 
@@ -94,11 +97,31 @@ func (s *Store) SaveNotifySettings(ctx context.Context, ns NotifySettings) error
 	return nil
 }
 
-// NotifyEvent is a row of the notification outbox: a job that finished.
+// NotifyEvent is a row of the notification outbox: a job that finished
+// (Kind "") or an event of the stack monitor.
 type NotifyEvent struct {
 	ID        int64
 	CreatedAt time.Time
-	Job       Job
+	Job       Job // a job event; zero for a stack event
+	// Stack events (issue #49): Kind is the notification key, StackID 0
+	// for the whole host, Detail JSON for the message.
+	Kind      string
+	StackID   int64
+	StackName string
+	Detail    string
+}
+
+// AddStackEvent writes a stack event of the monitor into the outbox.
+// stackID 0 is the whole host.
+func (s *Store) AddStackEvent(ctx context.Context, kind string, stackID int64, detail string, at time.Time) error {
+	if kind == "" {
+		return errors.New("adding stack event: empty kind")
+	}
+	if _, err := s.db.ExecContext(ctx, `INSERT INTO notify_events (created_at, stack_id, kind, detail) VALUES (?, ?, ?, ?)`,
+		formatTime(at), nullID(stackID), kind, detail); err != nil {
+		return fmt.Errorf("writing stack event %s: %w", kind, err)
+	}
+	return nil
 }
 
 // addNotifyEvent writes the outbox row of a finished job. It runs in the
@@ -116,6 +139,45 @@ func addNotifyEvent(ctx context.Context, tx *sql.Tx, jobID string, at time.Time)
 
 // NotifyEvents returns the outbox, oldest first.
 func (s *Store) NotifyEvents(ctx context.Context) ([]NotifyEvent, error) {
+	jobEvents, err := s.jobNotifyEvents(ctx)
+	if err != nil {
+		return nil, err
+	}
+	stackEvents, err := s.stackNotifyEvents(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := append(jobEvents, stackEvents...)
+	slices.SortFunc(out, func(a, b NotifyEvent) int { return cmp.Compare(a.ID, b.ID) })
+	return out, nil
+}
+
+// stackNotifyEvents returns the stack events of the outbox.
+func (s *Store) stackNotifyEvents(ctx context.Context) ([]NotifyEvent, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT e.id, e.created_at, e.kind, COALESCE(e.stack_id, 0), COALESCE(st.name, ''), e.detail
+		 FROM notify_events e LEFT JOIN stacks st ON st.id = e.stack_id WHERE e.kind != '' ORDER BY e.id`)
+	if err != nil {
+		return nil, fmt.Errorf("listing stack events: %w", err)
+	}
+	defer rows.Close()
+	var out []NotifyEvent
+	for rows.Next() {
+		var ev NotifyEvent
+		var created string
+		if err := rows.Scan(&ev.ID, &created, &ev.Kind, &ev.StackID, &ev.StackName, &ev.Detail); err != nil {
+			return nil, fmt.Errorf("listing stack events: %w", err)
+		}
+		if ev.CreatedAt, err = parseTime(created); err != nil {
+			return nil, err
+		}
+		out = append(out, ev)
+	}
+	return out, rows.Err()
+}
+
+// jobNotifyEvents returns the job events of the outbox.
+func (s *Store) jobNotifyEvents(ctx context.Context) ([]NotifyEvent, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT e.id, e.created_at, `+jobColumns+jobFrom+
 		`JOIN notify_events e ON e.job_id = j.id ORDER BY e.id`)
 	if err != nil {
@@ -134,7 +196,7 @@ func (s *Store) NotifyEvents(ctx context.Context) ([]NotifyEvent, error) {
 		if ev.CreatedAt, err = parseTime(created); err != nil {
 			return nil, err
 		}
-		ev.Job = j
+		ev.Job, ev.StackID, ev.StackName = j, j.StackID, j.StackName
 		out = append(out, ev)
 	}
 	return out, rows.Err()
