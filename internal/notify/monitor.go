@@ -59,6 +59,9 @@ type Monitor struct {
 	StacksRoot string
 	Logger     *slog.Logger
 	Now        func() time.Time
+	// Mutes: stacks an admin is working on with notifications muted are
+	// skipped like busy ones while the mute lasts (issue #50); nil: none.
+	Mutes *Mutes
 
 	hostBad     int  // polls in a row in which no stack could be read
 	hostAlerted bool // the host alert went out
@@ -114,9 +117,17 @@ func (m *Monitor) Step(ctx context.Context) {
 		m.Logger.Error("monitor: listing running jobs", "error", err)
 		return
 	}
+	now := m.now()
 	busy := map[int64]bool{}
 	for _, j := range running {
 		busy[j.StackID] = true
+	}
+	for _, st := range list {
+		if m.Mutes.StackMuted(st.ID, now) {
+			// An admin works on it with notifications muted; once the
+			// mute ends, a bad state is reported after the usual polls.
+			busy[st.ID] = true
+		}
 	}
 	found, err := stacks.Discover(m.StacksRoot)
 	if err != nil {
@@ -128,7 +139,6 @@ func (m *Monitor) Step(ctx context.Context) {
 		dirs[st.Name] = st.Dir
 	}
 
-	now := m.now()
 	obs := map[int64]observation{}
 	readable := 0
 	for _, st := range list {

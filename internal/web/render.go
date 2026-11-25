@@ -106,6 +106,9 @@ type pageData struct {
 	// GlobalLogs shows the "Logs" link in the header (the user has the
 	// logs right on some stack); set by render.
 	GlobalLogs bool
+	// Mute is the admin's notification mute for the header (issue #50);
+	// set by render.
+	Mute muteBadge
 }
 
 // render executes a page into a buffer first, so a template error never
@@ -114,6 +117,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, page
 	if a := authFrom(r.Context()); a != nil {
 		d.User, d.CSRF = &a.User, a.Session.CSRFToken
 		d.GlobalLogs = s.mayViewSomeLogs(r.Context(), a.User)
+		d.Mute = s.muteBadge(r, a.User)
 	}
 	t, ok := s.templates[page]
 	if !ok {

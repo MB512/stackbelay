@@ -29,6 +29,21 @@
       {{- if .IsAdmin}}
       <a href="/admin/users">Admin</a>
       {{- end}}
+      {{- with $.Mute}}{{if .Available}}
+      <form method="post" action="/account/notify-mute" class="mute{{if .Active}} active{{end}}">
+        <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+        <input type="hidden" name="back" value="{{.Back}}">
+        {{- if .Active}}
+        <span title="Your jobs send no notifications. The mute ends 5 minutes after your last page view.">🔕 muted
+          <span data-countdown="{{.Seconds}}">until {{.Until}}</span></span>
+        <button type="submit" name="on" value="true" class="secondary" title="Reset to 5 minutes">Reset</button>
+        <button type="submit" name="on" value="false" class="secondary">Unmute</button>
+        {{- else}}
+        <button type="submit" name="on" value="true" class="secondary"
+                title="Your jobs send no notifications while you work; ends 5 minutes after your last page view">🔕 Mute</button>
+        {{- end}}
+      </form>
+      {{- end}}{{end}}
       <a href="/account/password" title="Signed in as {{.Username}}">Profile</a>
       <form method="post" action="/logout">
         <input type="hidden" name="csrf_token" value="{{$.CSRF}}">

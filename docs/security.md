@@ -139,7 +139,7 @@ attackers reaching the UI, a leaked database file.
 9. **Audit log.** Login, failed login, job creation (manual and scheduled),
    restore, permission, schedule and repository changes (create, change,
    initialize, delete, a stack's choice), notification settings, test
-   messages and per-stack mutes. No secrets in entries; the ntfy topic is
+   messages, per-stack mutes and admins' temporary mutes. No secrets in entries; the ntfy topic is
    left out too (on a public server it is the only secret).
 10. **TLS.** The app speaks plain HTTP and is meant to run behind a reverse
     proxy that terminates TLS; the README says so prominently. Login over

@@ -186,7 +186,8 @@ func (n *Notifier) delete(ctx context.Context, ids []int64) {
 func toEvent(row store.NotifyEvent) (Event, bool) {
 	if row.Kind == "" {
 		key, ok := Classify(row.Job)
-		return Event{Key: key, Job: row.Job}, ok
+		// A job an admin started with notifications muted (issue #50).
+		return Event{Key: key, Job: row.Job}, ok && !row.Job.Options.NotifyMuted
 	}
 	key := Key(row.Kind)
 	if _, ok := Info(key); !ok {

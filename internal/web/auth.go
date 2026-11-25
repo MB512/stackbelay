@@ -102,6 +102,11 @@ func (s *Server) loadSession(next http.Handler) http.Handler {
 				s.Logger.Warn("extending session", "error", err)
 			}
 		}
+		// An admin's notification mute lasts while they work: every page
+		// request resets it, polls do not (issue #50).
+		if user.IsAdmin && s.Mutes != nil && r.Header.Get(pollHeader) == "" {
+			s.Mutes.Extend(user.ID, now)
+		}
 		ctx := context.WithValue(r.Context(), authKey, &authInfo{Session: sess, User: user})
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

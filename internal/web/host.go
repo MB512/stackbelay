@@ -116,7 +116,8 @@ func (s *Server) startCleanup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a := authFrom(ctx)
-	j, err := s.Jobs.Submit(ctx, store.Job{Type: jobs.TypeCleanup, Trigger: store.TriggerManual, RequestedBy: a.User.ID})
+	j, err := s.Jobs.Submit(ctx, store.Job{Type: jobs.TypeCleanup, Trigger: store.TriggerManual, RequestedBy: a.User.ID,
+		Options: store.JobOptions{NotifyMuted: s.markMuted(a.User, 0)}})
 	if errors.Is(err, store.ErrJobQueued) {
 		s.renderHost(w, r, http.StatusConflict, hostPage{}, "A cleanup is already waiting to run.", false)
 		return

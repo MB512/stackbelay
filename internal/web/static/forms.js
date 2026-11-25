@@ -18,6 +18,31 @@
 (function () {
 	"use strict";
 
+	// Countdown of the notification mute in the header (issue #50):
+	// data-countdown="<seconds left>" shows m:ss and "ended" at 0. Without
+	// JavaScript the element shows the end time.
+	function startCountdowns() {
+		var els = document.querySelectorAll("[data-countdown]");
+		if (els.length === 0) {
+			return;
+		}
+		var start = Date.now();
+		function tick() {
+			for (var i = 0; i < els.length; i++) {
+				var left = Math.max(0, Number(els[i].getAttribute("data-countdown")) - Math.floor((Date.now() - start) / 1000));
+				var s = left % 60;
+				els[i].textContent = left === 0 ? "– ended" : Math.floor(left / 60) + ":" + (s < 10 ? "0" : "") + s;
+			}
+		}
+		tick();
+		setInterval(tick, 1000);
+	}
+	if (document.readyState === "loading") {
+		document.addEventListener("DOMContentLoaded", startCountdowns);
+	} else {
+		startCountdowns();
+	}
+
 	// fieldIs reports whether form's field has a value, for a condition
 	// "<field>=<value>". form.elements[name] of radio buttons is a list
 	// whose value is the checked one's.

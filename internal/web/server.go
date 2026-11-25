@@ -16,6 +16,7 @@ import (
 
 	"github.com/MB512/stackbelay/internal/auth"
 	"github.com/MB512/stackbelay/internal/jobs"
+	"github.com/MB512/stackbelay/internal/notify"
 	"github.com/MB512/stackbelay/internal/store"
 )
 
@@ -96,6 +97,9 @@ type Server struct {
 	// Notify sends the test message of the notification settings; nil
 	// disables the button.
 	Notify NotifySender
+	// Mutes holds the admins' temporary notification mutes (issue #50),
+	// shared with the stack monitor; nil hides the mute.
+	Mutes *notify.Mutes
 	// Now returns the current time; defaults to time.Now (tests override it).
 	Now func() time.Time
 	// Location is the time zone all times are shown in (the manager's TZ);
@@ -244,6 +248,7 @@ func (s *Server) Handler() (http.Handler, error) {
 				r.Post("/admin/notifications", s.saveNotifications)
 				r.Post("/admin/notifications/test", s.testNotification)
 				r.Post("/stacks/{name}/notify-muted", s.setStackNotifyMuted)
+				r.Post("/account/notify-mute", s.setAdminMute)
 				r.Get("/admin/host", s.adminHost)
 				r.Post("/admin/host/cleanup", s.startCleanup)
 				r.Post("/admin/host/schedules", s.createHostSchedule)

@@ -25,6 +25,11 @@ All notable changes to StackBelay. The format is based on
   or whose directory is gone is reported once (after three polls), and
   again when it runs. One host message instead when Docker answers for no
   stack.
+- **Admin mute** (#50): admins can mute the notifications of their own
+  jobs while they work ("🔕 Mute" in the header, with a countdown). It
+  ends 5 minutes after their last page view; jobs started while muted stay
+  silent whenever they finish, and the stack monitor waits until the mute
+  has ended.
 
 ## [0.1.0] - 2026-11-24
 

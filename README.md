@@ -52,7 +52,8 @@ already trust until it has proven itself on your hosts.
   images, with a preview; never volumes.
 - **Notifications** through [ntfy](https://ntfy.sh) for failed jobs,
   rollbacks and stacks a job left down (successes optional), grouped when
-  several jobs finish together; per-stack mute. A daily or weekly
+  several jobs finish together; per-stack mute, and a temporary mute for
+  admins while they work. A daily or weekly
   **summary** of what needs attention, backups, downtime, updates,
   changes, security events and the data added per repository. A
   **stack monitor** reports stacks that degrade, stop or vanish outside

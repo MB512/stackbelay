@@ -86,6 +86,9 @@ func run(ctx context.Context, getenv func(string) string, readFile func(string) 
 		log.Error("backups and restores are unavailable", "error", jobsErr)
 	}
 	ntfy := &notify.NTFY{}
+	// Admins' temporary mutes (issue #50), shared by the web server and
+	// the stack monitor.
+	mutes := &notify.Mutes{}
 	srv := &web.Server{
 		Store: st, Logger: log, SessionTTL: cfg.SessionTTL, SecureCookies: !cfg.AllowInsecureHTTP,
 		// The manager runs only read-only restic commands itself, plus
@@ -121,6 +124,7 @@ func run(ctx context.Context, getenv func(string) string, readFile func(string) 
 		Hostname:           cfg.Hostname,
 		// "Send test" on the notification settings page.
 		Notify: ntfy,
+		Mutes:  mutes,
 		// All times in the UI are shown in the manager's time zone (TZ).
 		Location: cfg.TimeZone,
 		// On SIGTERM open live streams end at once (clients reconnect)
@@ -194,7 +198,7 @@ func run(ctx context.Context, getenv func(string) string, readFile func(string) 
 	go summarizer.Run(ctx)
 	// The stack monitor (issue #49): read-only "docker compose ps" of
 	// every stack once a minute; its events go through the outbox.
-	monitor := &notify.Monitor{Store: st, Docker: &docker.CLI{}, StacksRoot: cfg.StacksRoot, Logger: log}
+	monitor := &notify.Monitor{Store: st, Docker: &docker.CLI{}, StacksRoot: cfg.StacksRoot, Logger: log, Mutes: mutes}
 	go monitor.Run(ctx)
 
 	select {

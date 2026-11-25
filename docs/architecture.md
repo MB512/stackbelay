@@ -1554,6 +1554,30 @@ taken to be down: the stacks keep their state, and after 3 such polls one
 host event ("cannot read stack states") goes out, and one when Docker
 answers again. This host state lives in memory only.
 
+### Admin mute
+
+An admin doing a lot of manual work (updates, compose changes, setting up
+backups) can mute the notifications of their own jobs (issue #50): "🔕
+Mute" in the page header (admins only). While muted, the header shows a
+highlighted badge with a countdown (`forms.js`; the end time without
+JavaScript), "Reset" and "Unmute". The mute ends 5 minutes after the
+admin's last page request: `loadSession` resets it on every request of
+that admin except HTMX polls (`X-Stackbelay-Poll`, like the session), so
+it lasts while they work and ends by itself after a break or when
+forgotten.
+
+- Scope: the admin's own jobs only. A job created while the mute is
+  active gets `options.notify_muted`; it sends no event message, whenever
+  it finishes (an update can take longer than the mute). Scheduled jobs
+  and other users' jobs are not affected; the summary contains muted
+  jobs.
+- The stack monitor skips a stack that a muted job touched while that
+  admin's mute is active. Once the mute ends, a bad state is reported
+  after the usual three polls, so a stack left broken is not forgotten.
+- The state is in memory (`notify.Mutes`, shared by the web server and
+  the monitor): a restart of the manager ends every mute. Muting and
+  unmuting are audited (`notify.mute`, `notify.unmute`); expiry is not.
+
 ## Scheduler
 
 `internal/scheduler`, using `robfig/cron/v3` in the manager. A schedule only

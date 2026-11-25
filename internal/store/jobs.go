@@ -42,6 +42,9 @@ type JobOptions struct {
 	ComposeFile       string `json:"compose_file,omitempty"`
 	ComposeBaseSHA256 string `json:"compose_base_sha256,omitempty"`
 	ComposeSHA256     string `json:"compose_sha256,omitempty"`
+	// NotifyMuted: an admin started the job with notifications muted
+	// (issue #50); it sends no event message, whenever it finishes.
+	NotifyMuted bool `json:"notify_muted,omitempty"`
 }
 
 // JobResult holds results besides the main snapshot, stored as JSON.

@@ -76,6 +76,7 @@ func (s *Server) submitJob(w http.ResponseWriter, r *http.Request, st store.Stac
 	}
 	a := authFrom(ctx)
 	job.StackID, job.Trigger, job.RequestedBy = st.ID, store.TriggerManual, a.User.ID
+	job.Options.NotifyMuted = s.markMuted(a.User, st.ID)
 	j, err := s.Jobs.Submit(ctx, job)
 	if errors.Is(err, store.ErrJobQueued) {
 		s.renderError(w, r, http.StatusConflict, fmt.Sprintf("A %s of this stack is already waiting to run.", job.Type))
