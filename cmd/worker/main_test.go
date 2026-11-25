@@ -6,13 +6,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/MB512/stackbelay/internal/docker"
 	"github.com/MB512/stackbelay/internal/jobs"
 	"github.com/MB512/stackbelay/internal/restic"
 )
@@ -309,5 +312,66 @@ func TestOutcome(t *testing.T) {
 				t.Errorf("err = %v, want prefix %q", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+// fakeServices answers Services with the next entry of states.
+type fakeServices struct {
+	states [][]docker.ServiceState
+	err    error
+}
+
+func (f *fakeServices) Services(context.Context, string) ([]docker.ServiceState, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	s := f.states[0]
+	f.states = f.states[1:]
+	return s, nil
+}
+
+func TestServicesDown(t *testing.T) {
+	run := func(name string) docker.ServiceState { return docker.ServiceState{Name: name, State: "running"} }
+	stopped := func(name string) docker.ServiceState { return docker.ServiceState{Name: name, State: "exited"} }
+	log := slog.New(slog.DiscardHandler)
+	tests := []struct {
+		name   string
+		before []string
+		now    []docker.ServiceState
+		err    error
+		want   []string
+	}{
+		{"all running again", []string{"app", "db"}, []docker.ServiceState{run("app"), run("db")}, nil, nil},
+		{"one left down", []string{"app", "db"}, []docker.ServiceState{run("app"), stopped("db")}, nil, []string{"db"}},
+		{"was stopped before, still stopped", []string{"app"}, []docker.ServiceState{run("app"), stopped("worker")}, nil, nil},
+		{"state unreadable", []string{"app"}, nil, errors.New("daemon down"), nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := &fakeServices{states: [][]docker.ServiceState{tt.now}, err: tt.err}
+			if got := servicesDown(f, "/stacks/app", tt.before, log); !slices.Equal(got, tt.want) {
+				t.Errorf("got %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRestartsStack(t *testing.T) {
+	tests := []struct {
+		spec jobs.Spec
+		want bool
+	}{
+		{jobs.Spec{Type: jobs.TypeBackup}, true},
+		{jobs.Spec{Type: jobs.TypeUpdate}, true},
+		{jobs.Spec{Type: jobs.TypeComposeApply}, true},
+		{jobs.Spec{Type: jobs.TypeRestore}, true},
+		{jobs.Spec{Type: jobs.TypeRestore, NoStart: true}, false},
+		{jobs.Spec{Type: jobs.TypeStop}, false},
+		{jobs.Spec{Type: jobs.TypeCleanup}, false},
+	}
+	for _, tt := range tests {
+		if got := restartsStack(tt.spec); got != tt.want {
+			t.Errorf("%+v: got %v", tt.spec, got)
+		}
 	}
 }

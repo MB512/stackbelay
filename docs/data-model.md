@@ -96,7 +96,9 @@ CREATE INDEX jobs_stack_state ON jobs(stack_id, state);
 -- migration 0003:
 --   result TEXT NOT NULL DEFAULT '{}'  -- JSON: pre_stop_snapshot, safety_snapshot, previous_dir,
 --                                         rolled_back, unchanged, images_changed (update, compose apply),
---                                         replaced_images (update, compose apply: old image ids, kept by the host cleanup)
+--                                         replaced_images (update, compose apply: old image ids, kept by the host cleanup),
+--                                         services_down (failed backup/update/compose apply/restore: services that ran
+--                                         before the job and do not run after it; issue #47)
 --   UNIQUE INDEX jobs_one_running_per_stack ON jobs(stack_id) WHERE state = 'running'
 -- migration 0011 (tables rebuilt, see below):
 --   CHECK ((stack_id IS NULL) = (type = 'cleanup'))

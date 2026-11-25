@@ -67,6 +67,9 @@ type JobResult struct {
 	RemovedContainers int   `json:"removed_containers,omitempty"`
 	RemovedImages     int   `json:"removed_images,omitempty"`
 	FreedBytes        int64 `json:"freed_bytes,omitempty"`
+	// ServicesDown: a failed job left these services down that ran before
+	// it (see jobs.Status).
+	ServicesDown []string `json:"services_down,omitempty"`
 }
 
 // Job is a backup or restore job. State follows jobs.State: queued ->

@@ -555,6 +555,7 @@ func resultOf(st jobs.Status) store.JobResult {
 		RolledBack: st.RolledBack, Unchanged: st.Unchanged, ImagesChanged: st.ImagesChanged,
 		ReplacedImages: st.ReplacedImages, Unpinned: st.Unpinned,
 		RemovedContainers: st.RemovedContainers, RemovedImages: st.RemovedImages, FreedBytes: st.FreedBytes,
+		ServicesDown: st.ServicesDown,
 	}
 }
 

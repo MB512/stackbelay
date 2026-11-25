@@ -277,6 +277,10 @@ type Status struct {
 	RemovedContainers int   `json:"removed_containers,omitempty"`
 	RemovedImages     int   `json:"removed_images,omitempty"`
 	FreedBytes        int64 `json:"freed_bytes,omitempty"`
+	// ServicesDown: a failed backup, update, compose apply or restore:
+	// services that ran before the job and do not run after it, i.e. the
+	// job left the stack (partly) down (notifications, issue #47).
+	ServicesDown []string `json:"services_down,omitempty"`
 }
 
 // WriteSpec writes spec.json into dir (manager side).

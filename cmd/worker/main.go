@@ -33,6 +33,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -315,6 +316,80 @@ func execute(ctx context.Context, p *jobs.Pipeline, cfg config.Worker, spec jobs
 	if needsRepository(spec) && !cfg.HasRepo() {
 		return errors.New("no repository configured (RESTIC_REPOSITORY and RESTIC_PASSWORD(_FILE) are required for this job)")
 	}
+	if !restartsStack(spec) {
+		return executeStack(ctx, p, spec, jobDir, stack, status)
+	}
+	// Which services ran before, to report those a failed job left down.
+	before, berr := runningServices(ctx, p.Docker, stack.Dir)
+	if berr != nil {
+		log.Warn("reading stack state before the job", "error", berr)
+	}
+	err = executeStack(ctx, p, spec, jobDir, stack, status)
+	if err != nil && berr == nil && len(before) > 0 {
+		status.ServicesDown = servicesDown(p.Docker, stack.Dir, before, log)
+	}
+	return err
+}
+
+// restartsStack reports whether a job stops a running stack and starts it
+// again: backup, update, compose apply and a restore that starts the
+// stack. Only these can leave a stack down that ran before.
+func restartsStack(spec jobs.Spec) bool {
+	switch spec.Type {
+	case jobs.TypeBackup, jobs.TypeUpdate, jobs.TypeComposeApply:
+		return true
+	case jobs.TypeRestore:
+		return !spec.NoStart
+	}
+	return false
+}
+
+// serviceLister is the part of docker.Client the before/after check needs.
+type serviceLister interface {
+	Services(ctx context.Context, projectDir string) ([]docker.ServiceState, error)
+}
+
+// runningServices returns the names of the services of the stack in dir
+// whose container runs.
+func runningServices(ctx context.Context, dc serviceLister, dir string) ([]string, error) {
+	services, err := dc.Services(ctx, dir)
+	if err != nil {
+		return nil, err
+	}
+	var running []string
+	for _, s := range services {
+		if s.Running() {
+			running = append(running, s.Name)
+		}
+	}
+	return running, nil
+}
+
+// servicesDown returns the services of before that do not run now. It has
+// its own timeout: the job's context may have ended (cancel, timeout).
+func servicesDown(dc serviceLister, dir string, before []string, log *slog.Logger) []string {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	now, err := runningServices(ctx, dc, dir)
+	if err != nil {
+		log.Warn("reading stack state after the job", "error", err)
+		return nil
+	}
+	var down []string
+	for _, name := range before {
+		if !slices.Contains(now, name) {
+			down = append(down, name)
+		}
+	}
+	if len(down) > 0 {
+		log.Error("the job left services down that ran before it", "services", down)
+	}
+	return down
+}
+
+// executeStack runs a job of an existing stack and records its results in
+// status.
+func executeStack(ctx context.Context, p *jobs.Pipeline, spec jobs.Spec, jobDir string, stack stacks.Stack, status *jobs.Status) error {
 	switch spec.Type {
 	case jobs.TypeBackup:
 		res, err := p.Backup(ctx, stack)
