@@ -4,9 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"maps"
 	"net/http"
-	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -42,56 +40,19 @@ var (
 	stateMissing    = stackState{Label: "missing", Class: "warn", Detail: "The stack directory is missing."}
 )
 
-// classifyStack derives the state of a stack from its services and
-// containers:
-//   - started: every service runs (healthy, if it has a healthcheck);
-//   - stopped: no container runs;
-//   - degraded: some but not all services run, or a container is
-//     unhealthy or restarting.
-//
-// Containers that exited with code 0 while others run are one-shot
-// services (init, migrations) and are ignored.
+// classifyStack turns the condition of a stack (docker.Overview.Condition)
+// into its badge.
 func classifyStack(ov docker.Overview) stackState {
-	if len(ov.Containers) == 0 {
+	switch cond, problems := ov.Condition(); cond {
+	case docker.ConditionNotCreated:
 		return stateNotCreated
-	}
-	type service struct{ running, done bool }
-	services := map[string]*service{}
-	for _, name := range ov.Services {
-		services[name] = &service{}
-	}
-	var problems []string
-	anyRunning := false
-	for _, c := range ov.Containers {
-		svc := services[c.Service]
-		if svc == nil { // e.g. a service of an inactive profile
-			svc = &service{}
-			services[c.Service] = svc
-		}
-		switch {
-		case c.State == "running" && c.Health == "unhealthy":
-			problems = append(problems, c.Name+" is unhealthy")
-			svc.running, anyRunning = true, true
-		case c.State == "running":
-			svc.running, anyRunning = true, true
-		case c.State == "restarting":
-			problems = append(problems, c.Name+" is restarting")
-		case c.State == "exited" && c.ExitCode == 0:
-			svc.done = true
-		}
-	}
-	if !anyRunning && len(problems) == 0 {
+	case docker.ConditionStopped:
 		return stateStopped
-	}
-	for _, name := range slices.Sorted(maps.Keys(services)) {
-		if svc := services[name]; !svc.running && !svc.done {
-			problems = append(problems, name+" is not running")
-		}
-	}
-	if len(problems) > 0 {
+	case docker.ConditionDegraded:
 		return stackState{Label: "degraded", Class: "warn", Detail: strings.Join(problems, "; ")}
+	default:
+		return stateStarted
 	}
-	return stateStarted
 }
 
 // overviewState turns the result of StackOverview into a state.
