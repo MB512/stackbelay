@@ -1,6 +1,7 @@
 package notify
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/MB512/stackbelay/internal/jobs"
@@ -49,7 +50,7 @@ func TestEnabledDefaults(t *testing.T) {
 	// Defaults (issue #47): failures, rollbacks and left-down are on,
 	// successes off.
 	for _, e := range Events {
-		want := e.Key == KeyRollback || e.Key == KeyLeftDown || e.Label[len(e.Label)-6:] == "failed"
+		want := e.Key == KeyRollback || e.Key == KeyLeftDown || e.Key == KeySummary || strings.HasSuffix(e.Label, "failed")
 		if got := Enabled(nil, e.Key); got != want {
 			t.Errorf("%s: default %v, want %v", e.Key, got, want)
 		}
@@ -58,8 +59,8 @@ func TestEnabledDefaults(t *testing.T) {
 	if Enabled(settings, KeyBackupFailed) || !Enabled(settings, KeyBackupSucceeded) || !Enabled(settings, KeyRollback) {
 		t.Error("the admin's choice must override the default")
 	}
-	if p := Events[len(Events)-1]; p.Key != KeyLeftDown || p.Priority != PriorityUrgent {
-		t.Errorf("only a stack left down is urgent: %+v", p)
+	if p, _ := Info(KeyLeftDown); p.Priority != PriorityUrgent {
+		t.Errorf("a stack left down is urgent: %+v", p)
 	}
 	for _, e := range Events {
 		if e.Key != KeyLeftDown && e.Priority == PriorityUrgent {

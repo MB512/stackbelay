@@ -186,7 +186,10 @@ attackers reaching the UI, a leaked database file.
     messages contain only the short host name, stack and service names,
     job types, times and a classified reason: no links, no user names, no
     image references or digests, no raw errors (they can contain
-    repository locations, paths or tool output).
+    repository locations, paths or tool output). The summary (issue #48)
+    uses only read-only Docker commands the manager already runs for the
+    stack list and the update check (`compose ps`, `image inspect`,
+    `buildx imagetools inspect`).
 
 ## Reporting vulnerabilities
 

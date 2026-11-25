@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/MB512/stackbelay/internal/auth"
 	"github.com/MB512/stackbelay/internal/notify"
+	"github.com/MB512/stackbelay/internal/scheduler"
 	"github.com/MB512/stackbelay/internal/store"
 )
 
@@ -34,7 +36,26 @@ type notifyForm struct {
 	PasswordStored   bool
 	Rows             []notifyRow   // the job type x outcome matrix
 	Single           []notifyEvent // rollback, left down
+	// Summary (issue #48): on/off, schedule (a preset or a custom cron
+	// expression) and the stale threshold.
+	Summary         notifyEvent
+	SummarySchedule string // summaryDaily, summaryWeekly or summaryCustom
+	SummaryCron     string
+	StaleDays       int
 }
+
+// Presets of the summary schedule.
+const (
+	summaryDaily  = "daily"
+	summaryWeekly = "weekly"
+	summaryCustom = "custom"
+)
+
+// summaryPresets are the cron expressions of the presets.
+var summaryPresets = map[string]string{summaryDaily: "0 7 * * *", summaryWeekly: "0 7 * * 1"}
+
+// maxStaleDays bounds the stale threshold of the summary.
+const maxStaleDays = 365
 
 // notifyRow is one job type of the matrix.
 type notifyRow struct {
@@ -89,6 +110,13 @@ func newNotifyForm(ns store.NotifySettings) notifyForm {
 		f.Rows = append(f.Rows, notifyRow{Label: m.label, Failed: event(m.failed), Succeeded: event(m.succeeded)})
 	}
 	f.Single = []notifyEvent{event(notify.KeyRollback), event(notify.KeyLeftDown)}
+	f.Summary = event(notify.KeySummary)
+	f.SummaryCron, f.StaleDays, f.SummarySchedule = ns.SummaryCron, ns.StaleDays, summaryCustom
+	for preset, expr := range summaryPresets {
+		if ns.SummaryCron == expr {
+			f.SummarySchedule = preset
+		}
+	}
 	return f
 }
 
@@ -148,8 +176,9 @@ func (s *Server) saveNotifications(w http.ResponseWriter, r *http.Request) {
 	}
 	// The topic is left out: on a public server it is the only secret.
 	s.audit(r, store.AuditEntry{UserID: authFrom(ctx).User.ID, Action: "notify.update",
-		Detail: fmt.Sprintf("server %q, topic set: %t, auth %s, credentials changed: %t, events on: %s",
-			truncate(ns.ServerURL, 200), ns.Topic != "", authType(ns.Auth), ns.Auth != old.Auth, strings.Join(on, ", "))})
+		Detail: fmt.Sprintf("server %q, topic set: %t, auth %s, credentials changed: %t, events on: %s, summary %q, stale after %d d",
+			truncate(ns.ServerURL, 200), ns.Topic != "", authType(ns.Auth), ns.Auth != old.Auth, strings.Join(on, ", "),
+			ns.SummaryCron, ns.StaleDays)})
 	info := "Saved."
 	if ns.Topic == "" {
 		info = "Saved. Notifications are off until a topic is set."
@@ -174,6 +203,12 @@ func parseNotifyInput(r *http.Request, old store.NotifySettings) (store.NotifySe
 			ns.Events[key] = true
 		}
 	}
+	ns.SummaryCron = strings.TrimSpace(r.PostFormValue("summary_cron"))
+	if expr, ok := summaryPresets[r.PostFormValue("summary_schedule")]; ok {
+		ns.SummaryCron = expr
+	}
+	staleDays, staleErr := strconv.Atoi(strings.TrimSpace(r.PostFormValue("stale_days")))
+	ns.StaleDays = staleDays
 	authKind := r.PostFormValue("auth")
 	switch authKind {
 	case notifyAuthToken:
@@ -193,6 +228,9 @@ func parseNotifyInput(r *http.Request, old store.NotifySettings) (store.NotifySe
 
 	echo := newNotifyForm(ns)
 	echo.AuthType = authKind
+	if schedule := r.PostFormValue("summary_schedule"); schedule == summaryCustom {
+		echo.SummarySchedule = summaryCustom
+	}
 	echo.TokenStored, echo.PasswordStored = old.Auth.Token != "", old.Auth.Password != ""
 	if ns.ServerURL == "" {
 		ns.ServerURL = "https://ntfy.sh"
@@ -208,6 +246,11 @@ func parseNotifyInput(r *http.Request, old store.NotifySettings) (store.NotifySe
 		return ns, echo, "Enter user and password."
 	case strings.ContainsAny(ns.Auth.Token+ns.Auth.User, "\r\n"):
 		return ns, echo, "Token and user must be a single line."
+	case staleErr != nil || staleDays < 1 || staleDays > maxStaleDays:
+		return ns, echo, fmt.Sprintf("Enter the days without backup as a number from 1 to %d.", maxStaleDays)
+	}
+	if _, err := scheduler.Parse(ns.SummaryCron); err != nil {
+		return ns, echo, "Summary schedule: " + capitalize(err.Error()) + "."
 	}
 	return ns, echo, ""
 }

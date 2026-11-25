@@ -25,6 +25,12 @@ type NotifySettings struct {
 	// Events maps event keys (internal/notify) to on/off. A key that is
 	// missing has its default.
 	Events map[string]bool
+	// SummaryCron is when the summary is sent (issue #48), a standard cron
+	// expression in the manager's time zone.
+	SummaryCron string
+	// StaleDays: a stack without a consistent backup for longer is listed
+	// as stale in the summary.
+	StaleDays int
 }
 
 // notifyAAD binds the sealed ntfy credentials to their row (see repoAAD).
@@ -36,8 +42,9 @@ func (s *Store) NotifySettings(ctx context.Context) (NotifySettings, error) {
 	var ns NotifySettings
 	var authEnc []byte
 	var events string
-	err := s.db.QueryRowContext(ctx, `SELECT server_url, topic, auth_enc, events FROM notify_settings WHERE id = 1`).
-		Scan(&ns.ServerURL, &ns.Topic, &authEnc, &events)
+	err := s.db.QueryRowContext(ctx,
+		`SELECT server_url, topic, auth_enc, events, summary_cron, stale_days FROM notify_settings WHERE id = 1`).
+		Scan(&ns.ServerURL, &ns.Topic, &authEnc, &events, &ns.SummaryCron, &ns.StaleDays)
 	if err != nil {
 		return NotifySettings{}, fmt.Errorf("loading notification settings: %w", err)
 	}
@@ -78,8 +85,9 @@ func (s *Store) SaveNotifySettings(ctx context.Context, ns NotifySettings) error
 		}
 	}
 	_, err = s.db.ExecContext(ctx,
-		`UPDATE notify_settings SET server_url = ?, topic = ?, auth_enc = ?, events = ? WHERE id = 1`,
-		ns.ServerURL, ns.Topic, authEnc, string(events))
+		`UPDATE notify_settings SET server_url = ?, topic = ?, auth_enc = ?, events = ?, summary_cron = ?, stale_days = ?
+		 WHERE id = 1`,
+		ns.ServerURL, ns.Topic, authEnc, string(events), ns.SummaryCron, ns.StaleDays)
 	if err != nil {
 		return fmt.Errorf("saving notification settings: %w", err)
 	}

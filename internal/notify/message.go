@@ -213,11 +213,14 @@ func emojiOf(priority int) string {
 
 // limitBody joins lines, cut to maxBodyBytes: lines that do not fit are
 // replaced by "… and N more".
-func limitBody(lines []string) string {
+func limitBody(lines []string) string { return limitBodyTo(lines, maxBodyBytes) }
+
+// limitBodyTo is limitBody with another limit.
+func limitBodyTo(lines []string, limit int) string {
 	const markerRoom = 32 // enough for "… and N more"
 	var b strings.Builder
 	for i, line := range lines {
-		if b.Len()+len(line)+markerRoom > maxBodyBytes {
+		if b.Len()+len(line)+markerRoom > limit {
 			fmt.Fprintf(&b, "… and %d more", len(lines)-i)
 			return b.String()
 		}

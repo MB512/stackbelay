@@ -38,10 +38,16 @@ func TestNotificationSettings(t *testing.T) {
 		t.Fatalf("page:\n%s", r.body)
 	}
 	token := e.csrf("/admin/notifications")
+	// form builds the settings form: kv replaces the defaults, except
+	// "event", which may repeat.
 	form := func(kv ...string) url.Values {
-		v := url.Values{"csrf_token": {token}}
+		v := url.Values{"csrf_token": {token}, "summary_schedule": {"daily"}, "stale_days": {"2"}}
 		for i := 0; i < len(kv); i += 2 {
-			v.Add(kv[i], kv[i+1])
+			if kv[i] == "event" {
+				v.Add(kv[i], kv[i+1])
+			} else {
+				v.Set(kv[i], kv[i+1])
+			}
 		}
 		return v
 	}
@@ -52,6 +58,8 @@ func TestNotificationSettings(t *testing.T) {
 		form("topic", "has space"),
 		form("topic", "t", "auth", "token"),
 		form("topic", "t", "auth", "basic", "user", "u"),
+		form("topic", "t", "stale_days", "0"),
+		form("topic", "t", "summary_schedule", "custom", "summary_cron", "not cron"),
 	} {
 		if r := e.post("/admin/notifications", bad); r.status != http.StatusBadRequest {
 			t.Errorf("%v: status %d", bad, r.status)
@@ -87,6 +95,21 @@ func TestNotificationSettings(t *testing.T) {
 	sender.err = errors.New("ntfy answered 401 Unauthorized")
 	if r := e.post("/admin/notifications/test", form()); r.status != http.StatusBadGateway || !strings.Contains(r.body, "401") {
 		t.Errorf("failed test: %d\n%s", r.status, r.body)
+	}
+
+	// Summary: a custom schedule and threshold; the summary key is off
+	// unless its box is checked.
+	expect(t, e.post("/admin/notifications", form("topic", "stackbelay-x1", "auth", "none", "event", "summary",
+		"stale_days", "8", "summary_schedule", "custom", "summary_cron", "30 6 * * 1-5")), http.StatusOK, "")
+	if ns, _ := e.st.NotifySettings(ctx); ns.SummaryCron != "30 6 * * 1-5" || ns.StaleDays != 8 || !ns.Events["summary"] {
+		t.Errorf("summary settings: %+v", ns)
+	}
+	if r := e.get("/admin/notifications"); !strings.Contains(r.body, `<option value="custom" selected>`) {
+		t.Error("custom schedule not shown as custom")
+	}
+	expect(t, e.post("/admin/notifications", form("topic", "stackbelay-x1", "summary_schedule", "weekly")), http.StatusOK, "")
+	if ns, _ := e.st.NotifySettings(ctx); ns.SummaryCron != "0 7 * * 1" || ns.Events["summary"] {
+		t.Errorf("weekly preset, summary off: %+v", ns)
 	}
 
 	// Switching to no auth removes the credentials.

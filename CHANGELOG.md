@@ -14,6 +14,12 @@ All notable changes to StackBelay. The format is based on
   ran before it; successes optional. Jobs that finish together are sent
   as one message. Settings on the new Notifications admin page, with a
   test message; stacks can be muted on their Settings tab.
+- **Notification summary** (#48), daily, weekly or on a cron schedule:
+  stacks that need attention (failed or stale backups, no repository or
+  schedule, degraded or stopped stacks, incomplete restores, available
+  updates), then backups, downtime, updates, changes, restores, security
+  events and the data added per repository. Sent even when nothing
+  happened, so a missing summary means StackBelay is not running.
 
 ## [0.1.0] - 2026-11-24
 

@@ -1462,6 +1462,55 @@ the raw error (see `docs/security.md`, rule 14).
 the server. A failed send is retried with a backoff from 1 min doubling
 to 30 min; events older than 24 h are dropped with a log entry.
 
+### Summary
+
+A periodic summary (issue #48), on by default, sent by
+`notify.Summarizer` in its own goroutine (collecting can take minutes and
+must not hold up event messages). Its schedule is a cron expression in
+the manager's `TZ` (presets: daily or weekly on Monday, 07:00;
+`notify_settings.summary_cron`). The period runs from the last summary
+(`summary_sent_at`) to now: a summary missed while the manager was down
+goes out at its next start and covers the whole gap. The first summary is
+due at the first scheduled time after notifications were set up. It is
+sent even when nothing happened, so a missing summary means the manager
+is not running. A failed send is retried with the same backoff as events.
+
+Content (`notify.BuildSummary`, `FormatSummary`), with the rules of the
+event messages (short host, no links, no user names, no image tags):
+
+1. Status line: "All N stacks OK" or "N items need attention".
+2. **Attention**, the state at send time, for each present stack that is
+   not muted: an incomplete restore; no repository; the newest backup
+   failed (with the age of the last consistent one); no enabled backup
+   schedule; never backed up, or the last consistent backup is older
+   than `stale_days` (default 2; one global threshold); degraded, or
+   stopped unless its newest stop/start job stopped it
+   (`store.StoppedOnPurpose`); stacks with a running job are not
+   inspected. Then the stacks with newer images ("updates available"):
+   the summary runs the read-only update check (`docker.CLI.CheckUpdates`)
+   of every running stack. Stack states come from
+   `docker.Overview.Condition`, like the stack list.
+3. **Backups**: backup jobs succeeded / failed / cancelled. Snapshots of
+   updates and compose changes do not count here.
+4. **Downtime**: caused by backups, updates and compose changes (not by
+   user stops or restores): from `result.stack_stopped_at` to
+   `stack_started_at`, or to the job's end if it did not start the stack
+   again. Total and the longest (stack, job type, weekday).
+5. **Updates**: applied / unchanged / failed / rolled back, with the
+   stacks and the services that changed.
+6. **Changes**: compose edits (stacks); settings changes from the audit
+   log as counts per group (schedules, repositories, stack settings,
+   notifications).
+7. **Restores**: stacks.
+8. **Security** (audit log): failed logins (count only: the user name is
+   attacker input), user and permission changes, shell sessions (with
+   stacks).
+9. **Data added**: per repository the sum of `data_added_packed` of the
+   period's snapshots of this host (snapshot cache), with the top stack.
+
+The attention section is never cut; the others are, below ntfy's 4 KB
+limit.
+
 ## Scheduler
 
 `internal/scheduler`, using `robfig/cron/v3` in the manager. A schedule only

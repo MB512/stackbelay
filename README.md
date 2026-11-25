@@ -52,7 +52,9 @@ already trust until it has proven itself on your hosts.
   images, with a preview; never volumes.
 - **Notifications** through [ntfy](https://ntfy.sh) for failed jobs,
   rollbacks and stacks a job left down (successes optional), grouped when
-  several jobs finish together; per-stack mute.
+  several jobs finish together; per-stack mute. A daily or weekly
+  **summary** of what needs attention, backups, downtime, updates,
+  changes, security events and the data added per repository.
 - **Compose editor** and an opt-in **container shell** for admins.
 - **Multi-user** with per-stack rights (backup, restore, update, operate,
   logs);

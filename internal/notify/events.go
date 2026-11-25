@@ -31,6 +31,8 @@ const (
 	KeyRollback Key = "rollback"
 	// KeyLeftDown: a failed job left services down that ran before it.
 	KeyLeftDown Key = "left_down"
+	// KeySummary: the periodic summary (issue #48).
+	KeySummary Key = "summary"
 )
 
 // ntfy priorities (1 = min ... 5 = urgent). Urgent breaks through Do Not
@@ -68,6 +70,7 @@ var Events = []EventInfo{
 	{KeyCleanupSucceeded, "Host cleanup succeeded", false, PriorityLow, "✅"},
 	{KeyRollback, "Rolled back", true, PriorityHigh, "↩️"},
 	{KeyLeftDown, "Stack left down", true, PriorityUrgent, "🚨"},
+	{KeySummary, "Summary", true, PriorityDefault, "📊"},
 }
 
 // Info returns the description of key; ok is false for an unknown key.

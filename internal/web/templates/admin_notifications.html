@@ -63,6 +63,30 @@
         down that ran before it; sent as urgent, which passes Do Not Disturb on Android. Cancelled jobs and updates that
         found nothing to change send no message. Jobs that finish within a minute of each other are sent as one message.</p>
     </fieldset>
+
+    <fieldset>
+      <legend>Summary</legend>
+      <label class="check"><input type="checkbox" name="event" value="{{.Summary.Key}}"{{if .Summary.On}} checked{{end}}> Send a summary</label>
+      <label>When
+        <select name="summary_schedule">
+          <option value="daily"{{if eq .SummarySchedule "daily"}} selected{{end}}>daily at 07:00</option>
+          <option value="weekly"{{if eq .SummarySchedule "weekly"}} selected{{end}}>weekly, Monday at 07:00</option>
+          <option value="custom"{{if eq .SummarySchedule "custom"}} selected{{end}}>custom (cron expression below)</option>
+        </select>
+      </label>
+      <label>Cron expression
+        <input name="summary_cron" value="{{.SummaryCron}}" spellcheck="false" autocomplete="off" placeholder="0 7 * * *">
+      </label>
+      <label>Stale after (days without a backup)
+        <input name="stale_days" type="number" min="1" max="365" required value="{{.StaleDays}}">
+      </label>
+      <p class="hint">The summary covers the time since the previous one: what needs attention now (failed or stale
+        backups, stacks without repository or backup schedule, degraded or stopped stacks, incomplete restores, available
+        updates), then backups, downtime, updates, changes, restores, security events and the data added per repository.
+        It is sent even when nothing happened, so a missing summary means StackBelay is not running. One missed while
+        StackBelay was down is sent at its next start. Times are in the manager's time zone. With weekly backups, raise
+        "stale after" above 7 days. The cron expression is used only with "custom".</p>
+    </fieldset>
     <div><button type="submit">Save</button></div>
   </form>
   {{- end}}

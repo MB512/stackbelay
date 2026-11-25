@@ -157,14 +157,17 @@ func (n *Notifier) Step(ctx context.Context) {
 	n.delete(ctx, send)
 }
 
-// backoff is the wait after n.failures failed sends in a row: doubling
+// backoff is the wait after the notifier's failed sends in a row.
+func (n *Notifier) backoff() time.Duration { return backoffAfter(n.failures) }
+
+// backoffAfter is the wait after failures failed sends in a row: doubling
 // from minBackoff, capped at maxBackoff (checked before shifting, so many
 // failures cannot overflow).
-func (n *Notifier) backoff() time.Duration {
-	if n.failures > 10 {
+func backoffAfter(failures int) time.Duration {
+	if failures > 10 {
 		return maxBackoff
 	}
-	return min(minBackoff<<(max(n.failures, 1)-1), maxBackoff)
+	return min(minBackoff<<(max(failures, 1)-1), maxBackoff)
 }
 
 func (n *Notifier) delete(ctx context.Context, ids []int64) {

@@ -131,7 +131,11 @@ CREATE TABLE notify_settings (            -- migration 0019 (issue #47): exactly
   server_url TEXT NOT NULL DEFAULT 'https://ntfy.sh',
   topic      TEXT NOT NULL DEFAULT '',      -- '' = notifications off
   auth_enc   BLOB,                          -- AES-GCM: {"token"} or {"user","password"}; NULL = no auth
-  events     TEXT NOT NULL DEFAULT '{}'     -- JSON: event key -> on/off; a missing key has its default
+  events     TEXT NOT NULL DEFAULT '{}',    -- JSON: event key -> on/off; a missing key has its default
+  -- migration 0020 (issue #48):
+  summary_cron    TEXT NOT NULL DEFAULT '0 7 * * *', -- when the summary is sent (manager's TZ)
+  stale_days      INTEGER NOT NULL DEFAULT 2,         -- summary: no consistent backup for longer = stale
+  summary_sent_at TEXT                                -- start of the next summary's period; NULL until notifications are set up
 ) STRICT;
 
 CREATE TABLE notify_events (              -- migration 0019: outbox of the notifier

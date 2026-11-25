@@ -44,12 +44,22 @@ func (s *Store) ListAudit(ctx context.Context, limit int) ([]AuditEntry, error) 
 // before of the next page.
 func (s *Store) ListAuditBefore(ctx context.Context, before int64, limit int) ([]AuditEntry, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT a.id, a.at, a.user_id, a.action, a.stack_id, a.detail, u.username, st.name
-		 FROM audit_log a LEFT JOIN users u ON u.id = a.user_id LEFT JOIN stacks st ON st.id = a.stack_id
-		 WHERE (? = 0 OR a.id < ?) ORDER BY a.id DESC LIMIT ?`, before, before, limit)
+		`SELECT `+auditColumns+auditFrom+`WHERE (? = 0 OR a.id < ?) ORDER BY a.id DESC LIMIT ?`, before, before, limit)
 	if err != nil {
 		return nil, fmt.Errorf("listing audit log: %w", err)
 	}
+	return scanAudit(rows)
+}
+
+// auditColumns and auditFrom select audit entries with user and stack
+// names, for scanAudit.
+const (
+	auditColumns = `a.id, a.at, a.user_id, a.action, a.stack_id, a.detail, u.username, st.name`
+	auditFrom    = ` FROM audit_log a LEFT JOIN users u ON u.id = a.user_id LEFT JOIN stacks st ON st.id = a.stack_id `
+)
+
+// scanAudit reads the rows of a query on auditColumns and closes them.
+func scanAudit(rows *sql.Rows) ([]AuditEntry, error) {
 	defer rows.Close()
 	var out []AuditEntry
 	for rows.Next() {
@@ -60,6 +70,7 @@ func (s *Store) ListAuditBefore(ctx context.Context, before int64, limit int) ([
 		if err := rows.Scan(&e.ID, &at, &user, &e.Action, &stack, &detail, &username, &stackName); err != nil {
 			return nil, fmt.Errorf("listing audit log: %w", err)
 		}
+		var err error
 		if e.At, err = parseTime(at); err != nil {
 			return nil, err
 		}

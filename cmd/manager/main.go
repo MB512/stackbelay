@@ -187,6 +187,11 @@ func run(ctx context.Context, getenv func(string) string, readFile func(string) 
 	notifier := &notify.Notifier{Store: st, Sender: ntfy, Host: notify.ShortHost(cfg.Hostname),
 		Logger: log, Location: cfg.TimeZone}
 	go notifier.Run(ctx)
+	// The periodic summary (issue #48): read-only "docker compose ps" and
+	// update checks ("docker buildx imagetools inspect") when it is due.
+	summarizer := &notify.Summarizer{Store: st, Sender: ntfy, Docker: &docker.CLI{}, StacksRoot: cfg.StacksRoot,
+		Hostname: cfg.Hostname, Logger: log, Location: cfg.TimeZone}
+	go summarizer.Run(ctx)
 
 	select {
 	case err := <-serveErr:
