@@ -92,6 +92,9 @@ func (p *Pipeline) Backup(ctx context.Context, stack stacks.Stack) (res BackupRe
 	if err := p.Docker.Stop(dctx, stack.Dir); err != nil {
 		return res, p.downtimeErr(ctx, dctx, fmt.Errorf("stopping stack: %w", err))
 	}
+	if len(running) > 0 {
+		p.markStopped()
+	}
 
 	// 5. Final snapshot.
 	log.Info("taking final snapshot", "parent", res.PreStopSnapshot)

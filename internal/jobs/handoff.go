@@ -281,6 +281,10 @@ type Status struct {
 	// services that ran before the job and do not run after it, i.e. the
 	// job left the stack (partly) down (notifications, issue #47).
 	ServicesDown []string `json:"services_down,omitempty"`
+	// StackStoppedAt / StackStartedAt: when the job stopped the running
+	// stack and started it again (Pipeline.StackDowntime; issue #48).
+	StackStoppedAt *time.Time `json:"stack_stopped_at,omitempty"`
+	StackStartedAt *time.Time `json:"stack_started_at,omitempty"`
 }
 
 // WriteSpec writes spec.json into dir (manager side).

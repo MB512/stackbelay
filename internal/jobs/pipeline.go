@@ -59,6 +59,32 @@ type Pipeline struct {
 	// compose apply; 0: none. When it runs out, the final snapshot is
 	// aborted and the stack started again.
 	DowntimeTimeout time.Duration
+
+	// stoppedAt / startedAt: when the job first stopped the running stack
+	// and when it last started it again (StackDowntime).
+	stoppedAt, startedAt time.Time
+}
+
+// StackDowntime returns when the job stopped the running stack (first
+// stop) and when it started it again (last successful start after that);
+// stopped is zero if the job stopped no running stack, started is zero if
+// the stack was not started again. The summary sums these (issue #48).
+func (p *Pipeline) StackDowntime() (stopped, started time.Time) {
+	return p.stoppedAt, p.startedAt
+}
+
+// markStopped records that the job stopped the running stack.
+func (p *Pipeline) markStopped() {
+	if p.stoppedAt.IsZero() {
+		p.stoppedAt = p.now()
+	}
+}
+
+// markStarted records that the stack runs again after the job stopped it.
+func (p *Pipeline) markStarted() {
+	if !p.stoppedAt.IsZero() {
+		p.startedAt = p.now()
+	}
 }
 
 func (p *Pipeline) logger() *slog.Logger {
@@ -188,6 +214,7 @@ func (p *Pipeline) bringUp(ctx context.Context, log *slog.Logger, dir string, co
 		log.Error("STACK WAS NOT STARTED; manual intervention required", "error", err)
 		return err
 	}
+	p.markStarted()
 
 	hctx, hcancel := context.WithTimeout(ctx, orDefault(p.HealthTimeout, DefaultHealthTimeout))
 	defer hcancel()

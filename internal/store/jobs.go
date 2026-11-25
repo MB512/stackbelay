@@ -70,6 +70,11 @@ type JobResult struct {
 	// ServicesDown: a failed job left these services down that ran before
 	// it (see jobs.Status).
 	ServicesDown []string `json:"services_down,omitempty"`
+	// StackStoppedAt / StackStartedAt: when the job stopped the running
+	// stack and started it again; the downtime of the summary (issue #48).
+	// Nil if the job stopped no running stack, or did not start it again.
+	StackStoppedAt *time.Time `json:"stack_stopped_at,omitempty"`
+	StackStartedAt *time.Time `json:"stack_started_at,omitempty"`
 }
 
 // Job is a backup or restore job. State follows jobs.State: queued ->

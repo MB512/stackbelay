@@ -120,6 +120,9 @@ func (p *Pipeline) Restore(ctx context.Context, stack stacks.Stack, opts Restore
 	if err := p.Docker.Stop(ctx, stack.Dir); err != nil {
 		return res, fmt.Errorf("stopping stack: %w", err)
 	}
+	if len(running) > 0 {
+		p.markStopped()
+	}
 	switch {
 	case opts.skipSafetySnapshot:
 		log.Info("no safety snapshot: rolling back to the snapshot taken just before")

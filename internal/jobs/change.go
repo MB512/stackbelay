@@ -167,6 +167,7 @@ func (p *Pipeline) runChange(ctx context.Context, stack stacks.Stack, c change) 
 		if err := p.Docker.Stop(dctx, stack.Dir); err != nil {
 			return res, p.downtimeErr(ctx, dctx, fmt.Errorf("stopping stack: %w", err))
 		}
+		p.markStopped()
 	}
 
 	// 5. Final snapshot: the state the rollback returns to.
@@ -245,6 +246,7 @@ func (p *Pipeline) upAndVerify(ctx context.Context, log *slog.Logger, dir string
 	if err := p.Docker.Up(uctx, dir, nil, start); err != nil {
 		return fmt.Errorf("starting stack: %w", err)
 	}
+	p.markStarted()
 	if len(verify) == 0 {
 		return nil
 	}

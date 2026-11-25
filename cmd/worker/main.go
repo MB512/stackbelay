@@ -178,6 +178,7 @@ func run(args []string, getenv func(string) string, stderr io.Writer) int {
 		}
 	}
 	err = execute(ctx, p, cfg, spec, jobDir, &status, log)
+	status.StackStoppedAt, status.StackStartedAt = downtimeTimes(p)
 
 	finished := time.Now().UTC()
 	status.FinishedAt = &finished
@@ -329,6 +330,21 @@ func execute(ctx context.Context, p *jobs.Pipeline, cfg config.Worker, spec jobs
 		status.ServicesDown = servicesDown(p.Docker, stack.Dir, before, log)
 	}
 	return err
+}
+
+// downtimeTimes returns when the job stopped the running stack and started
+// it again, as the status records them (nil = did not happen).
+func downtimeTimes(p *jobs.Pipeline) (stopped, started *time.Time) {
+	s, t := p.StackDowntime()
+	if !s.IsZero() {
+		s = s.UTC()
+		stopped = &s
+	}
+	if !t.IsZero() {
+		t = t.UTC()
+		started = &t
+	}
+	return stopped, started
 }
 
 // restartsStack reports whether a job stops a running stack and starts it
